@@ -1,27 +1,25 @@
 package exoticatechnologies.modifications.upgrades.impl
 
-import activators.ActivatorManager
-import activators.CombatActivator
-import activators.drones.DroneActivator
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
-import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.upgrades.Upgrade
 import exoticatechnologies.util.StringUtils
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
 import org.lazywizard.lazylib.VectorUtils
-import org.lwjgl.util.vector.Vector2f
+import org.magiclib.subsystems.MagicSubsystem
+import org.magiclib.subsystems.MagicSubsystemsManager
 import kotlin.math.absoluteValue
 
 class QuickJets(key: String, settings: JSONObject) : Upgrade(key, settings) {
     override var maxLevel: Int = 1
 
     override fun applyToShip(member: FleetMemberAPI, ship: ShipAPI, mods: ShipModifications) {
-        ActivatorManager.addActivator(ship, QuickTurnJets(ship))
+//        ActivatorManager.addActivator(ship, QuickTurnJets(ship))
+        MagicSubsystemsManager.addSubsystemToShip(ship, QuickTurnJets(ship))
     }
 
     override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?): Boolean {
@@ -29,17 +27,17 @@ class QuickJets(key: String, settings: JSONObject) : Upgrade(key, settings) {
     }
 
     override fun modifyToolTip(
-        tooltip: TooltipMakerAPI,
-        stats: MutableShipStatsAPI,
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        expand: Boolean
+            tooltip: TooltipMakerAPI,
+            stats: MutableShipStatsAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            expand: Boolean
     ): TooltipMakerAPI {
         val imageText = tooltip.beginImageWithText(iconPath, 64f)
         imageText.addPara("$name (%s)", 0f, color, mods.getUpgrade(this).toString())
         if (expand) {
             StringUtils.getTranslation("QuickJets", "tooltip")
-                .addToTooltip(imageText)
+                    .addToTooltip(imageText)
         }
         tooltip.addImageWithText(5f)
 
@@ -48,10 +46,11 @@ class QuickJets(key: String, settings: JSONObject) : Upgrade(key, settings) {
 
     override fun showStatsInShop(tooltip: TooltipMakerAPI, member: FleetMemberAPI, mods: ShipModifications) {
         StringUtils.getTranslation("QuickJets", "tooltip")
-            .addToTooltip(tooltip)
+                .addToTooltip(tooltip)
     }
 
-    inner class QuickTurnJets(ship: ShipAPI) : CombatActivator(ship) {
+    //    inner class QuickTurnJets(ship: ShipAPI) : CombatActivator(ship) {
+    inner class QuickTurnJets(ship: ShipAPI) : MagicSubsystem(ship) {
         override fun getBaseActiveDuration(): Float {
             return 1.5f
         }
@@ -88,7 +87,9 @@ class QuickJets(key: String, settings: JSONObject) : Upgrade(key, settings) {
             stats.maxTurnRate.unmodify(buffId)
         }
 
-        override fun advance(amount: Float) {
+        override fun advance(amount: Float, isPaused:Boolean) {
+            if(isPaused) return //lets try this
+
             if (state == State.OUT) {
                 val speed = ship.angularVelocity
 

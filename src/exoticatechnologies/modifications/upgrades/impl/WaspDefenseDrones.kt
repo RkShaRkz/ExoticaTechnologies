@@ -1,7 +1,5 @@
 package exoticatechnologies.modifications.upgrades.impl
 
-import activators.ActivatorManager
-import activators.drones.DroneActivator
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
@@ -10,12 +8,15 @@ import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.upgrades.Upgrade
 import exoticatechnologies.util.StringUtils
 import org.json.JSONObject
+import org.magiclib.subsystems.MagicSubsystemsManager
+import org.magiclib.subsystems.drones.MagicDroneSubsystem
 
 class WaspDefenseDrones(key: String, settings: JSONObject) : Upgrade(key, settings) {
     override var maxLevel: Int = 1
 
     override fun applyToShip(member: FleetMemberAPI, ship: ShipAPI, mods: ShipModifications) {
-        ActivatorManager.addActivator(ship, WaspDroneActivator(ship))
+//        ActivatorManager.addActivator(ship, WaspDroneActivator(ship))
+        MagicSubsystemsManager.addSubsystemToShip(ship, WaspDroneActivator(ship))
     }
 
     override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?): Boolean {
@@ -23,18 +24,18 @@ class WaspDefenseDrones(key: String, settings: JSONObject) : Upgrade(key, settin
     }
 
     override fun modifyToolTip(
-        tooltip: TooltipMakerAPI,
-        stats: MutableShipStatsAPI,
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        expand: Boolean
+            tooltip: TooltipMakerAPI,
+            stats: MutableShipStatsAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            expand: Boolean
     ): TooltipMakerAPI {
         val imageText = tooltip.beginImageWithText(iconPath, 64f)
         imageText.addPara("$name (%s)", 0f, color, mods.getUpgrade(this).toString())
         if (expand) {
             StringUtils.getTranslation("WaspDefenseDrones", "tooltip")
-                .format("drones", WaspDroneActivator.maxDronesMap[member.hullSpec.hullSize] ?: 1)
-                .addToTooltip(imageText)
+                    .format("drones", WaspDroneActivator.maxDronesMap[member.hullSpec.hullSize] ?: 1)
+                    .addToTooltip(imageText)
         }
         tooltip.addImageWithText(5f)
 
@@ -43,17 +44,18 @@ class WaspDefenseDrones(key: String, settings: JSONObject) : Upgrade(key, settin
 
     override fun showStatsInShop(tooltip: TooltipMakerAPI, member: FleetMemberAPI, mods: ShipModifications) {
         StringUtils.getTranslation("WaspDefenseDrones", "tooltip")
-            .format("drones", WaspDroneActivator.maxDronesMap[member.hullSpec.hullSize] ?: 1)
-            .addToTooltip(tooltip)
+                .format("drones", WaspDroneActivator.maxDronesMap[member.hullSpec.hullSize] ?: 1)
+                .addToTooltip(tooltip)
     }
 
-    class WaspDroneActivator(ship: ShipAPI) : DroneActivator(ship) {
+    //    class WaspDroneActivator(ship: ShipAPI) : DroneActivator(ship) {
+    class WaspDroneActivator(ship: ShipAPI) : MagicDroneSubsystem(ship) {
         companion object {
             val maxDronesMap: Map<ShipAPI.HullSize, Int> = mapOf(
-                ShipAPI.HullSize.FRIGATE to 4,
-                ShipAPI.HullSize.DESTROYER to 4,
-                ShipAPI.HullSize.CRUISER to 5,
-                ShipAPI.HullSize.CAPITAL_SHIP to 6
+                    ShipAPI.HullSize.FRIGATE to 4,
+                    ShipAPI.HullSize.DESTROYER to 4,
+                    ShipAPI.HullSize.CRUISER to 5,
+                    ShipAPI.HullSize.CAPITAL_SHIP to 6
             )
         }
 
