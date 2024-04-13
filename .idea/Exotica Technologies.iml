@@ -23,6 +23,15 @@
       </library>
     </orderEntry>
     <orderEntry type="library" name="ExiledSpace" level="application" />
+    <orderEntry type="module-library" exported="">
+      <library>
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/libs/ExiledSpace.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
     <orderEntry type="library" name="IndEvo" level="application" />
     <orderEntry type="module-library" exported="">
       <library>
@@ -103,7 +112,7 @@
     <orderEntry type="module-library" exported="">
       <library>
         <CLASSES>
-          <root url="jar://$MODULE_DIR$/../../Games/Starsector/mods/LunaLib/jars/LunaLib.jar!/" />
+          <root url="jar://$MODULE_DIR$/../../Games/Starsector/mods/LunaLib/jars/LunaLib-Kotlin.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES />
