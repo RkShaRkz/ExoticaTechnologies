@@ -527,6 +527,20 @@
       "supplies": 75.0
     }
   },
+  "ExternalThrusters": {
+    "name": "External Thrusters",
+    "color": [ 255, 200, 15 ],
+    "hints": ["speed"],
+    "bandwidthPerLevel": 25,
+    "upgradeClass": "exoticatechnologies.modifications.upgrades.impl.ExternalThrusters",
+    "resourceRatios": {
+      "volatiles": 150.0,
+      "heavy_machinery": 25.0,
+      "metals": 100.0,
+      "rare_metals": 25.0,
+      "supplies": 75.0
+    }
+  },
   "Kingslayer": {
     "name": "Kingslayer",
     "color": [ 120, 0, 0 ],
