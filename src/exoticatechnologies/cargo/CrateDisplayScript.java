@@ -4,8 +4,9 @@ import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CargoAPI;
 import lombok.SneakyThrows;
+import org.apache.log4j.Logger;
 
-import java.awt.Robot;
+import java.awt.*;
 import java.awt.event.KeyEvent;
 
 /**
@@ -16,10 +17,23 @@ public class CrateDisplayScript implements EveryFrameScript {
     private final Robot robot;
     private boolean success = false;
 
+    private final Logger log = Logger.getLogger(CrateDisplayScript.class);
+
     @SneakyThrows
     public CrateDisplayScript(CargoAPI cargo) {
         this.cargo = cargo;
-        this.robot = new Robot();
+        this.robot = instantiateRobot();
+    }
+
+    private Robot instantiateRobot() {
+        Robot retVal = null;
+        try {
+            retVal = new Robot();
+        } catch (AWTException awtException) {
+            log.error("Encountered exception " + awtException);
+        }
+
+        return retVal;
     }
 
     @Override

@@ -12,12 +12,17 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.Map;
 
-@RequiredArgsConstructor
+//@RequiredArgsConstructor
 public class CrateItemDialog implements InteractionDialogPlugin {
     private final CargoAPI playerCargo;
     private final CargoAPI crateCargo;
     private InteractionDialogAPI dialog;
     private boolean loadedChestCargo = false;
+
+    public CrateItemDialog(CargoAPI playerCargo, CargoAPI crateCargo) {
+        this.playerCargo = playerCargo;
+        this.crateCargo = crateCargo;
+    }
 
     @Override
     public void init(InteractionDialogAPI dialog) {

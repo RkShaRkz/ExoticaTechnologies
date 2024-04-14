@@ -33,4 +33,8 @@ public class CrateGlobalData {
         }
         Global.getSector().getPersistentData().put(GLOBAL_KEY,  data);
     }
+
+    public CargoAPI getCargo() {
+        return cargo;
+    }
 }

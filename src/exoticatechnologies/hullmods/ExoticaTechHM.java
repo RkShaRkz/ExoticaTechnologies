@@ -16,15 +16,17 @@ import exoticatechnologies.modifications.upgrades.UpgradesHandler;
 import exoticatechnologies.util.ExtensionsKt;
 import exoticatechnologies.util.FleetMemberUtils;
 import lombok.extern.log4j.Log4j;
+import org.apache.log4j.Logger;
 
 import java.awt.*;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-@Log4j
+//@Log4j
 public class ExoticaTechHM extends BaseHullMod {
     private static final Color hullmodColor = new Color(94, 206, 226);
+    private static final Logger log = Logger.getLogger(ExoticaTechHM.class);
 
     public static void addToFleetMember(FleetMemberAPI member, ShipVariantAPI variant) {
         if (variant == null) {

@@ -7,6 +7,7 @@ import com.fs.starfarer.api.campaign.SpecialItemPlugin
 import com.fs.starfarer.api.graphics.SpriteAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.util.Misc
+import exoticatechnologies.config.FactionConfig
 import exoticatechnologies.config.FactionConfigLoader
 import exoticatechnologies.modifications.ModSpecialItemPlugin
 import exoticatechnologies.modifications.exotics.ExoticsGenerator
@@ -14,6 +15,7 @@ import exoticatechnologies.modifications.exotics.ExoticsHandler
 import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.RenderUtils
 import exoticatechnologies.util.RomanNumeral
+import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.ui.LazyFont
 import org.lwjgl.util.vector.Vector2f
@@ -25,7 +27,13 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
     var upgrade: Upgrade? = null
         get() {
             if (field == null) {
-                field = UpgradesHandler.UPGRADES[modId]!!
+//                field = UpgradesHandler.UPGRADES[modId]!!
+                // Lets do it safer
+                if (UpgradesHandler.UPGRADES[modId] != null) {
+                    field = UpgradesHandler.UPGRADES[modId]
+                } else {
+                    log.error(">>>\tUpgradesHandler.UPGRADES[modId] was null!")
+                }
             }
             return field
         }
@@ -123,5 +131,9 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
                 return values()[index]
             }
         }
+    }
+
+    companion object {
+        private val log: Logger = Logger.getLogger(UpgradeSpecialItemPlugin::class.java)
     }
 }
