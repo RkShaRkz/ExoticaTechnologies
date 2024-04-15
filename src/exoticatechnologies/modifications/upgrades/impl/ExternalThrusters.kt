@@ -8,9 +8,10 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.upgrades.Upgrade
 import exoticatechnologies.util.StringUtils
+import exoticatechnologies.util.getAbsoluteAngleToAnotherShip
+import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
-import org.lazywizard.lazylib.VectorUtils
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
@@ -81,17 +82,25 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
         }
 
         override fun shouldActivateAI(amount: Float): Boolean {
-            ship.shipTarget?.let { target ->
-                val targetDir = VectorUtils.getAngle(ship.location, target.location)
+            return if (ship.shipTarget != null) {
+                val target = ship.shipTarget
 
-                val activationDistance = DISTANCE_TO_HINT_ACTIVATION_TO_AI * DISTANCE_TO_HINT_ACTIVATION_TO_AI
-                val farEnoughToActivate = MathUtils.getDistanceSquared(ship.location, target.location).absoluteValue > activationDistance
-                if (farEnoughToActivate && targetDir < 30) {
+                val differenceInDegrees = ship.getAbsoluteAngleToAnotherShip(target)
+
+                val activationDistanceSquared = DISTANCE_TO_HINT_ACTIVATION_TO_AI * DISTANCE_TO_HINT_ACTIVATION_TO_AI
+                val distanceToTargetSquared = MathUtils.getDistanceSquared(ship.location, target.location)
+                val farEnoughToActivate = distanceToTargetSquared.absoluteValue > activationDistanceSquared
+                if (farEnoughToActivate && differenceInDegrees < 15) {
                     // If further than 2000 range and within a 30-degree arc, activate the boosters
-                    return true
+                    true
+                } else {
+                    // otherwise, just activate if far enough - this must remain here because kotlin reasons
+                    farEnoughToActivate
                 }
+            } else {
+                // Nothing to charge at or chase, return false
+                false
             }
-            return false
         }
 
         override fun onStateSwitched(oldState: State?) {
@@ -177,5 +186,7 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
         const val BOOSTER_ROCKETS_OUT_DURATION = 0.6f
 
         const val DISTANCE_TO_HINT_ACTIVATION_TO_AI = 2000
+
+        val log: Logger = Logger.getLogger(ExternalThrusters::class.java)
     }
 }
