@@ -15,10 +15,10 @@ public abstract class TabbedCustomUIPanelPlugin implements CustomUIPanelPlugin {
 
     protected PositionAPI pos;
 
-    @Getter
-    @Setter
+//    @Getter
+//    @Setter
     protected CustomPanelAPI myPanel;
-    @Getter
+//    @Getter
     protected final TooltipMakerAPI myTooltip;
 
     protected TooltipMakerAPI switcherPanel;
@@ -191,5 +191,17 @@ public abstract class TabbedCustomUIPanelPlugin implements CustomUIPanelPlugin {
     @Override
     public void buttonPressed(Object buttonId) {
 
+    }
+
+    public void setMyPanel(CustomPanelAPI myPanel) {
+        this.myPanel = myPanel;
+    }
+
+    public CustomPanelAPI getMyPanel() {
+        return myPanel;
+    }
+
+    public TooltipMakerAPI getMyTooltip() {
+        return myTooltip;
     }
 }
