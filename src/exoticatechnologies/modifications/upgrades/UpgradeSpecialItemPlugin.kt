@@ -7,12 +7,8 @@ import com.fs.starfarer.api.campaign.SpecialItemPlugin
 import com.fs.starfarer.api.graphics.SpriteAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.util.Misc
-import exoticatechnologies.config.FactionConfig
 import exoticatechnologies.config.FactionConfigLoader
 import exoticatechnologies.modifications.ModSpecialItemPlugin
-import exoticatechnologies.modifications.exotics.ExoticsGenerator
-import exoticatechnologies.modifications.exotics.ExoticsHandler
-import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.RenderUtils
 import exoticatechnologies.util.RomanNumeral
 import org.apache.log4j.Logger
@@ -37,8 +33,16 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
             }
             return field
         }
+
     override fun getName(): String {
-        return String.format("%s - %s (%s)", super.getName(), upgrade!!.name, upgradeLevel)
+//        return String.format("%s - %s (%s)", super.getName(), upgrade!!.name, upgradeLevel)
+        return if (upgrade != null) {
+            upgrade?.let {
+                String.format("%s - %s (%s)", super.getName(), it.name, upgradeLevel)
+            } ?: String.format("%s - %s (%s)", super.getName(), "ERROR: upgrade is null", upgradeLevel)
+        } else {
+            String.format("%s - %s (%s)", super.getName(), "ERROR: upgrade is null", upgradeLevel)
+        }
     }
 
     override val type: ModType
@@ -73,18 +77,18 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
     }
 
     override fun createTooltip(
-        tooltip: TooltipMakerAPI,
-        expanded: Boolean,
-        transferHandler: CargoTransferHandlerAPI,
-        stackSource: Any,
-        useGray: Boolean
+            tooltip: TooltipMakerAPI,
+            expanded: Boolean,
+            transferHandler: CargoTransferHandlerAPI,
+            stackSource: Any,
+            useGray: Boolean
     ) {
         val opad = 10.0f
         tooltip.addTitle(this.name)
 
         val design = this.designType
         Misc.addDesignTypePara(tooltip, design, opad)
-        if (!spec.desc.isEmpty()) {
+        if (spec.desc.isNotEmpty()) {
             var c = Misc.getTextColor()
             if (useGray) {
                 c = Misc.getGrayColor()
@@ -92,17 +96,23 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
             tooltip.addPara(spec.desc, c, opad)
         }
 
-        tooltip.addPara(upgrade!!.description, Misc.getTextColor(), opad)
+        if (upgrade != null) {
+            upgrade?.let {
+                tooltip.addPara(it.description, Misc.getTextColor(), opad)
+            } ?: tooltip.addPara("ERROR: upgrade was null, no description", Misc.getTextColor(), opad)
+        } else {
+            tooltip.addPara("ERROR: upgrade was null, no description", Misc.getTextColor(), opad)
+        }
     }
 
     override fun render(
-        x: Float,
-        y: Float,
-        w: Float,
-        h: Float,
-        alphaMult: Float,
-        glowMult: Float,
-        renderer: SpecialItemPlugin.SpecialItemRendererAPI
+            x: Float,
+            y: Float,
+            w: Float,
+            h: Float,
+            alphaMult: Float,
+            glowMult: Float,
+            renderer: SpecialItemPlugin.SpecialItemRendererAPI
     ) {
         super.render(x, y, w, h, alphaMult, glowMult, renderer)
 
@@ -159,7 +169,6 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
             }
         }
     }
-
 
 
     companion object {
