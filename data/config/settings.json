@@ -62,7 +62,7 @@
 			"SubsumedAlphaCore": "graphics/icons/exotics/subsumedalphacore.png",
 			"SubsumedBetaCore": "graphics/icons/exotics/subsumedbetacore.png",
 			"SubsumedGammaCore": "graphics/icons/exotics/subsumedgammacore.png"
-		},
+        },
 		"upgrades": {
 			"AdvancedFluxCoils": "graphics/icons/upgrades/advancedfluxcoils.png",
 			"CommissionedCrews": "graphics/icons/upgrades/commissionedcrews.png",
@@ -89,6 +89,7 @@
 			"OversizedMagazines": "graphics/icons/upgrades/oversizedmagazines.png",
 			"Kingslayer": "graphics/icons/upgrades/kingslayer.png",
 			"QuickJets": "graphics/icons/upgrades/quickjets.png",
+			"INVALID": "graphics/icons/upgrades/INVALID.png",
 			"ExternalThrusters": "graphics/icons/upgrades/externalthrusters.png"
 		},
 		"overlays": {

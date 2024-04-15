@@ -2,6 +2,7 @@ package exoticatechnologies.modifications.upgrades.impl
 
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
+import com.fs.starfarer.api.combat.ShipCommand
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import exoticatechnologies.modifications.ShipModifications
@@ -66,7 +67,6 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
                 .addToTooltip(tooltip)
     }
 
-    //    inner class QuickTurnJets(ship: ShipAPI) : CombatActivator(ship) {
     inner class BoosterRockets(ship: ShipAPI) : MagicSubsystem(ship) {
         override fun getBaseActiveDuration(): Float {
             return BOOSTER_ROCKETS_ACTIVE_DURATION
@@ -80,7 +80,6 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
             return BOOSTER_ROCKETS_OUT_DURATION
         }
 
-        //TODO fix this
         override fun shouldActivateAI(amount: Float): Boolean {
             ship.shipTarget?.let { target ->
                 val targetDir = VectorUtils.getAngle(ship.location, target.location)
@@ -97,9 +96,6 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
 
         override fun onStateSwitched(oldState: State?) {
             if (state == State.IN || state == State.ACTIVE) {
-//                stats.turnAcceleration.modifyPercent(buffId, 350f)
-//                stats.maxTurnRate.modifyFlat(buffId, 15f)
-//                stats.maxTurnRate.modifyPercent(buffId, 100f)
                 // Give 30 to top speed, modify top speed by an additional 100%, but make steering very rigid (-80%)
                 stats.maxSpeed.modifyFlat(boosterRocketsBuffId, BOOSTER_ROCKETS_MAX_SPEED_FLAT_BOOST)
                 stats.maxSpeed.modifyPercent(boosterRocketsBuffId, BOOSTER_ROCKETS_MAX_SPEED_PERCENT_BOOST)
@@ -121,15 +117,16 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
                         false,
                         true
                 )
+
+                // Finally, put the pedal to the metal
+                ship.giveCommand(ShipCommand.ACCELERATE, null, 0)
             }
         }
 
         override fun onFinished() {
-//            stats.turnAcceleration.unmodify(buffId)
-//            stats.maxTurnRate.unmodify(buffId)
-            stats.maxSpeed.unmodify(buffId)
-            stats.turnAcceleration.unmodify(buffId)
-            stats.maxTurnRate.unmodify(buffId)
+            stats.maxSpeed.unmodify(boosterRocketsBuffId)
+            stats.turnAcceleration.unmodify(boosterRocketsBuffId)
+            stats.maxTurnRate.unmodify(boosterRocketsBuffId)
         }
 
         override fun advance(amount: Float, isPaused: Boolean) {
@@ -139,7 +136,6 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
                 val speed = ship.angularVelocity
 
                 // Modify turning
-//                stats.maxTurnRate.modifyFlat(buffId, (stats.maxTurnRate.getFlatStatMod(buffId).value - (15f / outDuration) * amount).coerceAtLeast(0f))
                 stats.maxTurnRate.modifyPercent(boosterRocketsBuffId, (stats.maxTurnRate.getPercentStatMod(boosterRocketsBuffId).value - (BOOSTER_ROCKETS_TURNING_PENALTY / outDuration) * amount).coerceAtLeast(0f))
                 stats.turnAcceleration.modifyPercent(boosterRocketsBuffId, (stats.maxTurnRate.getPercentStatMod(boosterRocketsBuffId).value - (BOOSTER_ROCKETS_TURNING_PENALTY / outDuration) * amount).coerceAtLeast(0f))
 
@@ -156,11 +152,6 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
                         ship.angularVelocity = (speed - amount * 4500f).coerceIn(0f..ship.mutableStats.maxTurnRate.modifiedValue)
                     }
                 }
-
-                // Speeding part
-//                if (speed.absoluteValue > ship.mutableStats.maxSpeed.baseValue) {
-//                    ship.angularVelocity = (speed + amount * 4500f).coerceIn()
-//                }
             }
         }
 

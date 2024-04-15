@@ -32,7 +32,7 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
                 if (UpgradesHandler.UPGRADES[modId] != null) {
                     field = UpgradesHandler.UPGRADES[modId]
                 } else {
-                    log.error(">>>\tUpgradesHandler.UPGRADES[modId] was null!")
+                    log.error(">>>\tUpgradesHandler.UPGRADES[${modId}] was null!")
                 }
             }
             return field
@@ -44,7 +44,9 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
     override val type: ModType
         get() = ModType.UPGRADE
     override val sprite: SpriteAPI
-        get() = Global.getSettings().getSprite("upgrades", upgrade!!.key)
+        get() = upgrade?.let {
+            Global.getSettings().getSprite("upgrades", it.key)
+        } ?: Global.getSettings().getSprite("upgrades", "INVALID")
 
     override fun resolveDropParamsToSpecificItemData(params: String, random: Random): String? {
         val paramsObj = JSONObject(params)
@@ -123,6 +125,31 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
         }
     }
 
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as UpgradeSpecialItemPlugin
+
+        if (upgradeLevel != other.upgradeLevel) return false
+        if (upgrade != other.upgrade) return false
+        if (type != other.type) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = upgradeLevel
+        result = 31 * result + (upgrade?.hashCode() ?: 0)
+        result = 31 * result + type.hashCode()
+        return result
+    }
+
+    override fun toString(): String {
+        return "UpgradeSpecialItemPlugin(upgradeLevel=$upgradeLevel, upgrade=$upgrade, type=$type, sprite=<redacted>)"
+    }
+
+
     private enum class Param {
         UPGRADE_ID, UPGRADE_LEVEL, IGNORE_CRATE;
 
@@ -132,6 +159,8 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
             }
         }
     }
+
+
 
     companion object {
         private val log: Logger = Logger.getLogger(UpgradeSpecialItemPlugin::class.java)

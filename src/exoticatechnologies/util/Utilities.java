@@ -585,4 +585,16 @@ public class Utilities {
     public static boolean isResourceString(String key) {
         return key.startsWith("&");
     }
+
+    public static boolean checkUpgradesForEquality(UpgradeSpecialItemPlugin plugin1, UpgradeSpecialItemPlugin plugin2) {
+        boolean plugin1null = plugin1 == null;
+        boolean plugin2null = plugin2 == null;
+
+        if (plugin1null && plugin2null) return true;
+
+        if (plugin1null && !plugin2null) return false;
+        if (!plugin1null && plugin2null) return false;
+
+        return Objects.equals(plugin1.getUpgrade(), plugin2.getUpgrade());
+    }
 }
