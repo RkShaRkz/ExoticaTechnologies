@@ -193,6 +193,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             // Make the shield-hosting drone invulnerable, so that it's not targetable.
             // Because the owning ship keeps shooting it down.
             fighter.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f)
+            // Set it's collision channel to fighter - since they can fly over the ship and should still react to most of the things
+            fighter.collisionClass = CollisionClass.FIGHTER
             logger.info("<-- spawnDrone()\tdrone shield: ${fighter.shield}, shield arc: ${fighter.shield.arc}, shield type: ${fighter.shield.type}, shield active ? ${fighter.shield.isOn}")
             return fighter
         }
