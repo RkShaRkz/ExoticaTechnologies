@@ -3,13 +3,9 @@ package exoticatechnologies.modifications.exotics.impl
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.campaign.CampaignFleetAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
-import com.fs.starfarer.api.characters.PersonAPI
 import com.fs.starfarer.api.combat.*
-import com.fs.starfarer.api.combat.listeners.CombatListenerManagerAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.fleet.FleetMemberType
-import com.fs.starfarer.api.graphics.SpriteAPI
-import com.fs.starfarer.api.loading.WeaponSlotAPI
 import com.fs.starfarer.api.mission.FleetSide
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
@@ -17,18 +13,20 @@ import com.fs.starfarer.api.util.IntervalUtil
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
+import exoticatechnologies.util.CollisionUtil
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
+import org.lazywizard.lazylib.VectorUtils
 import org.lazywizard.lazylib.combat.AIUtils
 import org.lazywizard.lazylib.combat.CombatUtils
 import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystemsManager
 import org.magiclib.subsystems.drones.MagicDroneSubsystem
 import java.awt.Color
-import java.util.*
+import kotlin.math.max
 
 
 class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) {
@@ -155,6 +153,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 }
 
                 shieldController.assesSituation(amount)
+                shieldController.controlShield(amount)
+                shieldController.shieldPushOutEffect(amount)
             }
         }
 
@@ -239,7 +239,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                         systemOn()
                         return true
                     }
-                    val projectiles: List<DamagingProjectileAPI> = engine.getProjectiles()
+                    val projectiles: List<DamagingProjectileAPI> = engine.projectiles
                     for (proj in projectiles) {
                         if (proj.owner != ship.owner
                                 && (MathUtils.getDistance(ship, proj) > 1500 || MathUtils.getDistance(drone, proj) > 1500)) {
@@ -248,7 +248,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                             return true
                         }
                     }
-                    val beams: List<BeamAPI> = engine.getBeams()
+                    val beams: List<BeamAPI> = engine.beams
                     for (beam in beams) {
                         if (beam.source.owner != ship.owner
                                 && (MathUtils.isWithinRange(ship, beam.to, 1500f)
@@ -266,6 +266,107 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 // what do we do here? lets fallback to returning false, but don't touch the shield
                 logger.info("just returning false, not touching shield")
                 return false
+            }
+
+            fun controlShield(amount: Float) {
+                drone?.let {
+                    if (it.isHulk || it.shield.isOff) {
+                        it.collisionClass = CollisionClass.FIGHTER
+                        it.collisionRadius = 400f
+                    } else if (it.shield.isOn) {
+                        it.shield.activeArc = 360f
+                        var radius = it.collisionRadius
+                        if (radius < 1500) {
+                            radius += 300 * amount
+                        } else {
+                            radius = 1500f
+                        }
+                        it.shield.radius = radius
+                        it.collisionRadius = radius
+                    }
+                    if (it.fluxTracker.isOverloaded && Math.random() < 0.1) {
+                        engine.applyDamage(ship, ship.location, MathUtils.getRandomNumberInRange(0f, 100f), DamageType.ENERGY, 0f, true, true, ship)
+                    }
+                }
+            }
+
+            fun shieldPushOutEffect(amount: Float) {
+                drone?.let {
+                    for (ship in AIUtils.getNearbyEnemies(it, it.collisionRadius)) {
+                        if (MathUtils.getDistance(ship.location, it.location) < ship.collisionRadius + it.getCollisionRadius()) { //hmm, I needs to override the no negative result thing here.
+                            val pointToTest = VectorUtils.clampLength(Vector2f.sub(it.getLocation(), ship.location, null), it.getShieldRadiusEvenIfNoShield())
+                            val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(it.getLocation(), pointToTest, ship)
+                            collisionPoint?.let { collisionPoint -> //ugh, this shadowing is bad but i'm lazy
+                                if (!ship.isStation && !(ship.isStationModule && ship.parentStation.isStation)) {
+                                    ship.velocity.set(it.getVelocity())
+                                    ForceApplier.applyMomentum(ship, collisionPoint, Vector2f.sub(it.getLocation(), ship.location, null), amount * 10f, true)
+                                }
+                                ForceApplier.applyMomentum(it.getParentStation(), collisionPoint, Vector2f.sub(ship.location, it.getLocation(), null), amount * -0.5f, true)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    object ForceApplier {
+        fun applyMomentum(entity: CombatEntityAPI?, pointOfImpact: Vector2f?, direction: Vector2f, momentum: Float, elasticCollision: Boolean) {
+            // This whole thing is weird, but necessary since arguments are being reassigned for some reason
+            var entity = entity
+            var direction = direction
+            var momentum = momentum
+
+            if (entity == null) {
+                return
+            } else {
+                // Filter out forces without a direction
+                if (direction.lengthSquared() == 0f) {
+                    return
+                }
+                // Avoid divide-by-zero errors...
+                var mass = max(1.0, entity.mass.toDouble()).toFloat()
+                // We should not move stations, right?
+                if (entity is ShipAPI) {
+                    val ship = entity
+                    if (ship.isStation || (ship.isStationModule && ship.parentStation.isStation)) {
+                        return
+                    }
+                    if (ship.isStationModule && ship.isShipWithModules) {
+                        entity = ship.parentStation
+                        mass = max(1.0, ship.massWithModules.toDouble()).toFloat()
+                    }
+                }
+                // Momentum is far too weak otherwise
+                momentum *= 100f
+                // Doing some vector calculate
+                val BPtoMC = entity?.let { Vector2f.sub(it.location, pointOfImpact, null) }
+                        ?: throw RuntimeException("entity was null while assigning to BPtoMC -- this should not be happening. Look into GuardianShield -> ForceApplier::applyMomentum()")
+                val forceV = Vector2f()
+                direction.normalise(forceV)
+                forceV.scale(momentum)
+                // get force vector
+                BPtoMC.normalise(BPtoMC)
+                // calculate acceleration
+                BPtoMC.scale(Vector2f.dot(forceV, BPtoMC) / mass)
+                if (elasticCollision) {
+                    // Apply velocity change
+                    Vector2f.add(BPtoMC, entity.velocity, entity.velocity)
+                } else {
+                    // Apply velocity change
+                    direction = Vector2f(forceV)
+                    direction.scale(1 / mass)
+                    Vector2f.add(direction, entity.velocity, entity.velocity)
+                }
+                // calculate moment change
+                var angularAcc = VectorUtils.getCrossProduct(forceV, BPtoMC) / (0.5f * mass * entity.collisionRadius * entity.collisionRadius)
+                angularAcc = Math.toDegrees(angularAcc.toDouble()).toFloat()
+                // Apply angular velocity change
+                if (elasticCollision) {
+                    entity.angularVelocity = entity.angularVelocity + angularAcc
+                } else {
+                    entity.angularVelocity = entity.angularVelocity - angularAcc
+                }
             }
         }
     }
