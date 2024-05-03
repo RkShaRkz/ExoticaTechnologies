@@ -27,6 +27,7 @@ import org.magiclib.subsystems.MagicSubsystemsManager
 import org.magiclib.subsystems.drones.MagicDroneSubsystem
 import java.awt.Color
 import kotlin.math.max
+import kotlin.math.min
 
 
 class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) {
@@ -102,11 +103,6 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             }
         }
 
-//        override fun onFinished() {
-//            super.onFinished()
-//            drone?.let { it.shield.toggleOff() }
-//        }
-
 
         override fun getBaseActiveDuration(): Float = 0f
 
@@ -155,6 +151,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 shieldController.assesSituation(amount)
                 shieldController.controlShield(amount)
                 shieldController.shieldPushOutEffect(amount)
+                shieldController.transferFlux(amount, twoway = false, transfer = true)
             }
         }
 
@@ -304,6 +301,101 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                                 ForceApplier.applyMomentum(it.getParentStation(), collisionPoint, Vector2f.sub(ship.location, it.getLocation(), null), amount * -0.5f, true)
                             }
                         }
+                    }
+                }
+            }
+
+            fun transferFlux(amount: Float, twoway: Boolean = false, transfer: Boolean = false) {
+                /**
+                 * I don't know where i'm going with this two-way heat exchange
+                 * the whole concept of working with percentages is kinda broken at it's core:
+                 *  - the shield drone has 175k flux capacity
+                 *  - the host ship has whatever, lets say 25k or 8k.
+                 *  - 10% of shield drone's capacity (17.5k) will transform to 2.5k or 800 flux. 15k flux will have been lost.
+                 */
+                drone?.let {
+                    // should be between 0-100%
+                    val droneFluxTracker = it.fluxTracker
+                    val droneSoftFluxPercentageLevel = (droneFluxTracker.currFlux - droneFluxTracker.hardFlux) / droneFluxTracker.maxFlux
+                    val droneHardFluxPercentageLevel = droneFluxTracker.hardFlux / droneFluxTracker.maxFlux
+
+                    val shipFluxTracker = ship.fluxTracker
+                    val shipSoftFluxPercentageLevel =  (shipFluxTracker.currFlux - shipFluxTracker.hardFlux) / shipFluxTracker.maxFlux
+                    val shipHardFluxPercentageLevel = shipFluxTracker.hardFlux / shipFluxTracker.maxFlux
+                    // Check the host-ship's flux levels.
+                    // If they're different from the shield-host's levels, apply the sharing code to both of them.
+                    logger.info("droneSoftFluxPercentageLevel: ${droneSoftFluxPercentageLevel}, droneHardFluxPercentageLevel: ${droneHardFluxPercentageLevel}, drone hard flux: ${droneFluxTracker.hardFlux}, drone current flux: ${droneFluxTracker.currFlux}, drone max flux: ${droneFluxTracker.maxFlux}")
+                    logger.info("shipSoftFluxPercentageLevel: ${shipSoftFluxPercentageLevel}, shipHardFluxPercentageLevel: ${shipHardFluxPercentageLevel}, ship hard flux: ${shipFluxTracker.hardFlux}, ship current flux: ${shipFluxTracker.currFlux}, ship max flux: ${shipFluxTracker.maxFlux}")
+
+                    // Apply flux to the ship
+                    // keep the difference clamped between 0-100% by doing max(diff,0) to keep it >=0, and min(that,100) to keep it <=100
+                    val droneToShipSoftFluxDiff = min(max(droneSoftFluxPercentageLevel - shipSoftFluxPercentageLevel, 0f), 100f)
+                    val droneToShipHardFluxDiff = min(max(droneHardFluxPercentageLevel - shipHardFluxPercentageLevel, 0f), 100f)
+                    // because the diff isn't in (0, 1.00) range but rather (1,100), we need to divide to not end up having it 100 bigger
+                    val droneToShipSoftFluxAmount = (droneToShipSoftFluxDiff * shipFluxTracker.maxFlux) / 100f
+                    val droneToShipHardFluxAmount = (droneToShipHardFluxDiff * shipFluxTracker.maxFlux) / 100f
+                    logger.info("droneToShipSoftFluxDiff: ${droneToShipSoftFluxDiff}, droneToShipSoftFluxAmount: ${droneToShipSoftFluxAmount}, droneToShipHardFluxDiff: ${droneToShipHardFluxDiff}, droneToShipHardFluxAmount: ${droneToShipHardFluxAmount}")
+                    // If doing two-way, we need to calculate these things for the other direction too before we increase them
+                    if (twoway) {
+                        logger.info("Two-way flux exchange")
+                        val shipToDroneSoftFluxDiff = min(max(shipSoftFluxPercentageLevel - droneSoftFluxPercentageLevel, 0f), 100f)
+                        val shipToDroneHardFluxDiff = min(max(shipHardFluxPercentageLevel - droneHardFluxPercentageLevel, 0f), 100f)
+                        // because the diff isn't in (0, 1.00) range but rather (0,100), we need to divide to not end up having it 100 bigger
+                        val shipToDroneSoftFluxAmount = (shipToDroneSoftFluxDiff * droneFluxTracker.maxFlux) / 100f
+                        val shipToDroneHardFluxAmount = (shipToDroneHardFluxDiff * droneFluxTracker.maxFlux) / 100f
+                        logger.info("shipToDroneSoftFluxDiff: ${shipToDroneSoftFluxDiff}, shipToDroneSoftFluxAmount: ${shipToDroneSoftFluxAmount}, shipToDroneHardFluxDiff: ${shipToDroneHardFluxDiff}, shipToDroneHardFluxAmount: ${shipToDroneHardFluxAmount}")
+
+                        // apply increases
+                        shipFluxTracker.increaseFlux(droneToShipSoftFluxAmount, false)
+                        shipFluxTracker.increaseFlux(droneToShipHardFluxAmount, true)
+                        logger.info("Applied flux to ship! hard flux: ${droneToShipHardFluxAmount}, soft flux: ${droneToShipSoftFluxAmount}")
+                        logger.info("shipSoftFluxPercentageLevel: ${(shipFluxTracker.currFlux - shipFluxTracker.hardFlux) / shipFluxTracker.maxFlux}, shipHardFluxPercentageLevel: ${shipFluxTracker.hardFlux / shipFluxTracker.maxFlux}, ship hard flux: ${shipFluxTracker.hardFlux}, ship current flux: ${shipFluxTracker.currFlux}, ship max flux: ${shipFluxTracker.maxFlux}")
+                        droneFluxTracker.increaseFlux(shipToDroneSoftFluxAmount, false)
+                        droneFluxTracker.increaseFlux(shipToDroneHardFluxAmount, true)
+                        logger.info("Applied flux to drone! hard flux: ${shipToDroneHardFluxAmount}, soft flux: ${shipToDroneSoftFluxAmount}")
+                        logger.info("droneToShipSoftFluxDiff: ${(droneFluxTracker.currFlux - droneFluxTracker.hardFlux) / droneFluxTracker.maxFlux}, droneToShipSoftFluxAmount: ${droneFluxTracker.hardFlux / droneFluxTracker.maxFlux}, droneToShipHardFluxDiff: ${droneToShipHardFluxDiff}, droneToShipHardFluxAmount: ${droneToShipHardFluxAmount}")
+                    } else {
+                        if(transfer.not()) {
+                            logger.info("One-way flux exchange")
+                            shipFluxTracker.increaseFlux(droneToShipSoftFluxAmount, false)
+                            shipFluxTracker.increaseFlux(droneToShipHardFluxAmount, true)
+                            logger.info("Applied flux to ship! hard flux: ${droneToShipHardFluxAmount}, soft flux: ${droneToShipSoftFluxAmount}")
+                        } else {
+                            logger.info("One-way flux transfer")
+                            val droneSoftFluxAmount = (droneFluxTracker.currFlux - droneFluxTracker.hardFlux)//droneSoftFluxPercentageLevel * shipFluxTracker.maxFlux
+                            val droneHardFluxAmount = droneFluxTracker.hardFlux//droneHardFluxPercentageLevel * shipFluxTracker.maxFlux
+                            shipFluxTracker.increaseFlux(droneSoftFluxAmount, false)
+                            shipFluxTracker.increaseFlux(droneHardFluxAmount, true)
+                            logger.info("Applied flux to ship! hard flux: ${droneHardFluxAmount}, soft flux: ${droneSoftFluxAmount}")
+                            droneFluxTracker.hardFlux = 0f
+                            droneFluxTracker.currFlux = 0f
+                            logger.info("Cleared drone flux! drone stats: hard flux: ${droneFluxTracker.hardFlux}, softFlux: ${droneFluxTracker.currFlux - droneFluxTracker.hardFlux}, currFlux: ${droneFluxTracker.currFlux}")
+                        }
+                    }
+
+                    // share overload - it's done this way so that applying overload to one
+                    // doesn't immediately reflect back to the other
+                    val droneOverloaded = droneFluxTracker.isOverloaded
+                    val droneOverloadTime = droneFluxTracker.overloadTimeRemaining
+                    val shipOverloaded = shipFluxTracker.isOverloaded
+                    val shipOverloadTime = shipFluxTracker.overloadTimeRemaining
+                    logger.info("droneOverloaded: ${droneOverloaded}, droneOverloadTime: ${droneOverloadTime}, shipOverloaded: ${shipOverloaded}, shipOverloadTime: ${shipOverloadTime}")
+                    if (droneOverloaded) {
+                        // shield->ship overload transfer
+                        shipFluxTracker.forceOverload(droneOverloadTime)
+                        shipFluxTracker.setOverloadDuration(droneOverloadTime)
+                        logger.info("Applied ${droneOverloadTime} of overload time from drone to ship!")
+                    } else {
+                        // actually, nothing here
+                    }
+
+                    if (shipOverloaded) {
+                        // ship->shield overload transfer
+                        droneFluxTracker.forceOverload(shipOverloadTime)
+                        droneFluxTracker.setOverloadDuration(shipOverloadTime)
+                        logger.info("Applied ${shipOverloadTime} of overload time from ship to drone!")
+                    } else {
+                        // actually, nothing here
                     }
                 }
             }
