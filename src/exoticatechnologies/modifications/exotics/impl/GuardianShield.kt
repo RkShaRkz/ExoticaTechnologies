@@ -158,14 +158,14 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         private fun systemOn() {
             drone?.let {
                 it.shield.toggleOn()
-                logger.info("systemOn()\tshield on ? ${it.shield.isOn}")
+                log("systemOn()\tshield on ? ${it.shield.isOn}", "$LOGTAG:GuardianShieldDrone")
             }
         }
 
         private fun systemOff() {
             drone?.let {
                 it.shield.toggleOff()
-                logger.info("systemOff()\tshield off ? ${it.shield.isOff}")
+                log("systemOff()\tshield off ? ${it.shield.isOff}", "$LOGTAG:GuardianShieldDrone")
             }
         }
 
@@ -192,7 +192,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             fighter.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f)
             // Set it's collision channel to fighter - since they can fly over the ship and should still react to most of the things
             fighter.collisionClass = CollisionClass.FIGHTER
-            logger.info("<-- spawnDrone()\tdrone shield: ${fighter.shield}, shield arc: ${fighter.shield.arc}, shield type: ${fighter.shield.type}, shield active ? ${fighter.shield.isOn}")
+            log("<-- spawnDrone()\tdrone shield: ${fighter.shield}, shield arc: ${fighter.shield.arc}, shield type: ${fighter.shield.type}, shield active ? ${fighter.shield.isOn}", "$LOGTAG:GuardianShieldDrone")
             return fighter
         }
 
@@ -201,16 +201,34 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             fun assesSituation(amount: Float): Boolean {
                 tracker.advance(amount)
                 if (tracker.intervalElapsed()) {
+                    // If host ship or shield drone are overheated - turn off shields
+                    if (ship.fluxTracker.isOverloadedOrVenting) {
+                        systemOff()
+                    }
+                    drone?.let {
+                        if (it.fluxTracker.isOverloadedOrVenting) {
+                            systemOff()
+                        }
+                    }
+
+                    // Same for phasing
+                    if (ship.isPhased) {
+                        systemOff()
+                    }
+
+                    // Check for ships in danger - the host ship, or the shield drone
                     val shipInDanger = ship.hullLevel < 0.15f
 
                     drone?.let {
                         val shieldInDanger = it.hullLevel < 1f
                         if (it.fluxTracker.fluxLevel > 0.96f && !shipInDanger && !shieldInDanger) {
-                            logger.info("calling systemOff()\t\tif (it.fluxTracker.fluxLevel > 0.96f && !shipInDanger && !shieldInDanger)")
+                            log("calling systemOff()\t\tif (it.fluxTracker.fluxLevel > 0.96f && !shipInDanger && !shieldInDanger)", "$LOGTAG:ShieldController")
                             systemOff()
                             return false
                         }
                     }
+
+                    // Check for allies in radius of 1500 and whether they need help or have incoming damage
                     val allies = AIUtils.getNearbyAllies(ship, 1500f)
                     // add shield to allies if it's non-null
                     if (drone != null) {
@@ -221,26 +239,31 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                         if (ally.aiFlags != null
                                 && (ally.aiFlags.hasFlag(ShipwideAIFlags.AIFlags.HAS_INCOMING_DAMAGE)
                                         || ally.aiFlags.hasFlag(ShipwideAIFlags.AIFlags.NEEDS_HELP))) {
-                            logger.info("calling systemOn()\t\tallies need help condition")
+                            log("calling systemOn()\t\tallies need help condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
                         }
                     }
+
+                    // Check for nearby enemies within 2000, ignoring those that need help.
+                    // Shield remains up if there are some.
                     val enemies = AIUtils.getNearbyEnemies(ship, 2000f)
                     for (enemy in enemies) {
                         if ((enemy.aiFlags != null && enemy.aiFlags.hasFlag(ShipwideAIFlags.AIFlags.NEEDS_HELP))
                                 || enemy.isRetreating) {
                             continue
                         }
-                        logger.info("calling systemOn()\t\tnearby enemies condition")
+                        log("calling systemOn()\t\tnearby enemies condition", "$LOGTAG:ShieldController")
                         systemOn()
                         return true
                     }
+
+                    // Check for projectiles or and raise shields if there are some incoming
                     val projectiles: List<DamagingProjectileAPI> = engine.projectiles
                     for (proj in projectiles) {
                         if (proj.owner != ship.owner
                                 && (MathUtils.getDistance(ship, proj) > 1500 || MathUtils.getDistance(drone, proj) > 1500)) {
-                            logger.info("calling systemOn()\t\tprojectiles near ship or shield condition")
+                            log("calling systemOn()\t\tprojectiles near ship or shield condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
                         }
@@ -250,18 +273,18 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                         if (beam.source.owner != ship.owner
                                 && (MathUtils.isWithinRange(ship, beam.to, 1500f)
                                         || MathUtils.isWithinRange(drone, beam.to, 1500f))) {
-                            logger.info("calling systemOn()\t\tbeam within range of ship or shield condition")
+                            log("calling systemOn()\t\tbeam within range of ship or shield condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
                         }
                     }
-                    logger.info("calling systemOff()\t\tno other conditions were met")
+                    log("calling systemOff()\t\tno other conditions were met", "$LOGTAG:ShieldController")
                     systemOff()
                     return false
                 }
 
                 // what do we do here? lets fallback to returning false, but don't touch the shield
-                logger.info("just returning false, not touching shield")
+                log("just returning false, not touching shield", "$LOGTAG:ShieldController")
                 return false
             }
 
@@ -289,16 +312,29 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
 
             fun shieldPushOutEffect(amount: Float) {
                 drone?.let {
+                    val momentumFactor: Float = when (ship.hullSize) {
+                        null -> 0f
+                        ShipAPI.HullSize.DEFAULT -> 1f
+                        ShipAPI.HullSize.FIGHTER -> 1f
+                        ShipAPI.HullSize.FRIGATE -> 2f
+                        ShipAPI.HullSize.DESTROYER -> 2.5f
+                        ShipAPI.HullSize.CRUISER -> 3.5f
+                        ShipAPI.HullSize.CAPITAL_SHIP -> 5f
+                    }
+
                     for (ship in AIUtils.getNearbyEnemies(it, it.collisionRadius)) {
                         if (MathUtils.getDistance(ship.location, it.location) < ship.collisionRadius + it.getCollisionRadius()) { //hmm, I needs to override the no negative result thing here.
                             val pointToTest = VectorUtils.clampLength(Vector2f.sub(it.getLocation(), ship.location, null), it.getShieldRadiusEvenIfNoShield())
                             val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(it.getLocation(), pointToTest, ship)
-                            collisionPoint?.let { collisionPoint -> //ugh, this shadowing is bad but i'm lazy
+                            collisionPoint?.let { collision ->
                                 if (!ship.isStation && !(ship.isStationModule && ship.parentStation.isStation)) {
                                     ship.velocity.set(it.getVelocity())
-                                    ForceApplier.applyMomentum(ship, collisionPoint, Vector2f.sub(it.getLocation(), ship.location, null), amount * 10f, true)
+                                    val momentum = amount * 10f * momentumFactor
+                                    ForceApplier.applyMomentum(ship, collision, Vector2f.sub(it.getLocation(), ship.location, null), momentum, true)
+                                } else {
+                                    val momentum = amount * -0.5f * 1 / momentumFactor
+                                    ForceApplier.applyMomentum(it.getParentStation(), collision, Vector2f.sub(ship.location, it.getLocation(), null), momentum, true)
                                 }
-                                ForceApplier.applyMomentum(it.getParentStation(), collisionPoint, Vector2f.sub(ship.location, it.getLocation(), null), amount * -0.5f, true)
                             }
                         }
                     }
@@ -312,64 +348,76 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                  *  - the shield drone has 175k flux capacity
                  *  - the host ship has whatever, lets say 25k or 8k.
                  *  - 10% of shield drone's capacity (17.5k) will transform to 2.5k or 800 flux. 15k flux will have been lost.
+                 *
+                 *  on the other hand, if the ship has amassed 90% flux:
+                 *  - the 90% of let's say 25k is 22.5 will transform to 153k flux. 130.5k flux will have been magically created
+                 *
+                 *  I think the two-way exchange does kinda work, but exchange is the wrong word for it.
                  */
                 drone?.let {
+                    log("--> transferFlux(amount=$amount, twoway=$twoway, transfer=$transfer)", "$LOGTAG:FluxTransfer")
                     // should be between 0-100%
                     val droneFluxTracker = it.fluxTracker
                     val droneSoftFluxPercentageLevel = (droneFluxTracker.currFlux - droneFluxTracker.hardFlux) / droneFluxTracker.maxFlux
                     val droneHardFluxPercentageLevel = droneFluxTracker.hardFlux / droneFluxTracker.maxFlux
 
                     val shipFluxTracker = ship.fluxTracker
-                    val shipSoftFluxPercentageLevel =  (shipFluxTracker.currFlux - shipFluxTracker.hardFlux) / shipFluxTracker.maxFlux
+                    val shipSoftFluxPercentageLevel = (shipFluxTracker.currFlux - shipFluxTracker.hardFlux) / shipFluxTracker.maxFlux
                     val shipHardFluxPercentageLevel = shipFluxTracker.hardFlux / shipFluxTracker.maxFlux
                     // Check the host-ship's flux levels.
                     // If they're different from the shield-host's levels, apply the sharing code to both of them.
-                    logger.info("droneSoftFluxPercentageLevel: ${droneSoftFluxPercentageLevel}, droneHardFluxPercentageLevel: ${droneHardFluxPercentageLevel}, drone hard flux: ${droneFluxTracker.hardFlux}, drone current flux: ${droneFluxTracker.currFlux}, drone max flux: ${droneFluxTracker.maxFlux}")
-                    logger.info("shipSoftFluxPercentageLevel: ${shipSoftFluxPercentageLevel}, shipHardFluxPercentageLevel: ${shipHardFluxPercentageLevel}, ship hard flux: ${shipFluxTracker.hardFlux}, ship current flux: ${shipFluxTracker.currFlux}, ship max flux: ${shipFluxTracker.maxFlux}")
+                    log("droneSoftFluxPercentageLevel: ${droneSoftFluxPercentageLevel}, droneHardFluxPercentageLevel: ${droneHardFluxPercentageLevel}, drone hard flux: ${droneFluxTracker.hardFlux}, drone current flux: ${droneFluxTracker.currFlux}, drone max flux: ${droneFluxTracker.maxFlux}", "$LOGTAG:FluxTransfer")
+                    log("shipSoftFluxPercentageLevel: ${shipSoftFluxPercentageLevel}, shipHardFluxPercentageLevel: ${shipHardFluxPercentageLevel}, ship hard flux: ${shipFluxTracker.hardFlux}, ship current flux: ${shipFluxTracker.currFlux}, ship max flux: ${shipFluxTracker.maxFlux}", "$LOGTAG:FluxTransfer")
 
                     // Apply flux to the ship
-                    // keep the difference clamped between 0-100% by doing max(diff,0) to keep it >=0, and min(that,100) to keep it <=100
-                    val droneToShipSoftFluxDiff = min(max(droneSoftFluxPercentageLevel - shipSoftFluxPercentageLevel, 0f), 100f)
-                    val droneToShipHardFluxDiff = min(max(droneHardFluxPercentageLevel - shipHardFluxPercentageLevel, 0f), 100f)
-                    // because the diff isn't in (0, 1.00) range but rather (1,100), we need to divide to not end up having it 100 bigger
-                    val droneToShipSoftFluxAmount = (droneToShipSoftFluxDiff * shipFluxTracker.maxFlux) / 100f
-                    val droneToShipHardFluxAmount = (droneToShipHardFluxDiff * shipFluxTracker.maxFlux) / 100f
-                    logger.info("droneToShipSoftFluxDiff: ${droneToShipSoftFluxDiff}, droneToShipSoftFluxAmount: ${droneToShipSoftFluxAmount}, droneToShipHardFluxDiff: ${droneToShipHardFluxDiff}, droneToShipHardFluxAmount: ${droneToShipHardFluxAmount}")
+                    // keep the difference clamped between 0-1.00% by doing max(diff,0) to keep it >=0, and min(that,1.00) to keep it <=1.00
+                    val droneToShipSoftFluxDiff = min(max(droneSoftFluxPercentageLevel - shipSoftFluxPercentageLevel, 0f), 1.00f)
+                    val droneToShipHardFluxDiff = min(max(droneHardFluxPercentageLevel - shipHardFluxPercentageLevel, 0f), 1.00f)
+
+                    val droneToShipSoftFluxAmount = (droneToShipSoftFluxDiff * shipFluxTracker.maxFlux) / 1.00f
+                    val droneToShipHardFluxAmount = (droneToShipHardFluxDiff * shipFluxTracker.maxFlux) / 1.00f
+                    log("droneToShipSoftFluxDiff: ${droneToShipSoftFluxDiff}, droneToShipSoftFluxAmount: ${droneToShipSoftFluxAmount}, droneToShipHardFluxDiff: ${droneToShipHardFluxDiff}, droneToShipHardFluxAmount: ${droneToShipHardFluxAmount}", "$LOGTAG:FluxTransfer")
                     // If doing two-way, we need to calculate these things for the other direction too before we increase them
                     if (twoway) {
-                        logger.info("Two-way flux exchange")
-                        val shipToDroneSoftFluxDiff = min(max(shipSoftFluxPercentageLevel - droneSoftFluxPercentageLevel, 0f), 100f)
-                        val shipToDroneHardFluxDiff = min(max(shipHardFluxPercentageLevel - droneHardFluxPercentageLevel, 0f), 100f)
-                        // because the diff isn't in (0, 1.00) range but rather (0,100), we need to divide to not end up having it 100 bigger
-                        val shipToDroneSoftFluxAmount = (shipToDroneSoftFluxDiff * droneFluxTracker.maxFlux) / 100f
-                        val shipToDroneHardFluxAmount = (shipToDroneHardFluxDiff * droneFluxTracker.maxFlux) / 100f
-                        logger.info("shipToDroneSoftFluxDiff: ${shipToDroneSoftFluxDiff}, shipToDroneSoftFluxAmount: ${shipToDroneSoftFluxAmount}, shipToDroneHardFluxDiff: ${shipToDroneHardFluxDiff}, shipToDroneHardFluxAmount: ${shipToDroneHardFluxAmount}")
+                        log("Two-way flux exchange", "$LOGTAG:FluxTransfer")
+                        val shipToDroneSoftFluxDiff = min(max(shipSoftFluxPercentageLevel - droneSoftFluxPercentageLevel, 0f), 1.00f)
+                        val shipToDroneHardFluxDiff = min(max(shipHardFluxPercentageLevel - droneHardFluxPercentageLevel, 0f), 1.00f)
+
+                        val shipToDroneSoftFluxAmount = (shipToDroneSoftFluxDiff * droneFluxTracker.maxFlux) / 1.00f
+                        val shipToDroneHardFluxAmount = (shipToDroneHardFluxDiff * droneFluxTracker.maxFlux) / 1.00f
+                        log("shipToDroneSoftFluxDiff: ${shipToDroneSoftFluxDiff}, shipToDroneSoftFluxAmount: ${shipToDroneSoftFluxAmount}, shipToDroneHardFluxDiff: ${shipToDroneHardFluxDiff}, shipToDroneHardFluxAmount: ${shipToDroneHardFluxAmount}", "$LOGTAG:FluxTransfer")
 
                         // apply increases
                         shipFluxTracker.increaseFlux(droneToShipSoftFluxAmount, false)
                         shipFluxTracker.increaseFlux(droneToShipHardFluxAmount, true)
-                        logger.info("Applied flux to ship! hard flux: ${droneToShipHardFluxAmount}, soft flux: ${droneToShipSoftFluxAmount}")
-                        logger.info("shipSoftFluxPercentageLevel: ${(shipFluxTracker.currFlux - shipFluxTracker.hardFlux) / shipFluxTracker.maxFlux}, shipHardFluxPercentageLevel: ${shipFluxTracker.hardFlux / shipFluxTracker.maxFlux}, ship hard flux: ${shipFluxTracker.hardFlux}, ship current flux: ${shipFluxTracker.currFlux}, ship max flux: ${shipFluxTracker.maxFlux}")
+                        log("Applied flux to ship! hard flux: ${droneToShipHardFluxAmount}, soft flux: ${droneToShipSoftFluxAmount}", "$LOGTAG:FluxTransfer")
+                        log("shipSoftFluxPercentageLevel: ${(shipFluxTracker.currFlux - shipFluxTracker.hardFlux) / shipFluxTracker.maxFlux}, shipHardFluxPercentageLevel: ${shipFluxTracker.hardFlux / shipFluxTracker.maxFlux}, ship hard flux: ${shipFluxTracker.hardFlux}, ship current flux: ${shipFluxTracker.currFlux}, ship max flux: ${shipFluxTracker.maxFlux}", "$LOGTAG:FluxTransfer")
+                        log("[AFTER] ship stats: hard flux: ${shipFluxTracker.hardFlux}, softFlux: ${shipFluxTracker.currFlux - shipFluxTracker.hardFlux}, currFlux: ${shipFluxTracker.currFlux}", "$LOGTAG:FluxTransfer")
                         droneFluxTracker.increaseFlux(shipToDroneSoftFluxAmount, false)
                         droneFluxTracker.increaseFlux(shipToDroneHardFluxAmount, true)
-                        logger.info("Applied flux to drone! hard flux: ${shipToDroneHardFluxAmount}, soft flux: ${shipToDroneSoftFluxAmount}")
-                        logger.info("droneToShipSoftFluxDiff: ${(droneFluxTracker.currFlux - droneFluxTracker.hardFlux) / droneFluxTracker.maxFlux}, droneToShipSoftFluxAmount: ${droneFluxTracker.hardFlux / droneFluxTracker.maxFlux}, droneToShipHardFluxDiff: ${droneToShipHardFluxDiff}, droneToShipHardFluxAmount: ${droneToShipHardFluxAmount}")
+                        log("Applied flux to drone! hard flux: ${shipToDroneHardFluxAmount}, soft flux: ${shipToDroneSoftFluxAmount}", "$LOGTAG:FluxTransfer")
+                        log("droneToShipSoftFluxDiff: ${(droneFluxTracker.currFlux - droneFluxTracker.hardFlux) / droneFluxTracker.maxFlux}, droneToShipSoftFluxAmount: ${droneFluxTracker.hardFlux / droneFluxTracker.maxFlux}, droneToShipHardFluxDiff: ${droneToShipHardFluxDiff}, droneToShipHardFluxAmount: ${droneToShipHardFluxAmount}", "$LOGTAG:FluxTransfer")
+                        log("[AFTER] drone stats: hard flux: ${droneFluxTracker.hardFlux}, softFlux: ${droneFluxTracker.currFlux - droneFluxTracker.hardFlux}, currFlux: ${droneFluxTracker.currFlux}", "$LOGTAG:FluxTransfer")
                     } else {
-                        if(transfer.not()) {
-                            logger.info("One-way flux exchange")
+                        if (transfer.not()) {
+                            log("One-way flux exchange", "$LOGTAG:FluxTransfer")
                             shipFluxTracker.increaseFlux(droneToShipSoftFluxAmount, false)
                             shipFluxTracker.increaseFlux(droneToShipHardFluxAmount, true)
-                            logger.info("Applied flux to ship! hard flux: ${droneToShipHardFluxAmount}, soft flux: ${droneToShipSoftFluxAmount}")
+                            log("Applied flux to ship! hard flux: ${droneToShipHardFluxAmount}, soft flux: ${droneToShipSoftFluxAmount}", "$LOGTAG:FluxTransfer")
+                            log("[AFTER] drone stats: hard flux: ${droneFluxTracker.hardFlux}, softFlux: ${droneFluxTracker.currFlux - droneFluxTracker.hardFlux}, currFlux: ${droneFluxTracker.currFlux}", "$LOGTAG:FluxTransfer")
+                            log("[AFTER] ship stats: hard flux: ${shipFluxTracker.hardFlux}, softFlux: ${shipFluxTracker.currFlux - shipFluxTracker.hardFlux}, currFlux: ${shipFluxTracker.currFlux}", "$LOGTAG:FluxTransfer")
                         } else {
-                            logger.info("One-way flux transfer")
-                            val droneSoftFluxAmount = (droneFluxTracker.currFlux - droneFluxTracker.hardFlux)//droneSoftFluxPercentageLevel * shipFluxTracker.maxFlux
-                            val droneHardFluxAmount = droneFluxTracker.hardFlux//droneHardFluxPercentageLevel * shipFluxTracker.maxFlux
+                            log("One-way flux transfer", "$LOGTAG:FluxTransfer")
+                            val droneSoftFluxAmount = (droneFluxTracker.currFlux - droneFluxTracker.hardFlux)
+                            val droneHardFluxAmount = droneFluxTracker.hardFlux
                             shipFluxTracker.increaseFlux(droneSoftFluxAmount, false)
                             shipFluxTracker.increaseFlux(droneHardFluxAmount, true)
-                            logger.info("Applied flux to ship! hard flux: ${droneHardFluxAmount}, soft flux: ${droneSoftFluxAmount}")
+                            log("Applied flux to ship! hard flux: ${droneHardFluxAmount}, soft flux: ${droneSoftFluxAmount}", "$LOGTAG:FluxTransfer")
                             droneFluxTracker.hardFlux = 0f
                             droneFluxTracker.currFlux = 0f
-                            logger.info("Cleared drone flux! drone stats: hard flux: ${droneFluxTracker.hardFlux}, softFlux: ${droneFluxTracker.currFlux - droneFluxTracker.hardFlux}, currFlux: ${droneFluxTracker.currFlux}")
+                            log("Cleared drone flux!", "$LOGTAG:FluxTransfer")
+                            log("[AFTER] drone stats: hard flux: ${droneFluxTracker.hardFlux}, softFlux: ${droneFluxTracker.currFlux - droneFluxTracker.hardFlux}, currFlux: ${droneFluxTracker.currFlux}", "$LOGTAG:FluxTransfer")
+                            log("[AFTER] ship stats: hard flux: ${shipFluxTracker.hardFlux}, softFlux: ${shipFluxTracker.currFlux - shipFluxTracker.hardFlux}, currFlux: ${shipFluxTracker.currFlux}", "$LOGTAG:FluxTransfer")
                         }
                     }
 
@@ -379,24 +427,28 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     val droneOverloadTime = droneFluxTracker.overloadTimeRemaining
                     val shipOverloaded = shipFluxTracker.isOverloaded
                     val shipOverloadTime = shipFluxTracker.overloadTimeRemaining
-                    logger.info("droneOverloaded: ${droneOverloaded}, droneOverloadTime: ${droneOverloadTime}, shipOverloaded: ${shipOverloaded}, shipOverloadTime: ${shipOverloadTime}")
-                    if (droneOverloaded) {
+                    log("droneOverloaded: ${droneOverloaded}, droneOverloadTime: ${droneOverloadTime}, shipOverloaded: ${shipOverloaded}, shipOverloadTime: ${shipOverloadTime}", "$LOGTAG:FluxTransfer")
+                    if (droneOverloaded && !shipOverloaded) {
                         // shield->ship overload transfer
                         shipFluxTracker.forceOverload(droneOverloadTime)
-                        shipFluxTracker.setOverloadDuration(droneOverloadTime)
-                        logger.info("Applied ${droneOverloadTime} of overload time from drone to ship!")
+                        // We don't want to apply drone's overload time, since drone will have
+                        // the shortest overload time due to it's Fighter profile
+//                        shipFluxTracker.setOverloadDuration(droneOverloadTime)
+                        log("Applied ${droneOverloadTime} of overload time from drone to ship!", "$LOGTAG:FluxTransfer")
                     } else {
                         // actually, nothing here
                     }
 
-                    if (shipOverloaded) {
+                    if (shipOverloaded && !droneOverloaded) {
                         // ship->shield overload transfer
                         droneFluxTracker.forceOverload(shipOverloadTime)
                         droneFluxTracker.setOverloadDuration(shipOverloadTime)
-                        logger.info("Applied ${shipOverloadTime} of overload time from ship to drone!")
+                        log("Applied ${shipOverloadTime} of overload time from ship to drone!")
                     } else {
                         // actually, nothing here
                     }
+
+                    log("<-- transferFlux()", "$LOGTAG:FluxTransfer")
                 }
             }
         }
@@ -463,6 +515,11 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         }
     }
 
+    private fun log(text: String, logtag: String = LOGTAG) {
+        if (LOGS_ENABLED) {
+            logger.info("[${logtag}]: ${text}")
+        }
+    }
 
     companion object {
         private const val ITEM = "et_ammospool"
@@ -470,5 +527,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         private const val INVULNERABLE_SHIELD_DRONE = "invulnerable_shield_drone"
         private const val BUFF_ID = "guardian_shield_buff"
         private const val SHIELD_DAMAGE_TAKEN_MULTIPLIER = 2f
+
+        private const val LOGTAG = "GuardianShield"
+        private const val LOGS_ENABLED = true
     }
 }
