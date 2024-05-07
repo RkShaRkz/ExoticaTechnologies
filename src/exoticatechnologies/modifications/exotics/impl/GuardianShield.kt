@@ -260,7 +260,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     }
 
                     // Check for allies in radius of 1500 and whether they need help or have incoming damage
-                    val allies = AIUtils.getNearbyAllies(ship, 1500f)
+                    val allies = AIUtils.getNearbyAllies(ship, SHIELD_RADIUS.toFloat())
                     // add shield to allies if it's non-null
                     if (drone != null) {
                         allies.add(drone)
@@ -293,7 +293,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     val projectiles: List<DamagingProjectileAPI> = engine.projectiles
                     for (proj in projectiles) {
                         if (proj.owner != ship.owner
-                                && (MathUtils.getDistance(ship, proj) > 1500 || nullSafeGetDistance(drone, proj) > 1500)) {
+                                && (MathUtils.getDistance(ship, proj) > SHIELD_RADIUS || nullSafeGetDistance(drone, proj) > SHIELD_RADIUS)) {
                             log("calling systemOn()\t\tprojectiles near ship or shield condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
@@ -302,8 +302,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     val beams: List<BeamAPI> = engine.beams
                     for (beam in beams) {
                         if (beam.source.owner != ship.owner
-                                && (MathUtils.isWithinRange(ship, beam.to, 1500f)
-                                        || nullSafeIsWithinRange(drone, beam.to, 1500f))) {
+                                && (MathUtils.isWithinRange(ship, beam.to, SHIELD_RADIUS.toFloat())
+                                        || nullSafeIsWithinRange(drone, beam.to, SHIELD_RADIUS.toFloat()))) {
                             log("calling systemOn()\t\tbeam within range of ship or shield condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
@@ -339,10 +339,10 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     } else if (it.shield.isOn) {
                         it.shield.activeArc = 360f
                         var radius = it.collisionRadius
-                        if (radius < 1500) {
+                        if (radius < SHIELD_RADIUS) {
                             radius += 300 * amount
                         } else {
-                            radius = 1500f
+                            radius = SHIELD_RADIUS.toFloat()
                         }
                         it.shield.radius = radius
                         it.collisionRadius = radius
@@ -639,12 +639,13 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
     }
 
     companion object {
-        private const val ITEM = "et_ammospool"
+        private const val ITEM = "et_shieldcrystal"
 
         private const val INVULNERABLE_SHIELD_DRONE = "invulnerable_shield_drone"
         private const val GUARDIAN_SHIELD_FLUX_DISSIPATION_DEBUFF_ID = "guardian_shield_debuff_flux-dissipation"
         private const val GUARDIAN_SHIELD_HARDFLUX_DISSIPATION_DEBUFF_ID = "guardian_shield_debuff_hardflux-dissipation"
 
+        private const val SHIELD_RADIUS = 1500
         private const val APPLY_FLUX_DEBUFF = true
         private const val APPLY_HARDFLUX_DEBUFF = true
         private const val FLUX_DEBUFF_AMOUNT = 0.75f
