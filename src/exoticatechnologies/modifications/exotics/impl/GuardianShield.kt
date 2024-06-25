@@ -675,8 +675,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         private const val SHIELD_RADIUS = 1500
         private const val APPLY_FLUX_DEBUFF = true
         private const val APPLY_HARDFLUX_DEBUFF = true
-        private const val FLUX_DEBUFF_AMOUNT = 0.75f
-        private const val HARDFLUX_DEBUFF_AMOUNT = 0.25f
+        private const val FLUX_DEBUFF_AMOUNT = 0.75f        // smaller is worse for the player
+        private const val HARDFLUX_DEBUFF_AMOUNT = 0.25f    // ditto, smaller is worse
 
         /**
          * Should the shield-hosting drone be an FXDrone or regular Drone
