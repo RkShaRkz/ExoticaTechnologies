@@ -111,7 +111,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
 
         override fun getDisplayText(): String = "Guardian Shield"
 
-        fun getDroneHullId(): String = "exotica_guardianshield"
+        private fun getDroneHullId(): String = "exotica_guardianshield"
+
         override fun getDroneVariant(): String = "exotica_guardianshield_standard"
 
         override fun targetOnlyEnemies(): Boolean = false
@@ -204,82 +205,54 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         }
 
         override fun spawnDrone(): ShipAPI {
-            val demDrone: ShipAPI
-            val spec = Global.getSettings().getHullSpec(getDroneHullId())
-            val v = Global.getSettings().createEmptyVariant(getDroneVariant(), spec)
 
-            demDrone = Global.getCombatEngine().createFXDrone(v)
-            demDrone.layer = CombatEngineLayers.ABOVE_SHIPS_AND_MISSILES_LAYER
-            demDrone.owner = ship.originalOwner
-            demDrone.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f) // so it's non-targetable
-            demDrone.isDrone = true
-            demDrone.aiFlags.setFlag(ShipwideAIFlags.AIFlags.DRONE_MOTHERSHIP, 100000f, ship)
-            demDrone.collisionClass = CollisionClass.FIGHTER
-            demDrone.shipAI = null
-            demDrone.isForceHideFFOverlay = true
-            demDrone.setRenderBounds(false)
-            demDrone.giveCommand(ShipCommand.SELECT_GROUP, null, 0)
-            Global.getCombatEngine().addEntity(demDrone)
-            log("<-- spawnDrone()\tdrone shield: ${demDrone.shield}, shield arc: ${demDrone.shield.arc}, shield type: ${demDrone.shield.type}, shield active ? ${demDrone.shield.isOn}", "$LOGTAG:GuardianShieldDrone")
-            return demDrone
+            val drone: ShipAPI = if(SPAWN_SHIELD_DRONE_USING_FXDRONE) {
+                val spec = Global.getSettings().getHullSpec(getDroneHullId())
+                val v = Global.getSettings().createEmptyVariant(getDroneVariant(), spec)
+                val fxDrone: ShipAPI = Global.getCombatEngine().createFXDrone(v)
+                fxDrone.layer = CombatEngineLayers.ABOVE_SHIPS_AND_MISSILES_LAYER
+                fxDrone.owner = ship.originalOwner
+                fxDrone.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f) // so it's non-targetable
+                fxDrone.isDrone = true
+                fxDrone.aiFlags.setFlag(ShipwideAIFlags.AIFlags.DRONE_MOTHERSHIP, 100000f, ship)
+                fxDrone.collisionClass = CollisionClass.FIGHTER
+                fxDrone.shipAI = null
+                fxDrone.isForceHideFFOverlay = true
+                fxDrone.setRenderBounds(false)
+                fxDrone.giveCommand(ShipCommand.SELECT_GROUP, null, 0)
+                Global.getCombatEngine().addEntity(fxDrone)
+
+                fxDrone
+            } else {
+                Global.getCombatEngine().getFleetManager(ship.owner).isSuppressDeploymentMessages = true
+
+                val fleetSide = FleetSide.values()[ship.owner]
+                val fighter = CombatUtils.spawnShipOrWingDirectly(
+                        getDroneVariant(),
+                        FleetMemberType.SHIP,
+                        fleetSide,
+                        1f,
+                        ship.location,
+                        ship.facing
+                )
+                activeWings[fighter] = getPIDController()
+                fighter.shipAI = null
+                fighter.giveCommand(ShipCommand.SELECT_GROUP, null, 99)
+                Global.getCombatEngine().getFleetManager(ship.owner).isSuppressDeploymentMessages = false
+
+                fighter.isForceHideFFOverlay = true
+                // Make the shield-hosting drone invulnerable, so that it's not targetable.
+                // Because the owning ship keeps shooting it down.
+                fighter.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f)
+                // Set it's collision channel to fighter - since they can fly over the ship and should still react to most of the things
+                fighter.collisionClass = CollisionClass.FIGHTER
+
+                fighter
+            }
+
+            log("<-- spawnDrone()\tdrone shield: ${drone.shield}, shield arc: ${drone.shield.arc}, shield type: ${drone.shield.type}, shield active ? ${drone.shield.isOn}", "$LOGTAG:GuardianShieldDrone")
+            return drone
         }
-
-        /*
-        override fun spawnDrone(): ShipAPI {
-            Global.getCombatEngine().getFleetManager(ship.owner).isSuppressDeploymentMessages = true
-
-            val fleetSide = FleetSide.values()[ship.owner]
-            val fighter = CombatUtils.spawnShipOrWingDirectly(
-                    getDroneVariant(),
-                    FleetMemberType.SHIP,
-                    fleetSide,
-                    1f,
-                    ship.location,
-                    ship.facing
-            )
-            activeWings[fighter] = getPIDController()
-            fighter.shipAI = null
-            fighter.giveCommand(ShipCommand.SELECT_GROUP, null, 99)
-            Global.getCombatEngine().getFleetManager(ship.owner).isSuppressDeploymentMessages = false
-
-            fighter.isForceHideFFOverlay = true
-            // Make the shield-hosting drone invulnerable, so that it's not targetable.
-            // Because the owning ship keeps shooting it down.
-            fighter.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f)
-            // Set it's collision channel to fighter - since they can fly over the ship and should still react to most of the things
-            fighter.collisionClass = CollisionClass.FIGHTER
-            log("<-- spawnDrone()\tdrone shield: ${fighter.shield}, shield arc: ${fighter.shield.arc}, shield type: ${fighter.shield.type}, shield active ? ${fighter.shield.isOn}", "$LOGTAG:GuardianShieldDrone")
-            return fighter
-        }
-         */
-
-        /*
-        fun spawnDrone(host: ShipAPI, weaponID: String?): ShipAPI? {
-            val demDrone: ShipAPI
-            val spec = Global.getSettings().getHullSpec(getDroneHullId())
-            val v = Global.getSettings().createEmptyVariant(getDroneVariant(), spec)
-//            v.addWeapon("WS 000", weaponID)
-//            val g = WeaponGroupSpec(WeaponGroupType.LINKED)
-//            g.addSlot("WS 000")
-//            v.addWeaponGroup(g)
-
-            demDrone = Global.getCombatEngine().createFXDrone(v)
-            demDrone.layer = CombatEngineLayers.ABOVE_SHIPS_AND_MISSILES_LAYER
-            demDrone.owner = host.originalOwner
-            //demDrone.getMutableStats().getBeamWeaponRangeBonus().modifyFlat("dem", targetingLaserRange);
-            demDrone.mutableStats.hullDamageTakenMult.modifyMult("dem", 0f) // so it's non-targetable
-            demDrone.isDrone = true
-            demDrone.aiFlags.setFlag(ShipwideAIFlags.AIFlags.DRONE_MOTHERSHIP, 100000f, host)
-            //demDrone.getMutableStats().getWeaponTurnRateBonus().modifyMult(id,0);
-            //demDrone.getMutableStats().getBeamWeaponTurnRateBonus().modifyFlat("StormbringerBeamEffect", 10000);
-            demDrone.collisionClass = CollisionClass.NONE
-            demDrone.giveCommand(ShipCommand.SELECT_GROUP, null, 0)
-            Global.getCombatEngine().addEntity(demDrone)
-            return demDrone
-        }
-        */
-
-
 
         inner class ShieldController {
 
@@ -704,6 +677,11 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         private const val APPLY_HARDFLUX_DEBUFF = true
         private const val FLUX_DEBUFF_AMOUNT = 0.75f
         private const val HARDFLUX_DEBUFF_AMOUNT = 0.25f
+
+        /**
+         * Should the shield-hosting drone be an FXDrone or regular Drone
+         */
+        private const val SPAWN_SHIELD_DRONE_USING_FXDRONE = true
 
         /**
          * Which mode should the flux transfer work in
