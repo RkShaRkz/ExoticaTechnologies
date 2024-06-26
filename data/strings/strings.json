@@ -560,5 +560,10 @@
 		"BandwidthUpgradePeak": "This ship has reached its maximum bandwidth.",
 		"BandwidthForShip": "Ship bandwidth: *${shipBandwidth}*",
 		"BandwidthUsed": "*${usedBandwidth}* used"
+	},
+	"GuardianShield": {
+		"description": "A 1.0 efficiency shield capable of covering an entire fleet, absorbing incoming fire for a time. The emitter has a massive flux capacity, but transfers generated flux onto the host ship.",
+		"tooltip": "Replaces the host ship's shield with a gargantuan 360-degree shield with a big radius.",
+		"longDescription": "=Replaces the ship's shield= with a *Guardian Shield*, a *360-degree* shield covering *1500 radius* capable of covering friendly ships. It has it's own activation AI, but naturally can't work while the host ship is venting or overloaded. While active, the shield ${flux_method}, ${flux_effects}and also pushes enemies out of it, with momentum strength depending on the size of the host ship."
 	}
 }
