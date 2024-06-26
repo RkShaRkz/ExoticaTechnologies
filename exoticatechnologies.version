@@ -1,11 +1,11 @@
 {
-    "masterVersionFile":"https://raw.githubusercontent.com/scardwell15/exoticatechnologies/main/exoticatechnologies.version",
+    "masterVersionFile":"https://raw.githubusercontent.com/RkShaRkz/ExoticaTechnologies/master/exoticatechnologies.version",
     "modName":"Exotica Technologies",
     "modThreadId":24660,
     "modVersion":
     {
-        "major":1,
-        "minor":8,
-        "patch":5
+        "major":2,
+        "minor":0,
+        "patch":2
     }
 }
