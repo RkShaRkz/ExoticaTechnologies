@@ -1,10 +1,7 @@
 package exoticatechnologies.modifications.exotics.impl
 
-import activators.ActivatorManager
-import activators.CombatActivator
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
-import com.fs.starfarer.api.combat.MutableStat
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
@@ -16,6 +13,8 @@ import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.StringUtils
 import org.json.JSONObject
+import org.magiclib.subsystems.MagicSubsystem
+import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
 import kotlin.math.abs
 
@@ -23,30 +22,30 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
     override var color = Color(0xD99836)
 
     override fun modifyToolTip(
-        tooltip: TooltipMakerAPI,
-        title: UIComponentAPI,
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData,
-        expand: Boolean
+            tooltip: TooltipMakerAPI,
+            title: UIComponentAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData,
+            expand: Boolean
     ) {
         if (expand) {
             StringUtils.getTranslation(key, "longDescription")
-                .format("projSpeedBoost", DAMAGE_BUFF)
-                .format("damageBoost", DAMAGE_BUFF * 0.33f)
-                .formatFloat("boostTime", BUFF_DURATION * getPositiveMult(member, mods, exoticData))
-                .formatFloat("cooldown", COOLDOWN * getNegativeMult(member, mods, exoticData))
-                .format("firerateMalus", abs(RATE_OF_FIRE_DEBUFF))
-                .addToTooltip(tooltip, title)
+                    .format("projSpeedBoost", DAMAGE_BUFF)
+                    .format("damageBoost", DAMAGE_BUFF * 0.33f)
+                    .formatFloat("boostTime", BUFF_DURATION * getPositiveMult(member, mods, exoticData))
+                    .formatFloat("cooldown", COOLDOWN * getNegativeMult(member, mods, exoticData))
+                    .format("firerateMalus", abs(RATE_OF_FIRE_DEBUFF))
+                    .addToTooltip(tooltip, title)
         }
     }
 
     override fun applyExoticToStats(
-        id: String,
-        stats: MutableShipStatsAPI,
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData
+            id: String,
+            stats: MutableShipStatsAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
     ) {
         stats.ballisticRoFMult.modifyMult(buffId, 1 + RATE_OF_FIRE_DEBUFF / 100f)
         stats.energyRoFMult.modifyMult(buffId, 1 + RATE_OF_FIRE_DEBUFF / 100f)
@@ -61,25 +60,29 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
     }
 
     override fun applyToShip(
-        id: String,
-        member: FleetMemberAPI,
-        ship: ShipAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData
+            id: String,
+            member: FleetMemberAPI,
+            ship: ShipAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
     ) {
-        if (ActivatorManager.getActivators(ship)?.filterIsInstance<SalvoActivator>()?.isEmpty() != false) {
+//        if (ActivatorManager.getActivators(ship)?.filterIsInstance<SalvoActivator>()?.isEmpty() != false) {
+//            val activator = SalvoActivator(ship, member, mods, exoticData)
+//            ActivatorManager.addActivator(ship, activator)
+//        }
+        if (MagicSubsystemsManager.getSubsystemsForShipCopy(ship)?.filterIsInstance<SalvoActivator>()?.isEmpty() != false) {
             val activator = SalvoActivator(ship, member, mods, exoticData)
-            ActivatorManager.addActivator(ship, activator)
+            MagicSubsystemsManager.addSubsystemToShip(ship, activator)
         }
     }
 
     inner class SalvoActivator(
-        ship: ShipAPI,
-        val member: FleetMemberAPI,
-        val mods: ShipModifications,
-        val exoticData: ExoticData
+            ship: ShipAPI,
+            val member: FleetMemberAPI,
+            val mods: ShipModifications,
+            val exoticData: ExoticData
     ) :
-        CombatActivator(ship) {
+            MagicSubsystem(ship) {
         override fun getDisplayText(): String {
             return Global.getSettings().getString(exoticData.key, "systemText")
         }
@@ -92,7 +95,9 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
             return COOLDOWN.toFloat()
         }
 
-        override fun advance(amount: Float) {
+        override fun advance(amount: Float, isPaused: Boolean) {
+            if (isPaused) return //lets try this as an improvement
+
             if (state == State.ACTIVE) {
                 gigaProjectiles(ship)
             }
@@ -105,18 +110,18 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
                 ship.mutableStats.missileMaxSpeedBonus.modifyMult(this.toString(), 1 + DAMAGE_BUFF / 100f)
 
                 ship.addAfterimage(
-                    Color(255, 125, 0, 150),
-                    0f,
-                    0f,
-                    0f,
-                    0f,
-                    6f,
-                    0f,
-                    this.activeDuration,
-                    0.25f,
-                    true,
-                    false,
-                    true
+                        Color(255, 125, 0, 150),
+                        0f,
+                        0f,
+                        0f,
+                        0f,
+                        6f,
+                        0f,
+                        this.activeDuration,
+                        0.25f,
+                        true,
+                        false,
+                        true
                 )
             } else {
                 ship.mutableStats.ballisticProjectileSpeedMult.unmodify(this.toString())

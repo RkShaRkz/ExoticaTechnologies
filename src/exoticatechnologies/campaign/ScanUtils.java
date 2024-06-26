@@ -27,16 +27,19 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j;
+import org.apache.log4j.Logger;
 
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
-@Log4j
+//@Log4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ScanUtils {
     private static final float NOTABLE_BANDWIDTH = 180f;
     private static final float NOTABLE_SHIPS_ROW_HEIGHT = 64;
+
+    private static final Logger log = Logger.getLogger(ScanUtils.class);
 
     public static Long getPerShipDataSeed(ShipRecoverySpecial.PerShipData shipData, int i) {
         ShipVariantAPI var = shipData.getVariant();
@@ -301,11 +304,16 @@ public class ScanUtils {
         }
     }
 
-    @RequiredArgsConstructor
+//    @RequiredArgsConstructor
     protected static class ExoticTooltip extends BaseTooltipCreator {
         @Getter
         private final ExoticData exoticData;
         private final TooltipMakerAPI tooltip;
+
+        public ExoticTooltip(ExoticData exoticData, TooltipMakerAPI tooltip) {
+            this.exoticData = exoticData;
+            this.tooltip = tooltip;
+        }
 
         @Override
         public float getTooltipWidth(Object tooltipParam) {
@@ -319,13 +327,20 @@ public class ScanUtils {
         }
     }
 
-    @RequiredArgsConstructor
+//    @RequiredArgsConstructor
     protected static class UpgradeTooltip extends BaseTooltipCreator {
         @Getter
         private final Upgrade upgrade;
         private final TooltipMakerAPI tooltip;
         private final ShipModifications mods;
         private final ShipAPI.HullSize hullSize;
+
+        UpgradeTooltip(Upgrade upgrade, TooltipMakerAPI tooltip, ShipModifications mods, ShipAPI.HullSize hullSize) {
+            this.upgrade = upgrade;
+            this.tooltip = tooltip;
+            this.mods = mods;
+            this.hullSize = hullSize;
+        }
 
         @Override
         public float getTooltipWidth(Object tooltipParam) {

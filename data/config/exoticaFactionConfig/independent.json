@@ -7,6 +7,7 @@
     "TerminatorSubsystems": 0.5
   },
   "allowedUpgrades": {
-    "WaspDefenseDrones": 0.4
+    "WaspDefenseDrones": 0.4,
+    "ExternalThrusters": 0.5
   }
 }

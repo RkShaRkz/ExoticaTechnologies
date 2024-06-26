@@ -4,6 +4,7 @@ import lombok.extern.log4j.Log4j
 import org.json.JSONException
 import org.json.JSONObject
 
+
 @Log4j
 class ETUpgrades {
     private val upgrades: MutableMap<String, Int>

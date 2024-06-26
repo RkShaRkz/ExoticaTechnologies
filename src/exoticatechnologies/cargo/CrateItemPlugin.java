@@ -10,8 +10,11 @@ import com.fs.starfarer.api.util.Misc;
 import com.fs.starfarer.api.util.Pair;
 import exoticatechnologies.modifications.exotics.ExoticSpecialItemPlugin;
 import exoticatechnologies.modifications.upgrades.UpgradeSpecialItemPlugin;
+import exoticatechnologies.util.PluginStringifier;
 import exoticatechnologies.util.StringUtils;
+import exoticatechnologies.util.Utilities;
 import lombok.SneakyThrows;
+import org.apache.log4j.Logger;
 
 import java.awt.Color;
 import java.util.*;
@@ -21,6 +24,8 @@ public class CrateItemPlugin extends BaseSpecialItemPlugin {
     private static final Color UPGRADE_COLOR = new Color(118, 214, 217);
     private static final Color EXOTIC_COLOR = new Color(239, 218, 120);
     private static final Color OTHER_COLOR = new Color(144, 213, 122);
+
+    private static final Logger log = Logger.getLogger(CrateItemPlugin.class);
 
     public CrateSpecialData getData() {
         return (CrateSpecialData) stack.getSpecialDataIfSpecial();
@@ -92,6 +97,13 @@ public class CrateItemPlugin extends BaseSpecialItemPlugin {
                     Map<Integer, Integer> levelQuantities = new HashMap<>();
                     levelQuantities.put(((UpgradeSpecialItemPlugin) newStack.getPlugin()).getUpgradeLevel(), (int) newStack.getSize());
 
+                    //FIXME RKZ added this - skip newPlugin nulls
+                    if (newPlugin.getUpgrade() == null) {
+                        log.error("CreateItemPlugin::createTooltip()\tProblematic area around plugin: "+newPlugin);
+                        PluginStringifier.logPlugin(newPlugin, log);
+                        continue;
+                    }
+
                     //iterate through all stacks
                     while (stackIterator.hasNext()) {
                         CargoStackAPI upgStack = stackIterator.next();
@@ -101,7 +113,17 @@ public class CrateItemPlugin extends BaseSpecialItemPlugin {
 
                                 //find similar stacks
                                 UpgradeSpecialItemPlugin upgPlugin = (UpgradeSpecialItemPlugin) upgStack.getPlugin();
-                                if (newPlugin.getUpgrade().equals(upgPlugin.getUpgrade())) {
+
+                                // While this can be useful, the amount of spam it spits out makes it drown out
+                                // the stuff that's *really* useful for debugging. We'll leave the super-useful stuff
+                                // and comment out this informational overloading garbage
+//                                PluginStringifier.logPlugins(upgPlugin, newPlugin, log);
+
+                                // Since 'newPlugin' tends to be null, the following (old) approach can't really work
+                                // due to throwing alot of NPEs. So since either the plugins or their upgrades end up
+                                // being null, the whole equality/null-check was extracted into a utility method
+//                                if (newPlugin.getUpgrade().equals(upgPlugin.getUpgrade())) {
+                                if (Utilities.checkUpgradesForEquality(newPlugin, upgPlugin)) {
 
                                     //remove similar stacks so they don't get counted again
                                     stackIterator.remove();

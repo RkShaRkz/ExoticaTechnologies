@@ -21,6 +21,7 @@
     "WeldedArmor": 1.0,
     "AssaultWings": 1.0,
     "VelocityInjectors": 1.0,
-    "FluxInductionDrive": 1.0
+    "FluxInductionDrive": 1.0,
+    "ExternalThrusters": 1.5
   }
 }

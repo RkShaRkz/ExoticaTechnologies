@@ -2,11 +2,11 @@
 	#base settings for everything ET related
 
 	"upgradeAlwaysSucceed":true, #does upgrading always succeed?
-		"baseFailureMinFactor":0.4, #a multiplier applied to the chance to fail. the first upgrade always succeeds, but failure chance increases for every upgrade after.
+	"baseFailureMinFactor":0.4, #a multiplier applied to the chance to fail. the first upgrade always succeeds, but failure chance increases for every upgrade after.
 	"shipsKeepUpgradesOnDeath":true, #whether ships keep upgrades if they are disabled/destroyed in battle.
 
 	"useRandomBandwidth":true, #bandwidth based on fleet member ID
-		"baseBandwidth":0, #flat bandwidth used if the above value is false
+	"baseBandwidth":0, #flat bandwidth used if the above value is false
 
 
 	# below settings used to determine upgrade costs. see upgrade_resource_ratio.csv for item ratios used for each upgrade.
@@ -39,7 +39,10 @@
 			"flux_smoke": "graphics/fx/particlealpha_textured.png",
 		},
 		"ui": {
-			"shimmer": "graphics/fx/shimmer.png"
+			"shimmer": "graphics/fx/shimmer.png",
+			"credits_24x24": "graphics/ui/icons/fleettab/credits_24x24.png",
+			"supplies_24x24": "graphics/ui/icons/fleettab/supplies_24x24.png",
+			"32x_crossed_circle2": "graphics/ui/icons/32x_crossed_circle2.png"
 		},
 		"exotics": {
 			"PlasmaFluxCatalyst": "graphics/icons/exotics/plasmafluxcatalyst.png",
@@ -61,7 +64,8 @@
 			"DaemonCore": "graphics/icons/exotics/daemoncore.png",
 			"SubsumedAlphaCore": "graphics/icons/exotics/subsumedalphacore.png",
 			"SubsumedBetaCore": "graphics/icons/exotics/subsumedbetacore.png",
-			"SubsumedGammaCore": "graphics/icons/exotics/subsumedgammacore.png"
+			"SubsumedGammaCore": "graphics/icons/exotics/subsumedgammacore.png",
+			"GuardianShield": "graphics/icons/exotics/guardianshield.png"
 		},
 		"upgrades": {
 			"AdvancedFluxCoils": "graphics/icons/upgrades/advancedfluxcoils.png",
@@ -88,7 +92,13 @@
 			"WaspDefenseDrones": "graphics/icons/upgrades/waspdefensedrones.png",
 			"OversizedMagazines": "graphics/icons/upgrades/oversizedmagazines.png",
 			"Kingslayer": "graphics/icons/upgrades/kingslayer.png",
-			"QuickJets": "graphics/icons/upgrades/quickjets.png"
+			"QuickJets": "graphics/icons/upgrades/quickjets.png",
+			"PerseanUnity": "graphics/icons/upgrades/perseanunity.png",
+			"HegemonStrength": "graphics/icons/upgrades/hegemonstrength.png",
+			"TechSupremacy": "graphics/icons/upgrades/techsupremacy.png",
+			"KnightsShield": "graphics/icons/upgrades/knightsshield.png",
+			"INVALID": "graphics/icons/upgrades/INVALID.png",
+			"ExternalThrusters": "graphics/icons/upgrades/externalthrusters.png"
 		},
 		"overlays": {
 			"Corrupted": "graphics/icons/overlays/corrupted.png",

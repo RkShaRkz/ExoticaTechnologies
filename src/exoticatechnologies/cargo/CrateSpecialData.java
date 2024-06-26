@@ -5,8 +5,10 @@ import com.fs.starfarer.api.campaign.CargoAPI;
 import com.fs.starfarer.api.campaign.SpecialItemData;
 import lombok.Getter;
 
+import java.util.Objects;
+
 public class CrateSpecialData extends SpecialItemData {
-    @Getter private final CargoAPI cargo;
+    private final CargoAPI cargo;
 
     public CrateSpecialData() {
         super("et_crate", "");
@@ -21,7 +23,7 @@ public class CrateSpecialData extends SpecialItemData {
 
         CrateSpecialData that = (CrateSpecialData) o;
 
-        return cargo != null ? cargo.equals(that.cargo) : that.cargo == null;
+        return Objects.equals(cargo, that.cargo);
     }
 
     @Override
@@ -30,4 +32,6 @@ public class CrateSpecialData extends SpecialItemData {
         result = 31 * result + (cargo != null ? cargo.hashCode() : 0);
         return result;
     }
+
+    public CargoAPI getCargo() { return cargo; }
 }

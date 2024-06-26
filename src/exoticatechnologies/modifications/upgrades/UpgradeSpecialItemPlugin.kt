@@ -9,11 +9,9 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.config.FactionConfigLoader
 import exoticatechnologies.modifications.ModSpecialItemPlugin
-import exoticatechnologies.modifications.exotics.ExoticsGenerator
-import exoticatechnologies.modifications.exotics.ExoticsHandler
-import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.RenderUtils
 import exoticatechnologies.util.RomanNumeral
+import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.ui.LazyFont
 import org.lwjgl.util.vector.Vector2f
@@ -25,18 +23,34 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
     var upgrade: Upgrade? = null
         get() {
             if (field == null) {
-                field = UpgradesHandler.UPGRADES[modId]!!
+//                field = UpgradesHandler.UPGRADES[modId]!!
+                // Lets do it safer
+                if (UpgradesHandler.UPGRADES[modId] != null) {
+                    field = UpgradesHandler.UPGRADES[modId]
+                } else {
+                    log.error(">>>\tUpgradesHandler.UPGRADES[${modId}] was null!")
+                }
             }
             return field
         }
+
     override fun getName(): String {
-        return String.format("%s - %s (%s)", super.getName(), upgrade!!.name, upgradeLevel)
+//        return String.format("%s - %s (%s)", super.getName(), upgrade!!.name, upgradeLevel)
+        return if (upgrade != null) {
+            upgrade?.let {
+                String.format("%s - %s (%s)", super.getName(), it.name, upgradeLevel)
+            } ?: String.format("%s - %s (%s)", super.getName(), "ERROR: upgrade is null", upgradeLevel)
+        } else {
+            String.format("%s - %s (%s)", super.getName(), "ERROR: upgrade is null", upgradeLevel)
+        }
     }
 
     override val type: ModType
         get() = ModType.UPGRADE
     override val sprite: SpriteAPI
-        get() = Global.getSettings().getSprite("upgrades", upgrade!!.key)
+        get() = upgrade?.let {
+            Global.getSettings().getSprite("upgrades", it.key)
+        } ?: Global.getSettings().getSprite("upgrades", "INVALID")
 
     override fun resolveDropParamsToSpecificItemData(params: String, random: Random): String? {
         val paramsObj = JSONObject(params)
@@ -63,18 +77,18 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
     }
 
     override fun createTooltip(
-        tooltip: TooltipMakerAPI,
-        expanded: Boolean,
-        transferHandler: CargoTransferHandlerAPI,
-        stackSource: Any,
-        useGray: Boolean
+            tooltip: TooltipMakerAPI,
+            expanded: Boolean,
+            transferHandler: CargoTransferHandlerAPI,
+            stackSource: Any,
+            useGray: Boolean
     ) {
         val opad = 10.0f
         tooltip.addTitle(this.name)
 
         val design = this.designType
         Misc.addDesignTypePara(tooltip, design, opad)
-        if (!spec.desc.isEmpty()) {
+        if (spec.desc.isNotEmpty()) {
             var c = Misc.getTextColor()
             if (useGray) {
                 c = Misc.getGrayColor()
@@ -82,17 +96,23 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
             tooltip.addPara(spec.desc, c, opad)
         }
 
-        tooltip.addPara(upgrade!!.description, Misc.getTextColor(), opad)
+        if (upgrade != null) {
+            upgrade?.let {
+                tooltip.addPara(it.description, Misc.getTextColor(), opad)
+            } ?: tooltip.addPara("ERROR: upgrade was null, no description", Misc.getTextColor(), opad)
+        } else {
+            tooltip.addPara("ERROR: upgrade was null, no description", Misc.getTextColor(), opad)
+        }
     }
 
     override fun render(
-        x: Float,
-        y: Float,
-        w: Float,
-        h: Float,
-        alphaMult: Float,
-        glowMult: Float,
-        renderer: SpecialItemPlugin.SpecialItemRendererAPI
+            x: Float,
+            y: Float,
+            w: Float,
+            h: Float,
+            alphaMult: Float,
+            glowMult: Float,
+            renderer: SpecialItemPlugin.SpecialItemRendererAPI
     ) {
         super.render(x, y, w, h, alphaMult, glowMult, renderer)
 
@@ -115,6 +135,31 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
         }
     }
 
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as UpgradeSpecialItemPlugin
+
+        if (upgradeLevel != other.upgradeLevel) return false
+        if (upgrade != other.upgrade) return false
+        if (type != other.type) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = upgradeLevel
+        result = 31 * result + (upgrade?.hashCode() ?: 0)
+        result = 31 * result + type.hashCode()
+        return result
+    }
+
+    override fun toString(): String {
+        return "UpgradeSpecialItemPlugin(upgradeLevel=$upgradeLevel, upgrade=$upgrade, type=$type, sprite=<redacted>)"
+    }
+
+
     private enum class Param {
         UPGRADE_ID, UPGRADE_LEVEL, IGNORE_CRATE;
 
@@ -123,5 +168,10 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
                 return values()[index]
             }
         }
+    }
+
+
+    companion object {
+        private val log: Logger = Logger.getLogger(UpgradeSpecialItemPlugin::class.java)
     }
 }

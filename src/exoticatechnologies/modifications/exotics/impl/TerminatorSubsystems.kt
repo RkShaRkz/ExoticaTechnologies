@@ -1,19 +1,18 @@
 package exoticatechnologies.modifications.exotics.impl
 
-import activators.ActivatorManager
-import activators.drones.DroneActivator
 import com.fs.starfarer.api.Global
-import com.fs.starfarer.api.combat.*
+import com.fs.starfarer.api.combat.GuidedMissileAI
+import com.fs.starfarer.api.combat.MissileAPI
+import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipAPI.HullSize
 import com.fs.starfarer.api.combat.ShipwideAIFlags.AIFlags
+import com.fs.starfarer.api.combat.WeaponAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.combat.DroneStrikeStats
 import com.fs.starfarer.api.impl.combat.DroneStrikeStats.DroneMissileScript
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
-import com.fs.starfarer.api.util.IntervalUtil
 import com.fs.starfarer.api.util.Misc
-import exoticatechnologies.combat.ExoticaCombatUtils
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
@@ -22,37 +21,38 @@ import exoticatechnologies.util.StringUtils
 import org.json.JSONObject
 import org.lwjgl.util.vector.Vector2f
 import org.magiclib.kotlin.getDistanceSq
+import org.magiclib.subsystems.MagicSubsystemsManager
+import org.magiclib.subsystems.drones.MagicDroneSubsystem
 import java.awt.Color
-import java.util.*
-import kotlin.math.abs
 import kotlin.math.sign
 
 class TerminatorSubsystems(key: String, settings: JSONObject) : Exotic(key, settings) {
     override var color = Color(0xC20AE0)
 
     override fun modifyToolTip(
-        tooltip: TooltipMakerAPI,
-        title: UIComponentAPI,
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData,
-        expand: Boolean
+            tooltip: TooltipMakerAPI,
+            title: UIComponentAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData,
+            expand: Boolean
     ) {
         if (expand) {
             StringUtils.getTranslation(key, "longDescription")
-                .format("drones", TerminatorDroneActivator.maxDronesMap[member.hullSpec.hullSize])
-                .addToTooltip(tooltip, title)
+                    .format("drones", TerminatorDroneActivator.maxDronesMap[member.hullSpec.hullSize])
+                    .addToTooltip(tooltip, title)
         }
     }
 
     override fun applyToShip(
-        id: String,
-        member: FleetMemberAPI,
-        ship: ShipAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData
+            id: String,
+            member: FleetMemberAPI,
+            ship: ShipAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
     ) {
-        ActivatorManager.addActivator(ship, TerminatorDroneActivator(ship))
+//        ActivatorManager.addActivator(ship, TerminatorDroneActivator(ship))
+        MagicSubsystemsManager.addSubsystemToShip(ship, TerminatorDroneActivator(ship))
     }
 
     override fun canUseExoticType(type: ExoticType): Boolean {
@@ -63,7 +63,7 @@ class TerminatorSubsystems(key: String, settings: JSONObject) : Exotic(key, sett
         return false
     }
 
-    class TerminatorDroneActivator(ship: ShipAPI) : DroneActivator(ship) {
+    class TerminatorDroneActivator(ship: ShipAPI) : MagicDroneSubsystem(ship) {
         private val droneStrikeStats = DroneStrikeStats()
         private var weaponBackingField: WeaponAPI? = null
         private val weapon: WeaponAPI
@@ -76,10 +76,10 @@ class TerminatorSubsystems(key: String, settings: JSONObject) : Exotic(key, sett
 
         companion object {
             val maxDronesMap: Map<HullSize, Int> = mapOf(
-                HullSize.FRIGATE to 2,
-                HullSize.DESTROYER to 3,
-                HullSize.CRUISER to 4,
-                HullSize.CAPITAL_SHIP to 5
+                    HullSize.FRIGATE to 2,
+                    HullSize.DESTROYER to 3,
+                    HullSize.CRUISER to 4,
+                    HullSize.CAPITAL_SHIP to 5
             )
         }
 
@@ -156,8 +156,8 @@ class TerminatorSubsystems(key: String, settings: JSONObject) : Exotic(key, sett
 
             val drone = drones[0]
             val missile = engine.spawnProjectile(
-                ship, weapon, getWeaponId(),
-                Vector2f(drone.location), drone.facing, Vector2f(drone.velocity)
+                    ship, weapon, getWeaponId(),
+                    Vector2f(drone.location), drone.facing, Vector2f(drone.velocity)
             ) as MissileAPI
 
             if (missile.ai is GuidedMissileAI) {
@@ -186,8 +186,8 @@ class TerminatorSubsystems(key: String, settings: JSONObject) : Exotic(key, sett
             val thickness = 26f
             val coreWidthMult = 0.67f
             val arc = engine.spawnEmpArcVisual(
-                ship.location, ship,
-                missile.location, missile, thickness, Color(255, 100, 100, 255), Color.white
+                    ship.location, ship,
+                    missile.location, missile, thickness, Color(255, 100, 100, 255), Color.white
             )
             arc.coreWidthOverride = thickness * coreWidthMult
             arc.setSingleFlickerMode()
@@ -255,9 +255,9 @@ class TerminatorSubsystems(key: String, settings: JSONObject) : Exotic(key, sett
         private fun getSystemRange(ship: ShipAPI) = droneStrikeStats.getMaxRange(ship) * 0.66f
 
         private val goodAiFlags = setOf(
-            AIFlags.PHASE_ATTACK_RUN_FROM_BEHIND_DIST_CRITICAL,
-            AIFlags.PHASE_ATTACK_RUN_IN_GOOD_SPOT,
-            AIFlags.IN_ATTACK_RUN
+                AIFlags.PHASE_ATTACK_RUN_FROM_BEHIND_DIST_CRITICAL,
+                AIFlags.PHASE_ATTACK_RUN_IN_GOOD_SPOT,
+                AIFlags.IN_ATTACK_RUN
         )
 
         override fun shouldActivateAI(amount: Float): Boolean {
@@ -271,11 +271,11 @@ class TerminatorSubsystems(key: String, settings: JSONObject) : Exotic(key, sett
                 }
 
                 goodAiFlags
-                    .filter { ship.aiFlags.hasFlag(it) }
-                    .firstOrNull()
-                    ?.let {
-                        score += 8f
-                    }
+                        .filter { ship.aiFlags.hasFlag(it) }
+                        .firstOrNull()
+                        ?.let {
+                            score += 8f
+                        }
 
                 var desiredScore = 10f
                 if (charges >= 2) {
