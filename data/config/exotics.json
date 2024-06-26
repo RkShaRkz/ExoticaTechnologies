@@ -149,9 +149,5 @@
   "SubsumedGammaCore": {
     "name": "Subsumed Gamma Core",
     "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedGammaCore"
-  },
-  "GuardianShield": {
-    "name": "Guardian Shield",
-    "exoticClass": "exoticatechnologies.modifications.exotics.impl.GuardianShield"
   }
 }
