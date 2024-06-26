@@ -103,8 +103,7 @@
       "PhasefieldEngine",
       "SpooledFeeders",
       "FullMetalSalvo",
-      "HyperspecLPC",
-      "GuardianShield"
+      "HyperspecLPC"
     ],
     "rngUpgradeWhitelist": [
       "WeldedArmor",
