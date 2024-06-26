@@ -2,6 +2,7 @@ package exoticatechnologies.util
 
 import com.fs.starfarer.api.combat.CollisionClass
 import com.fs.starfarer.api.combat.ShipAPI
+import org.apache.log4j.Logger
 import org.lazywizard.lazylib.CollisionUtils
 import org.lazywizard.lazylib.MathUtils
 import org.lwjgl.util.vector.Vector2f
@@ -9,6 +10,8 @@ import java.awt.geom.Line2D
 import kotlin.math.sqrt
 
 object CollisionUtil {
+
+    private val logger: Logger = Logger.getLogger(CollisionUtil::class.java)
 
     private fun getShipCollisionPoint(segStart: Vector2f, segEnd: Vector2f, ship: ShipAPI, accurateShieldEdgeTest: Boolean): Vector2f? {
         // if target can not be hit, return null
@@ -67,7 +70,32 @@ object CollisionUtil {
     }
 
     fun getShipCollisionPoint(segStart: Vector2f?, segEnd: Vector2f?, ship: ShipAPI?): Vector2f? {
-        return getShipCollisionPoint(segStart!!, segEnd!!, ship!!, false)
+        return if (segStart != null && segEnd != null && ship != null) {
+            getShipCollisionPoint(segStart, segEnd, ship, false)
+        } else {
+            val segStartNull = segStart == null
+            val segEndNull = segEnd == null
+            val shipNull = ship == null
+
+            // figure out which one was null
+            // log accordingly about it being null
+            val nullMessages = mutableListOf<String>()
+
+            if (segStartNull) {
+                nullMessages.add("segStart was null")
+            }
+            if (segEndNull) {
+                nullMessages.add("segEnd was null")
+            }
+            if (shipNull) {
+                nullMessages.add("ship was null")
+            }
+
+            log("${nullMessages.joinToString(", ")}, returning null")
+
+            //return null
+            null
+        }
     }
 
     private fun getCollisionPointOnCircle(segStart: Vector2f, segEnd: Vector2f, circleCenter: Vector2f, circleRadius: Float): Vector2f? {
@@ -173,5 +201,9 @@ object CollisionUtil {
 
     fun getShieldCollisionPoint(segStart: Vector2f, segEnd: Vector2f, ship: ShipAPI, ignoreHull: Boolean): Vector2f? {
         return getShieldCollisionPoint(segStart, segEnd, ship, ignoreHull, false)
+    }
+
+    private fun log(logString: String) {
+        logger.info(logString)
     }
 }

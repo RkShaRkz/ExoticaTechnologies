@@ -6,8 +6,6 @@ import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.*
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.fleet.FleetMemberType
-import com.fs.starfarer.api.loading.WeaponGroupSpec
-import com.fs.starfarer.api.loading.WeaponGroupType
 import com.fs.starfarer.api.mission.FleetSide
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
@@ -287,7 +285,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     }
 
                     // Check for allies in radius of 1500 and whether they need help or have incoming damage
-                    val allies = AIUtils.getNearbyAllies(ship, SHIELD_RADIUS.toFloat())
+                    val allies = AIUtils.getNearbyAllies(ship, ACTIVE_SHIELD_RADIUS.toFloat())
                     // add shield to allies if it's non-null
                     if (drone != null) {
                         allies.add(drone)
@@ -320,7 +318,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     val projectiles: List<DamagingProjectileAPI> = engine.projectiles
                     for (proj in projectiles) {
                         if (proj.owner != ship.owner
-                                && (MathUtils.getDistance(ship, proj) > SHIELD_RADIUS || nullSafeGetDistance(drone, proj) > SHIELD_RADIUS)) {
+                                && (MathUtils.getDistance(ship, proj) > ACTIVE_SHIELD_RADIUS || nullSafeGetDistance(drone, proj) > ACTIVE_SHIELD_RADIUS)) {
                             log("calling systemOn()\t\tprojectiles near ship or shield condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
@@ -329,8 +327,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     val beams: List<BeamAPI> = engine.beams
                     for (beam in beams) {
                         if (beam.source.owner != ship.owner
-                                && (MathUtils.isWithinRange(ship, beam.to, SHIELD_RADIUS.toFloat())
-                                        || nullSafeIsWithinRange(drone, beam.to, SHIELD_RADIUS.toFloat()))) {
+                                && (MathUtils.isWithinRange(ship, beam.to, ACTIVE_SHIELD_RADIUS.toFloat())
+                                        || nullSafeIsWithinRange(drone, beam.to, ACTIVE_SHIELD_RADIUS.toFloat()))) {
                             log("calling systemOn()\t\tbeam within range of ship or shield condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
@@ -362,14 +360,14 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 drone?.let {
                     if (it.isHulk || it.shield.isOff) {
                         it.collisionClass = CollisionClass.FIGHTER
-                        it.collisionRadius = 400f
+                        it.collisionRadius = SHIELD_OFF_COLLISION_RADIUS //400f
                     } else if (it.shield.isOn) {
                         it.shield.activeArc = 360f
                         var radius = it.collisionRadius
-                        if (radius < SHIELD_RADIUS) {
-                            radius += 300 * amount
+                        if (radius < ACTIVE_SHIELD_RADIUS) {
+                            radius += SHIELD_EXPANDING_FACTOR * amount //300
                         } else {
-                            radius = SHIELD_RADIUS.toFloat()
+                            radius = ACTIVE_SHIELD_RADIUS.toFloat()
                         }
                         it.shield.radius = radius
                         it.collisionRadius = radius
@@ -426,7 +424,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                  */
                 drone?.let {
                     log("--> transferFlux(amount=$amount, workingMode=$workingMode, transfer=$transfer)", "$LOGTAG:FluxTransfer")
-                    // should be between 0-100%
+                    // should be between 0-100% (between 0 and 1.0)
                     val droneFluxTracker = it.fluxTracker
                     val droneSoftFluxPercentageLevel = (droneFluxTracker.currFlux - droneFluxTracker.hardFlux) / droneFluxTracker.maxFlux
                     val droneHardFluxPercentageLevel = droneFluxTracker.hardFlux / droneFluxTracker.maxFlux
@@ -440,7 +438,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     log("shipSoftFluxPercentageLevel: ${shipSoftFluxPercentageLevel}, shipHardFluxPercentageLevel: ${shipHardFluxPercentageLevel}, ship hard flux: ${shipFluxTracker.hardFlux}, ship current flux: ${shipFluxTracker.currFlux}, ship max flux: ${shipFluxTracker.maxFlux}", "$LOGTAG:FluxTransfer")
 
                     // Apply flux to the ship
-                    // keep the difference clamped between 0-1.00% by doing max(diff,0) to keep it >=0, and min(that,1.00) to keep it <=1.00
+                    // keep the difference clamped between 0-100% (0 to 1.00) by doing max(diff,0) to keep it >=0, and min(that,1.00) to keep it <=1.00
                     val droneToShipSoftFluxDiff = min(max(droneSoftFluxPercentageLevel - shipSoftFluxPercentageLevel, 0f), 1.00f)
                     val droneToShipHardFluxDiff = min(max(droneHardFluxPercentageLevel - shipHardFluxPercentageLevel, 0f), 1.00f)
 
@@ -672,7 +670,9 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         private const val GUARDIAN_SHIELD_FLUX_DISSIPATION_DEBUFF_ID = "guardian_shield_debuff_flux-dissipation"
         private const val GUARDIAN_SHIELD_HARDFLUX_DISSIPATION_DEBUFF_ID = "guardian_shield_debuff_hardflux-dissipation"
 
-        private const val SHIELD_RADIUS = 1500
+        private const val ACTIVE_SHIELD_RADIUS = 1500
+        private const val SHIELD_EXPANDING_FACTOR = 300
+        private const val SHIELD_OFF_COLLISION_RADIUS = 400f
         private const val APPLY_FLUX_DEBUFF = true
         private const val APPLY_HARDFLUX_DEBUFF = true
         private const val FLUX_DEBUFF_AMOUNT = 0.75f        // smaller is worse for the player
