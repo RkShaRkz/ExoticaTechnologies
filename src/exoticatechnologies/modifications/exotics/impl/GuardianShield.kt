@@ -64,7 +64,11 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         super.applyToShip(id, member, ship, mods, exoticData)
 
         originalShip = ship
-        originalOwnersShield = ship.shield
+
+        // If ship had a shield, lets save it
+        ship.shield?.let {
+            originalOwnersShield = ship.shield
+        }
         // First thing's first - disable the ship's shield
         ship.setShield(ShieldAPI.ShieldType.NONE, 0f, 0f, 0f)
 
@@ -77,12 +81,15 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
     override fun onDestroy(member: FleetMemberAPI) {
         super.onDestroy(member)
 
-        originalShip.setShield(
-                originalOwnersShield.type,
-                originalOwnersShield.upkeep,
-                originalOwnersShield.fluxPerPointOfDamage,
-                originalOwnersShield.arc
-        )
+        // If we had a shield saved, lets restore it
+        if (::originalOwnersShield.isInitialized) {
+            originalShip.setShield(
+                    originalOwnersShield.type,
+                    originalOwnersShield.upkeep,
+                    originalOwnersShield.fluxPerPointOfDamage,
+                    originalOwnersShield.arc
+            )
+        }
     }
 
     inner class GuardianShieldDrone(ship: ShipAPI) : MagicDroneSubsystem(ship) {
