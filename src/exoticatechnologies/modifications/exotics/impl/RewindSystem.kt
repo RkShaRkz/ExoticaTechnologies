@@ -102,21 +102,6 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             if (candidate.isPresent()) {
                 rewindCandidate = candidate
 
-                /**
-                 * @param color
-                 * @param locX
-                 * @param locY
-                 * @param velX
-                 * @param velY
-                 * @param maxJitter
-                 * @param in
-                 * @param dur
-                 * @param out
-                 * @param additive
-                 * @param combineWithSpriteColor
-                 * @param aboveShip
-                 */
-
                 // (un)neccessary kotlin drama
                 candidate.get().let {
                     ship.addAfterimage(
@@ -275,6 +260,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         }
     }
 
+
+
     internal fun determineRewindLength(ship: ShipAPI): Int {
         return when (ship.hullSize) {
             null -> {
@@ -313,7 +300,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     }
 
     companion object {
-        const val MAX_TIME = 15f
+        private const val ITEM = "et_rewindchip"
+        private const val MAX_TIME = 15f
     }
 
 }
