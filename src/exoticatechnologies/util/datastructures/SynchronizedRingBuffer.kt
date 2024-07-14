@@ -1,5 +1,6 @@
 package exoticatechnologies.util.datastructures
 
+import exoticatechnologies.util.reflect.JavaReflectionUtils
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
@@ -201,29 +202,29 @@ class SynchronizedRingBuffer<T : Any>(private val size: Int, private val default
     private fun <T : Any> createArray(size: Int, clazz: Class<T>): Array<T> {
         if (clazz.equals(Int::class.java)) {
             // These need to be boxed to avoid java.lang.ClassCastException: [I cannot be cast to [Ljava.lang.Object;
-            return java.lang.reflect.Array.newInstance(java.lang.Integer::class.java, size) as Array<T>
+            return JavaReflectionUtils.newArrayInstance(java.lang.Integer::class.java, size) as Array<T>
         }
         if (clazz.equals(Float::class.java)) {
             // These need to be boxed to avoid java.lang.ClassCastException: [F cannot be cast to [Ljava.lang.Object;
-            return java.lang.reflect.Array.newInstance(java.lang.Float::class.java, size) as Array<T>
+            return JavaReflectionUtils.newArrayInstance(java.lang.Float::class.java, size) as Array<T>
         }
         if (clazz.equals(Double::class.java)) {
             // These need to be boxed to avoid java.lang.ClassCastException: [D cannot be cast to [Ljava.lang.Object;
-            return java.lang.reflect.Array.newInstance(java.lang.Double::class.java, size) as Array<T>
+            return JavaReflectionUtils.newArrayInstance(java.lang.Double::class.java, size) as Array<T>
         }
         if (clazz.equals(Long::class.java)) {
             // These need to be boxed to avoid java.lang.ClassCastException: [J cannot be cast to [Ljava.lang.Object;
-            return java.lang.reflect.Array.newInstance(java.lang.Long::class.java, size) as Array<T>
+            return JavaReflectionUtils.newArrayInstance(java.lang.Long::class.java, size) as Array<T>
         }
         if (clazz.equals(Byte::class.java)) {
             // These need to be boxed to avoid java.lang.ClassCastException: [B cannot be cast to [Ljava.lang.Object;
-            return java.lang.reflect.Array.newInstance(java.lang.Byte::class.java, size) as Array<T>
+            return JavaReflectionUtils.newArrayInstance(java.lang.Byte::class.java, size) as Array<T>
         }
         if (clazz.equals(Short::class.java)) {
             // These need to be boxed to avoid java.lang.ClassCastException: [S cannot be cast to [Ljava.lang.Object;
-            return java.lang.reflect.Array.newInstance(java.lang.Short::class.java, size) as Array<T>
+            return JavaReflectionUtils.newArrayInstance(java.lang.Short::class.java, size) as Array<T>
         }
         @Suppress("UNCHECKED_CAST")
-        return java.lang.reflect.Array.newInstance(clazz, size) as Array<T>
+        return JavaReflectionUtils.newArrayInstance(clazz, size) as Array<T>
     }
 }
