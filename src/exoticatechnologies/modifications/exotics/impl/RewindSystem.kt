@@ -4,6 +4,7 @@ import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.campaign.CampaignFleetAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.CombatEngineAPI
+import com.fs.starfarer.api.combat.DamageType
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipAPI.HullSize.*
 import com.fs.starfarer.api.combat.ShipwideAIFlags
@@ -20,6 +21,7 @@ import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.datastructures.RingBuffer
 import org.apache.log4j.Logger
 import org.json.JSONObject
+import org.lazywizard.lazylib.combat.entities.SimpleEntity
 import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
@@ -70,12 +72,16 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     inner class RewindSubsystem(ship: ShipAPI) : MagicSubsystem(ship) {
         var engine: CombatEngineAPI = Global.getCombatEngine()
         private val secondsTracker = IntervalUtil(0.95f, 1.05f)
+        private val arcTimer = IntervalUtil(0.25f, 0.5f)
         private var timeElapsed: Float = 0f
         private val previousStates: RingBuffer<ShipParams> = exoticatechnologies.util.datastructures.RingBuffer<ShipParams>(
                 determineRewindLength(ship) + 5,
                 ShipParams.EmptyShipParams,
                 ShipParams::class.java
         )
+
+        //this should be either empty, or have an actual value
+        private var rewindCandidate: Optional<ShipParams.ConcreteShipParams> = Optional.empty();
 
         override fun getBaseInDuration(): Float = 1f
 
@@ -88,6 +94,85 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         }
 
         override fun getBaseCooldownDuration() = 300.toFloat()
+
+        override fun onActivate() {
+            super.onActivate()
+            val candidate = findActivationCandidate()
+
+            if (candidate.isPresent()) {
+                rewindCandidate = candidate
+
+                /**
+                 * @param color
+                 * @param locX
+                 * @param locY
+                 * @param velX
+                 * @param velY
+                 * @param maxJitter
+                 * @param in
+                 * @param dur
+                 * @param out
+                 * @param additive
+                 * @param combineWithSpriteColor
+                 * @param aboveShip
+                 */
+
+                // (un)neccessary kotlin drama
+                candidate.get().let {
+                    ship.addAfterimage(
+                            Color.CYAN.brighter(),
+                            it.location.getX(),
+                            it.location.getY(),
+                            0f,
+                            0f,
+                            MAX_TIME,
+                            0f,
+                            1f,
+                            MAX_TIME - 1f,
+                            true,
+                            false,
+                            true
+                    )
+                }
+            }
+        }
+
+
+        override fun onFinished() {
+            super.onFinished()
+
+            val amount = engine.elapsedInLastFrame
+
+            arcTimer.advance(amount)
+            if (arcTimer.intervalElapsed()) {
+                if (rewindCandidate.isPresent()) {
+                    engine.spawnEmpArc(
+                            ship,
+                            ship.location,
+                            ship,
+                            SimpleEntity(rewindCandidate.get().location),
+                            DamageType.OTHER,
+                            0f,
+                            0f,
+                            69420f,
+                            null,
+                            30f, //it used some dynamic formula but why not just use 30 all the time
+                            Color.CYAN.brighter().brighter(),
+                            Color.CYAN.brighter()
+                    )
+                } else {
+                    logger.error("rewindCandidate was not present in onFinished() for the spawnEmpArc!!!")
+                }
+            }
+
+            // And now, restore the ship!
+            if (rewindCandidate.isPresent()) {
+                deploySavedState(rewindCandidate.get())
+                rewindCandidate = Optional.empty()
+            } else {
+                logger.error("rewindCandidate was not present in onFinished() for deploying the rewind candidate!!!")
+            }
+        }
 
         override fun shouldActivateAI(amount: Float): Boolean {
             // AI should activate if:
@@ -126,16 +211,13 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             // they allow activation - then search through the buffer
             return if (isVenting && hasIncomingFire) {
                 // true, check if possible
-                val candidate = findActivationCandidate()
-                candidate.isPresent()
+                findActivationCandidate().isPresent()
             } else if (healthLow && hasIncomingFire) {
                 // true, check if possible
-                val candidate = findActivationCandidate()
-                candidate.isPresent()
+                findActivationCandidate().isPresent()
             } else if (healthReallyLow) {
                 // true, check if possible
-                val candidate = findActivationCandidate()
-                candidate.isPresent()
+                findActivationCandidate().isPresent()
             } else {
                 false
             }
@@ -155,7 +237,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                     && ((shipParams.timestamp - pastTime >= 0) && (shipParams.timestamp - pastTime <= 1))
         }
 
-        private fun findActivationCandidate() : Optional<ShipParams.ConcreteShipParams> {
+        private fun findActivationCandidate(): Optional<ShipParams.ConcreteShipParams> {
             val activationCandidate = previousStates.find { shipParams ->
                 isActivationPossible(ship, shipParams)
             }
@@ -180,15 +262,25 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             }
         }
 
-        override fun onStateSwitched(oldState: State?) {
-            super.onStateSwitched(oldState)
+        private fun deploySavedState(savedState: ShipParams.ConcreteShipParams) {
+            ship.velocity.set(savedState.velocity)
+            ship.angularVelocity = savedState.angularVelocity
+            ship.location.set(savedState.location)
+            ship.facing = savedState.facing
+            ship.maxHitpoints = savedState.maxHitpoints
+            ship.hitpoints = savedState.hitpoints
+            for (index in 0..savedState.usableWeapons.size) {
+                ship.usableWeapons[index] = savedState.usableWeapons[index]
+            }
         }
-
     }
 
     internal fun determineRewindLength(ship: ShipAPI): Int {
         return when (ship.hullSize) {
-            null -> { 0 } //can never happen but gets rid of the warning
+            null -> {
+                //can never happen but gets rid of the warning
+                0
+            }
 
             DEFAULT,
             FIGHTER -> {
@@ -220,5 +312,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 
     }
 
+    companion object {
+        const val MAX_TIME = 15f
+    }
 
 }
