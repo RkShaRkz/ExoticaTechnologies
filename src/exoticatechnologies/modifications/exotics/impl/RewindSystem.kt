@@ -340,6 +340,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                             deploySavedState(rewindCandidate.get())
                             rewindCandidate = Optional.empty()
                             performedTeleport.compareAndSet(false, true)
+                            playSound("tachyon_lance_emp_impact")
                         } else {
                             logger.error("rewindCandidate was not present in teleportTimer part for deploying the rewind candidate!!!")
                         }
@@ -365,12 +366,24 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             }
         }
 
+        private fun playSound(soundId: String) {
+            Global.getSoundPlayer().playSound(
+                    soundId,
+                    1.0f,
+                    1.0f,
+                    ship.location,
+                    ship.velocity
+            )
+        }
+
         /**
-         * Sets the [systemActivated] atomic boolean only if it's unset, and marks the activation time
+         * Sets the [systemActivated] atomic boolean only if it's unset, and marks the activation time.
+         * Also plays the "system_phase_teleporter" sound
          */
         private fun turnOnSystem() {
             systemActivated.compareAndSet(false, true)
             activationTime = timeElapsed;
+            playSound("system_phase_teleporter")
         }
 
         /**
