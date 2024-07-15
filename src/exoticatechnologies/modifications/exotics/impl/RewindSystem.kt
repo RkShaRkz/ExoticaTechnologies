@@ -8,6 +8,7 @@ import com.fs.starfarer.api.combat.DamageType
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipAPI.HullSize.*
 import com.fs.starfarer.api.combat.ShipwideAIFlags
+import com.fs.starfarer.api.combat.WeaponAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
@@ -70,18 +71,18 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     }
 
     inner class RewindSubsystem(ship: ShipAPI) : MagicSubsystem(ship) {
-        var engine: CombatEngineAPI = Global.getCombatEngine()
+        private var engine: CombatEngineAPI = Global.getCombatEngine()
         private val secondsTracker = IntervalUtil(0.95f, 1.05f)
         private val arcTimer = IntervalUtil(0.25f, 0.5f)
         private var timeElapsed: Float = 0f
-        private val previousStates: RingBuffer<ShipParams> = exoticatechnologies.util.datastructures.RingBuffer<ShipParams>(
+        private val previousStates: RingBuffer<ShipParams> = RingBuffer<ShipParams>(
                 determineRewindLength(ship) + 5,
                 ShipParams.EmptyShipParams,
                 ShipParams::class.java
         )
 
         //this should be either empty, or have an actual value
-        private var rewindCandidate: Optional<ShipParams.ConcreteShipParams> = Optional.empty();
+        private var rewindCandidate: Optional<ShipParams.ConcreteShipParams> = Optional.empty()
 
         override fun getBaseInDuration(): Float = 1f
 
@@ -102,7 +103,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             if (candidate.isPresent()) {
                 rewindCandidate = candidate
 
-                // (un)neccessary kotlin drama
+                // (un)necessary kotlin drama
                 candidate.get().let {
                     ship.addAfterimage(
                             Color.CYAN.brighter(),
@@ -217,7 +218,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             // calculate the timestamp we're looking for in the past
             val pastTime = timeElapsed - determineRewindLength(ship)
 
-            // We have a ConcreteShipParams (non invalid data) and we found a timestamp within a 1second of our target past time
+            // We have a ConcreteShipParams (non-invalid data) and we found a timestamp within a 1second of our target past time
             return shipParams is ShipParams.ConcreteShipParams
                     && ((shipParams.timestamp - pastTime >= 0) && (shipParams.timestamp - pastTime <= 1))
         }
@@ -227,9 +228,15 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 isActivationPossible(ship, shipParams)
             }
 
-            activationCandidate as ShipParams.ConcreteShipParams
+            val retVal = if (activationCandidate == null) {
+                Optional.empty()
+            } else {
+                activationCandidate as ShipParams.ConcreteShipParams
 
-            return Optional.ofNullable(activationCandidate)
+                Optional.of(activationCandidate)
+            }
+            debugLog("<-- findActivationCandidate() returning activationCandidate $activationCandidate (retVal = $retVal)")
+            return retVal
         }
 
         override fun getDisplayText(): String = "Rewind System"
@@ -292,20 +299,19 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     }
 
     private fun debugLog(log: String) {
-        if (DEBUG) logger.info(log)
+        if (DEBUG) logger.info("[RewindSystem] $log")
     }
 
     sealed class ShipParams {
 
         data class ConcreteShipParams(val ship: ShipAPI, val timestamp: Float) : ShipParams() {
-            val acceleration = ship.acceleration
             val location: Vector2f = ship.location
             val velocity: Vector2f = ship.velocity
             val angularVelocity = ship.angularVelocity
             val facing = ship.facing
-            val maxHitpoints = ship.maxHitpoints
-            val hitpoints = ship.hitpoints
-            val usableWeapons = ship.usableWeapons
+            val maxHitpoints: Float = ship.maxHitpoints
+            val hitpoints: Float = ship.hitpoints
+            val usableWeapons: List<WeaponAPI> = ship.usableWeapons
         }
 
         object EmptyShipParams : ShipParams()
