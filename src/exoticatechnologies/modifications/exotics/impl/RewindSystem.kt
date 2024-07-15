@@ -97,7 +97,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             return findActivationCandidate().isPresent()
         }
 
-        override fun getBaseCooldownDuration() = COOLDOWN.toFloat()
+        //TODO fix this!!!
+        override fun getBaseCooldownDuration() = 5.toFloat() // COOLDOWN.toFloat()
 
         override fun onActivate() {
             super.onActivate()
@@ -151,6 +152,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                     deploySavedState(rewindCandidate.get())
                     rewindCandidate = Optional.empty()
                 }
+            } else {
+                debugLog("onActivate()\tcandidate was NOT present !!!")
             }
 
             debugLog("<-- onActivate()\tnew ship location is now ${ship.location}")
@@ -294,7 +297,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             debugLog("--> deploySavedState()\tDeploying stats and location from time ${savedState.timestamp}\t(X, Y): (${savedState.location.x}, ${savedState.location.y})\tcurrent loc: (${ship.location.x}, ${ship.location.y})")
             ship.velocity.set(savedState.velocity)
             ship.angularVelocity = savedState.angularVelocity
-            ship.location.set(savedState.location)
+            ship.location.set(savedState.location.x, savedState.location.y)
             ship.facing = savedState.facing
             ship.maxHitpoints = savedState.maxHitpoints
             ship.hitpoints = savedState.hitpoints
