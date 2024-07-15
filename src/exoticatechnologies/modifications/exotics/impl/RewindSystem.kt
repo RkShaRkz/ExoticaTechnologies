@@ -51,8 +51,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             exoticData: ExoticData,
             expand: Boolean) {
         StringUtils.getTranslation(key, "longDescription")
-//                .format("flux_method", GuardianShield.lazyFluxMethodString)
-//                .format("flux_effects", GuardianShield.lazyFluxEffectString)
+                .format("how_much", calculateTooltipStringReplacement())
+                .format("cooldown_string", cooldownString)
                 .addToTooltip(tooltip, title)
     }
 
@@ -93,7 +93,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             return findActivationCandidate().isPresent()
         }
 
-        override fun getBaseCooldownDuration() = 300.toFloat()
+        override fun getBaseCooldownDuration() = COOLDOWN.toFloat()
 
         override fun onActivate() {
             super.onActivate()
@@ -242,24 +242,25 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 secondsTracker.advance(amount)
                 if (secondsTracker.intervalElapsed()) {
                     // Another second passed, record a snapshot
+                    debugLog("Saving stats and location at time ${timeElapsed}\t(X, Y): (${ship.location.x}, ${ship.location.y})")
                     previousStates.put(ShipParams.ConcreteShipParams(ship, timeElapsed))
                 }
             }
         }
 
         private fun deploySavedState(savedState: ShipParams.ConcreteShipParams) {
+            debugLog("Deploying stats and location from time ${savedState.timestamp}\t(X, Y): (${savedState.location.x}, ${savedState.location.y})\tcurrent loc: (${ship.location.x}, ${ship.location.y})")
             ship.velocity.set(savedState.velocity)
             ship.angularVelocity = savedState.angularVelocity
             ship.location.set(savedState.location)
             ship.facing = savedState.facing
             ship.maxHitpoints = savedState.maxHitpoints
             ship.hitpoints = savedState.hitpoints
-            for (index in 0..savedState.usableWeapons.size) {
+            for (index in 0 until savedState.usableWeapons.size) {
                 ship.usableWeapons[index] = savedState.usableWeapons[index]
             }
         }
     }
-
 
 
     internal fun determineRewindLength(ship: ShipAPI): Int {
@@ -282,11 +283,23 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         }
     }
 
+    private fun calculateTooltipStringReplacement(): String {
+        return if (::originalShip.isInitialized) {
+            determineRewindLength(originalShip).toString()
+        } else {
+            "15 / 20 / 30 / 45"
+        }
+    }
+
+    private fun debugLog(log: String) {
+        if (DEBUG) logger.info(log)
+    }
+
     sealed class ShipParams {
 
         data class ConcreteShipParams(val ship: ShipAPI, val timestamp: Float) : ShipParams() {
             val acceleration = ship.acceleration
-            val location: Vector2f = ship.copyLocation
+            val location: Vector2f = ship.location
             val velocity: Vector2f = ship.velocity
             val angularVelocity = ship.angularVelocity
             val facing = ship.facing
@@ -300,8 +313,17 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     }
 
     companion object {
+        private const val DEBUG = true
         private const val ITEM = "et_rewindchip"
         private const val MAX_TIME = 15f
+        private const val COOLDOWN = 300
+
+        private const val COOLDOWN_REPLACEMENT = "*Has a cooldown of {cooldown} seconds*."
+        private val cooldownString: String by lazy {
+            "${
+                COOLDOWN_REPLACEMENT.replace("{cooldown}", COOLDOWN.toString())
+            }"
+        }
     }
 
 }
