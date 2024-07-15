@@ -91,6 +91,9 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         override fun getBaseOutDuration(): Float = 1f
 
         override fun canActivate(): Boolean {
+            // If less time has passed than we need to, we can't for sure
+            if (timeElapsed < determineRewindLength(ship)) return false
+
             return findActivationCandidate().isPresent()
         }
 
@@ -100,17 +103,25 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             super.onActivate()
             val candidate = findActivationCandidate()
 
+            debugLog("--> onActivate()\tshould teleport from ${ship.location} to candidate ${candidate}\ttimeElapsed: ${timeElapsed}")
+
             if (candidate.isPresent()) {
                 rewindCandidate = candidate
 
                 // (un)necessary kotlin drama
                 candidate.get().let {
+                    debugLog("onActivate()\tcandidate was present, candidate location: ${it.location}")
+                    //part 1 - afterimage on ship
                     ship.addAfterimage(
                             Color.CYAN.brighter(),
-                            it.location.getX(),
-                            it.location.getY(),
-                            0f,
-                            0f,
+//                            it.location.getX(),
+//                            it.location.getY(),
+                            ship.location.getX(),
+                            ship.location.getY(),
+//                            0f,
+//                            0f,
+                            ship.velocity.getX(),
+                            ship.velocity.getY(),
                             MAX_TIME,
                             0f,
                             1f,
@@ -119,18 +130,41 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                             false,
                             true
                     )
+
+                    //part 2 - arc towards teleport location
+                    engine.spawnEmpArc(
+                            ship,
+                            ship.location,
+                            ship,
+                            SimpleEntity(it.location),
+                            DamageType.OTHER,
+                            0f,
+                            0f,
+                            69420f,
+                            null,
+                            30f, //it used some dynamic formula but why not just use 30 all the time
+                            Color.CYAN.brighter().brighter(),
+                            Color.CYAN.brighter()
+                    )
+
+                    //part 3 - teleport
+                    deploySavedState(rewindCandidate.get())
+                    rewindCandidate = Optional.empty()
                 }
             }
+
+            debugLog("<-- onActivate()\tnew ship location is now ${ship.location}")
         }
 
 
+        /*
         override fun onFinished() {
             super.onFinished()
 
-            val amount = engine.elapsedInLastFrame
+//            val amount = engine.elapsedInLastFrame
 
-            arcTimer.advance(amount)
-            if (arcTimer.intervalElapsed()) {
+//            arcTimer.advance(amount)
+//            if (arcTimer.intervalElapsed()) {
                 if (rewindCandidate.isPresent()) {
                     engine.spawnEmpArc(
                             ship,
@@ -149,7 +183,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 } else {
                     logger.error("rewindCandidate was not present in onFinished() for the spawnEmpArc!!!")
                 }
-            }
+//            }
 
             // And now, restore the ship!
             if (rewindCandidate.isPresent()) {
@@ -159,6 +193,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 logger.error("rewindCandidate was not present in onFinished() for deploying the rewind candidate!!!")
             }
         }
+         */
 
         override fun shouldActivateAI(amount: Float): Boolean {
             // AI should activate if:
@@ -256,7 +291,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         }
 
         private fun deploySavedState(savedState: ShipParams.ConcreteShipParams) {
-            debugLog("Deploying stats and location from time ${savedState.timestamp}\t(X, Y): (${savedState.location.x}, ${savedState.location.y})\tcurrent loc: (${ship.location.x}, ${ship.location.y})")
+            debugLog("--> deploySavedState()\tDeploying stats and location from time ${savedState.timestamp}\t(X, Y): (${savedState.location.x}, ${savedState.location.y})\tcurrent loc: (${ship.location.x}, ${ship.location.y})")
             ship.velocity.set(savedState.velocity)
             ship.angularVelocity = savedState.angularVelocity
             ship.location.set(savedState.location)
