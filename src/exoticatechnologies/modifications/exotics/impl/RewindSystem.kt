@@ -27,6 +27,7 @@ import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
+import java.util.concurrent.atomic.AtomicBoolean
 
 class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     override var color = Color(225, 225, 225)
@@ -74,7 +75,18 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         private var engine: CombatEngineAPI = Global.getCombatEngine()
         private val secondsTracker = IntervalUtil(0.95f, 1.05f)
         private val arcTimer = IntervalUtil(0.25f, 0.5f)
+        private val teleportTimer = IntervalUtil(1.75f, 2.25f)
         private var timeElapsed: Float = 0f
+        private val systemActivated = AtomicBoolean(false)
+        private val justTurnedOff = AtomicBoolean(false)
+        private val performedTeleport = AtomicBoolean(false)
+        /**
+        Measures *when* the system was activated and not *how long* it's been active for.
+        Calculate how long it's active for by doing *(timeElapsed - activationTime)*
+
+         If the value is less than 0, that should be interpreted as if it's not activated.
+         */
+        private var activationTime = -1f
         private val previousStates: RingBuffer<ShipParams> = RingBuffer<ShipParams>(
                 determineRewindLength(ship) + 5,
                 ShipParams.EmptyShipParams,
@@ -86,7 +98,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 
         override fun getBaseInDuration(): Float = 1f
 
-        override fun getBaseActiveDuration(): Float = 1f
+        override fun getBaseActiveDuration(): Float = 2f
 
         override fun getBaseOutDuration(): Float = 1f
 
@@ -108,7 +120,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 
             if (candidate.isPresent()) {
                 rewindCandidate = candidate
-
+                turnOnSystem()
                 // (un)necessary kotlin drama
                 candidate.get().let {
                     debugLog("onActivate()\tcandidate was present, candidate location: ${it.location}")
@@ -119,10 +131,10 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 //                            it.location.getY(),
                             ship.location.getX(),
                             ship.location.getY(),
-//                            0f,
-//                            0f,
-                            ship.velocity.getX(),
-                            ship.velocity.getY(),
+                            0f,
+                            0f,
+//                            ship.velocity.getX(),
+//                            ship.velocity.getY(),
                             MAX_TIME,
                             0f,
                             1f,
@@ -132,21 +144,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                             true
                     )
 
-                    //part 2 - arc towards teleport location
-                    engine.spawnEmpArc(
-                            ship,
-                            ship.location,
-                            ship,
-                            SimpleEntity(it.location),
-                            DamageType.OTHER,
-                            0f,
-                            0f,
-                            69420f,
-                            null,
-                            30f, //it used some dynamic formula but why not just use 30 all the time
-                            Color.CYAN.brighter().brighter(),
-                            Color.CYAN.brighter()
-                    )
+
 
                     //part 3 - teleport
                     deploySavedState(rewindCandidate.get())
@@ -159,6 +157,10 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             debugLog("<-- onActivate()\tnew ship location is now ${ship.location}")
         }
 
+        override fun onFinished() {
+            super.onFinished()
+            turnOffSystem()
+        }
 
         /*
         override fun onFinished() {
@@ -290,8 +292,93 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                     debugLog("Saving stats and location at time ${timeElapsed}\t(X, Y): (${ship.location.x}, ${ship.location.y})")
                     previousStates.put(ShipParams.ConcreteShipParams(ship, timeElapsed))
                 }
+
+                // Do time-specific system stuff here
+                // The following piece got somewhat complicated so here's a breakdown:
+                // 1. if system activated, the fattening EMP arc starts showing
+                // 2. after the "active skill" aka "phase-in period" (2 seconds) passes, the skill turns off
+                // 3. before the skill turns off, the teleport counter will have filled up and the ship would have teleported
+                // after which it would have set the "teleportPerformed" flag
+                // 4. if the system disactivated / turned off but no teleportation happened, a fallback check will happen
+                // in a subsequent frame, this is the "justTurnedOff && !performedTeleport" case which is when we just teleport
+                // 5. in a subsequent frame, the "performedTeleport" is cleared
+                if (systemActivated.get()) {
+                    arcTimer.advance(amount)
+                    if (arcTimer.intervalElapsed()) {
+                        // Draw increasingly-fat arc here
+                        //part 2 - arc towards teleport location
+                        rewindCandidate.get().let {
+                            engine.spawnEmpArc(
+                                    ship,
+                                    ship.location,
+                                    ship,
+                                    SimpleEntity(it.location),
+                                    DamageType.OTHER,
+                                    0f,
+                                    0f,
+                                    69420f,
+                                    null,
+                                    15f * getActivationDuration(),
+                                    Color.CYAN.brighter().brighter(),
+                                    Color.CYAN.brighter()
+                            )
+                        }
+                    }
+
+                    teleportTimer.advance(amount)
+                    if (teleportTimer.intervalElapsed()) {
+                        // And now, restore the ship!
+                        if (rewindCandidate.isPresent()) {
+                            deploySavedState(rewindCandidate.get())
+                            rewindCandidate = Optional.empty()
+                            performedTeleport.compareAndSet(false, true)
+                        } else {
+                            logger.error("rewindCandidate was not present in teleportTimer part for deploying the rewind candidate!!!")
+                        }
+                    }
+                } else if (justTurnedOff.get() && !performedTeleport.get()) {
+                    // In case the system got turned off and the teleport timer somehow didn't fire, lets be sure to repeat
+                    // the action here, just in case. Probably not necessary, but just to be sure. We will omit loading
+                    // up the teleportTimer because [turnOffSystem] will zero it out - so it won't make sense to fill it.
+                    if (rewindCandidate.isPresent()) {
+                        // Restore the ship if this is non-empty
+                        deploySavedState(rewindCandidate.get())
+                        rewindCandidate = Optional.empty()
+                        justTurnedOff.compareAndSet(true, false)
+                    } else {
+                        logger.error("rewindCandidate was not present in fallback part after justTurnedOff and not teleported!!!")
+                    }
+                } else if (performedTeleport.get()) {
+                    // If we performed teleport, just zero it out - this is the normal behaviour
+                    // for one frame after teleporting back to original position
+                    performedTeleport.compareAndSet(true, false)
+                }
             }
         }
+
+        /**
+         * Sets the [systemActivated] atomic boolean only if it's unset, and marks the activation time
+         */
+        private fun turnOnSystem() {
+            systemActivated.compareAndSet(false, true)
+            activationTime = timeElapsed;
+        }
+
+        /**
+         * Unsets the [systemActivated] atomic boolean only if it's set, clears the activation time,
+         * and also zeroes the [arcTimer] and [teleportTimer] [IntervalUtil] timers
+         */
+        private fun turnOffSystem() {
+            systemActivated.compareAndSet(true, false)
+            activationTime = -1f;
+            // reset timers as well
+            arcTimer.elapsed = 0f
+            teleportTimer.elapsed = 0f
+            // Since I believe this may cause a data race, lets do one more thing to be sure
+            justTurnedOff.compareAndSet(false, true)
+        }
+        private fun getActivationDuration(): Float = timeElapsed - activationTime
+
 
         private fun deploySavedState(savedState: ShipParams.ConcreteShipParams) {
             debugLog("--> deploySavedState()\tDeploying stats and location from time ${savedState.timestamp}\t(X, Y): (${savedState.location.x}, ${savedState.location.y})\tcurrent loc: (${ship.location.x}, ${ship.location.y})")
