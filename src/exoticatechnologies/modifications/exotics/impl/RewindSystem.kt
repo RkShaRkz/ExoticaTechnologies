@@ -74,8 +74,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     inner class RewindSubsystem(ship: ShipAPI) : MagicSubsystem(ship) {
         private var engine: CombatEngineAPI = Global.getCombatEngine()
         private val secondsTracker = IntervalUtil(0.95f, 1.05f)
-        private val arcTimer = IntervalUtil(0.25f, 0.5f)
-        private val teleportTimer = IntervalUtil(1.75f, 2.25f)
+        private val arcTimer = IntervalUtil(0.25f, 0.35f)//IntervalUtil(0.25f, 2.5f) //IntervalUtil(0.25f, 0.5f)
+        private val teleportTimer = IntervalUtil(PHASE_IN_DURATION - 0.05f, PHASE_IN_DURATION + 0.05f)//IntervalUtil(1.95f, 2.05f)
         private var timeElapsed: Float = 0f
         private val systemActivated = AtomicBoolean(false)
         private val justTurnedOff = AtomicBoolean(false)
@@ -98,7 +98,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 
         override fun getBaseInDuration(): Float = 1f
 
-        override fun getBaseActiveDuration(): Float = 2f
+        override fun getBaseActiveDuration(): Float = PHASE_IN_DURATION
 
         override fun getBaseOutDuration(): Float = 1f
 
@@ -125,30 +125,32 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 candidate.get().let {
                     debugLog("onActivate()\tcandidate was present, candidate location: ${it.location}")
                     //part 1 - afterimage on ship
+                    //note1: afterimage uses ship-relative coordinates, so anything other than 0,0 will paint it at some distance from the ship
+                    //note2: using non-zero velocity will make the image "drift away" from the ship instead of staying on top of it
                     ship.addAfterimage(
                             Color.CYAN.brighter(),
 //                            it.location.getX(),
 //                            it.location.getY(),
-                            ship.location.getX(),
-                            ship.location.getY(),
+                            0f,
+                            0f,
                             0f,
                             0f,
 //                            ship.velocity.getX(),
 //                            ship.velocity.getY(),
                             MAX_TIME,
                             0f,
-                            1f,
+                            PHASE_IN_DURATION,
                             MAX_TIME - 1f,
                             true,
                             false,
                             true
                     )
-
+                    // The other parts (part 2 and part 3) will happen over time in advance()
 
 
                     //part 3 - teleport
-                    deploySavedState(rewindCandidate.get())
-                    rewindCandidate = Optional.empty()
+//                    deploySavedState(rewindCandidate.get())
+//                    rewindCandidate = Optional.empty()
                 }
             } else {
                 debugLog("onActivate()\tcandidate was NOT present !!!")
@@ -254,16 +256,17 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
          * 1. we have a snapshot exactly enough seconds in the past
          * 2. we find a snapshot that is <1sec difference from ideal timing (duration seconds in the past from now)
          */
-        private fun isActivationPossible(ship: ShipAPI, shipParams: ShipParams): Boolean {
+        private fun isActivationPossible(ship: ShipAPI, shipParams: ShipParams?): Boolean {
             // calculate the timestamp we're looking for in the past
             val pastTime = timeElapsed - determineRewindLength(ship)
 
             // We have a ConcreteShipParams (non-invalid data) and we found a timestamp within a 1second of our target past time
-            return shipParams is ShipParams.ConcreteShipParams
+            return shipParams != null && shipParams is ShipParams.ConcreteShipParams
                     && ((shipParams.timestamp - pastTime >= 0) && (shipParams.timestamp - pastTime <= 1))
         }
 
         private fun findActivationCandidate(): Optional<ShipParams.ConcreteShipParams> {
+            // Due to lack of synchronization, a data race happens here and shipParams can end up being null. yuck.
             val activationCandidate = previousStates.find { shipParams ->
                 isActivationPossible(ship, shipParams)
             }
@@ -295,36 +298,41 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 
                 // Do time-specific system stuff here
                 // The following piece got somewhat complicated so here's a breakdown:
-                // 1. if system activated, the fattening EMP arc starts showing
-                // 2. after the "active skill" aka "phase-in period" (2 seconds) passes, the skill turns off
-                // 3. before the skill turns off, the teleport counter will have filled up and the ship would have teleported
-                // after which it would have set the "teleportPerformed" flag
-                // 4. if the system disactivated / turned off but no teleportation happened, a fallback check will happen
-                // in a subsequent frame, this is the "justTurnedOff && !performedTeleport" case which is when we just teleport
-                // 5. in a subsequent frame, the "performedTeleport" is cleared
+                // 1. if system activated, the ship gets an after image (part 1)
+                // 2. then the fattening EMP arc starts showing (part 2)
+                // 3. after the "active skill" aka "phase-in period" (2 seconds) passes, the skill turns off
+                // 4. before the skill turns off, the teleport counter will have filled up and the ship would have teleported
+                // after which it would have set the "teleportPerformed" flag (part 3)
+                // 5. if the system deactivated / turned off but no teleportation happened, a fallback check will happen
+                // in a subsequent frame, this is the "justTurnedOff && !performedTeleport" case which is when we
+                // just teleport (part 3 again)
+                // 6. in a subsequent frame, the "performedTeleport" is cleared (part 4)
                 if (systemActivated.get()) {
                     arcTimer.advance(amount)
                     if (arcTimer.intervalElapsed()) {
                         // Draw increasingly-fat arc here
                         //part 2 - arc towards teleport location
-                        rewindCandidate.get().let {
-                            engine.spawnEmpArc(
-                                    ship,
-                                    ship.location,
-                                    ship,
-                                    SimpleEntity(it.location),
-                                    DamageType.OTHER,
-                                    0f,
-                                    0f,
-                                    69420f,
-                                    null,
-                                    15f * getActivationDuration(),
-                                    Color.CYAN.brighter().brighter(),
-                                    Color.CYAN.brighter()
-                            )
+                        if (rewindCandidate.isPresent()) {
+                            rewindCandidate.get().let {
+                                engine.spawnEmpArc(
+                                        ship,
+                                        ship.location,
+                                        ship,
+                                        SimpleEntity(it.location),
+                                        DamageType.OTHER,
+                                        0f,
+                                        0f,
+                                        69420f,
+                                        null,
+                                        15f * getActivationDuration(),
+                                        Color.CYAN.brighter().brighter(),
+                                        Color.CYAN.brighter()
+                                )
+                            }
                         }
                     }
 
+                    // part 3 - actual teleportation to previous position
                     teleportTimer.advance(amount)
                     if (teleportTimer.intervalElapsed()) {
                         // And now, restore the ship!
@@ -341,6 +349,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                     // the action here, just in case. Probably not necessary, but just to be sure. We will omit loading
                     // up the teleportTimer because [turnOffSystem] will zero it out - so it won't make sense to fill it.
                     if (rewindCandidate.isPresent()) {
+                        // part 3 - fallback in case it didn't happen properly
                         // Restore the ship if this is non-empty
                         deploySavedState(rewindCandidate.get())
                         rewindCandidate = Optional.empty()
@@ -450,6 +459,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         private const val ITEM = "et_rewindchip"
         private const val MAX_TIME = 15f
         private const val COOLDOWN = 300
+        private const val PHASE_IN_DURATION = 2f;
 
         private const val COOLDOWN_REPLACEMENT = "*Has a cooldown of {cooldown} seconds*."
         private val cooldownString: String by lazy {
