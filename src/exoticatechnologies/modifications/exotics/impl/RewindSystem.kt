@@ -305,13 +305,15 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     sealed class ShipParams {
 
         data class ConcreteShipParams(val ship: ShipAPI, val timestamp: Float) : ShipParams() {
-            val location: Vector2f = ship.location
-            val velocity: Vector2f = ship.velocity
+            // Make an actual copy of all of the values instead of just reusing their reference
+            // Primitives are assigned by-value, so they're automatically copied during assignment
+            val location: Vector2f = Vector2f(ship.location)
+            val velocity: Vector2f = Vector2f(ship.velocity)
             val angularVelocity = ship.angularVelocity
             val facing = ship.facing
             val maxHitpoints: Float = ship.maxHitpoints
             val hitpoints: Float = ship.hitpoints
-            val usableWeapons: List<WeaponAPI> = ship.usableWeapons
+            val usableWeapons: List<WeaponAPI> = ship.usableWeapons.toList()
         }
 
         object EmptyShipParams : ShipParams()
