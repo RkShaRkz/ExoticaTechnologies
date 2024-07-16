@@ -340,7 +340,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                             deploySavedState(rewindCandidate.get())
                             rewindCandidate = Optional.empty()
                             performedTeleport.compareAndSet(false, true)
-                            playSound("tachyon_lance_emp_impact")
+                            playSound("tachyon_lance_fire")
                         } else {
                             logger.error("rewindCandidate was not present in teleportTimer part for deploying the rewind candidate!!!")
                         }
@@ -362,6 +362,9 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                     // If we performed teleport, just zero it out - this is the normal behaviour
                     // for one frame after teleporting back to original position
                     performedTeleport.compareAndSet(true, false)
+                    // It would be ideal to use compareAndSet(true,false) here but we can't guarantee that here.
+                    // Might just be safer to zero it out regardless of what it was.
+                    justTurnedOff.set(false)
                 }
             }
         }
@@ -383,7 +386,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         private fun turnOnSystem() {
             systemActivated.compareAndSet(false, true)
             activationTime = timeElapsed;
-            playSound("system_phase_teleporter")
+            playSound("gigacannon_charge")
         }
 
         /**
