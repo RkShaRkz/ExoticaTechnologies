@@ -14,6 +14,7 @@ import exoticatechnologies.combat.ExoticaCombatUtils
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
+import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
 import org.json.JSONObject
 import org.magiclib.subsystems.MagicSubsystem
@@ -36,7 +37,8 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
     }
 
     override fun modifyToolTip(tooltip: TooltipMakerAPI, title: UIComponentAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData, expand: Boolean) {
-        TODO("Not yet implemented")
+        StringUtils.getTranslation(key, "longDescription")
+                .addToTooltip(tooltip, title)
     }
 
     override fun applyToShip(id: String, member: FleetMemberAPI, ship: ShipAPI, mods: ShipModifications, exoticData: ExoticData) {
