@@ -267,10 +267,6 @@ class SynchronizedRingBufferTest {
             }
         }
 
-//         Searching for an item - this part is flaky
-//         there is *very* little chances of starting this thread just when the producer has put it in
-//         and before the consumer has pulled it out, because searching just searches through the
-//         current state at time of calling. Nothing can be produced nor consumed while search is ongoing.
         var foundItem: Int? = null
         val searchThread = Thread {
             Thread.sleep(100)

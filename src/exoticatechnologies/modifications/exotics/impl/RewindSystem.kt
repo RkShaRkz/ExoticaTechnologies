@@ -74,7 +74,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     inner class RewindSubsystem(ship: ShipAPI) : MagicSubsystem(ship) {
         private var engine: CombatEngineAPI = Global.getCombatEngine()
         private val secondsTracker = IntervalUtil(0.95f, 1.05f)
-        private val arcTimer = IntervalUtil(0.25f, 0.35f)//IntervalUtil(0.25f, 2.5f) //IntervalUtil(0.25f, 0.5f)
+        private val arcTimer = IntervalUtil(0.25f, 0.35f)
         private val teleportTimer = IntervalUtil(PHASE_IN_DURATION - 0.05f, PHASE_IN_DURATION + 0.05f)//IntervalUtil(1.95f, 2.05f)
         private var timeElapsed: Float = 0f
         private val systemActivated = AtomicBoolean(false)
@@ -93,7 +93,6 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 ShipParams::class.java
         )
 
-        //this should be either empty, or have an actual value
         private var rewindCandidate: Optional<ShipParams.ConcreteShipParams> = Optional.empty()
 
         override fun getBaseInDuration(): Float = 1f
@@ -109,8 +108,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             return findActivationCandidate().isPresent()
         }
 
-        //TODO fix this!!!
-        override fun getBaseCooldownDuration() = 5.toFloat() // COOLDOWN.toFloat()
+        override fun getBaseCooldownDuration() = COOLDOWN.toFloat()
 
         override fun onActivate() {
             super.onActivate()
@@ -146,11 +144,6 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                             true
                     )
                     // The other parts (part 2 and part 3) will happen over time in advance()
-
-
-                    //part 3 - teleport
-//                    deploySavedState(rewindCandidate.get())
-//                    rewindCandidate = Optional.empty()
                 }
             } else {
                 debugLog("onActivate()\tcandidate was NOT present !!!")
@@ -164,44 +157,6 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             turnOffSystem()
         }
 
-        /*
-        override fun onFinished() {
-            super.onFinished()
-
-//            val amount = engine.elapsedInLastFrame
-
-//            arcTimer.advance(amount)
-//            if (arcTimer.intervalElapsed()) {
-                if (rewindCandidate.isPresent()) {
-                    engine.spawnEmpArc(
-                            ship,
-                            ship.location,
-                            ship,
-                            SimpleEntity(rewindCandidate.get().location),
-                            DamageType.OTHER,
-                            0f,
-                            0f,
-                            69420f,
-                            null,
-                            30f, //it used some dynamic formula but why not just use 30 all the time
-                            Color.CYAN.brighter().brighter(),
-                            Color.CYAN.brighter()
-                    )
-                } else {
-                    logger.error("rewindCandidate was not present in onFinished() for the spawnEmpArc!!!")
-                }
-//            }
-
-            // And now, restore the ship!
-            if (rewindCandidate.isPresent()) {
-                deploySavedState(rewindCandidate.get())
-                rewindCandidate = Optional.empty()
-            } else {
-                logger.error("rewindCandidate was not present in onFinished() for deploying the rewind candidate!!!")
-            }
-        }
-         */
-
         override fun shouldActivateAI(amount: Float): Boolean {
             // AI should activate if:
             //  - we're venting and have incoming fire
@@ -212,7 +167,6 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 return false
             }
 
-
             val isVenting = ship.fluxTracker.isOverloadedOrVenting
             val hasIncomingFire = ship.aiFlags != null
                     && ship.aiFlags.hasFlag(ShipwideAIFlags.AIFlags.HAS_INCOMING_DAMAGE)
@@ -220,21 +174,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             val healthLow = ship.hullLevel <= 0.25f
             val healthReallyLow = ship.hullLevel <= 0.10f
 
-//            return if (possibleToActivate) {
-//                if (isVenting && hasIncomingFire) {
-//                    true
-//                } else if (healthLow && hasIncomingFire) {
-//                    true
-//                } else if (healthReallyLow) {
-//                    true
-//                } else {
-//                    false
-//                }
-//            } else {
-//                false
-//            }
-
-            // Instead of always searching the buffer, then checking a few eliminating constants
+            // Instead of always searching the buffer, then checking a few eliminating constants (like before)
             // we should instead make the constants the eliminating/narrowing factor, then when
             // they allow activation - then search through the buffer
             return if (isVenting && hasIncomingFire) {
@@ -340,7 +280,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                             deploySavedState(rewindCandidate.get())
                             rewindCandidate = Optional.empty()
                             performedTeleport.compareAndSet(false, true)
-                            playSound("tachyon_lance_fire")
+                            playSound(SHIP_TELEPORTED_SOUND)
                         } else {
                             logger.error("rewindCandidate was not present in teleportTimer part for deploying the rewind candidate!!!")
                         }
@@ -355,6 +295,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                         deploySavedState(rewindCandidate.get())
                         rewindCandidate = Optional.empty()
                         justTurnedOff.compareAndSet(true, false)
+                        playSound(SHIP_TELEPORTED_SOUND)
                     } else {
                         logger.error("rewindCandidate was not present in fallback part after justTurnedOff and not teleported!!!")
                     }
@@ -386,7 +327,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         private fun turnOnSystem() {
             systemActivated.compareAndSet(false, true)
             activationTime = timeElapsed;
-            playSound("gigacannon_charge")
+            playSound(SYSTEM_ACTIVATION_SOUND)
         }
 
         /**
@@ -471,7 +412,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     }
 
     companion object {
-        private const val DEBUG = true
+        private const val DEBUG = false
         private const val ITEM = "et_rewindchip"
         private const val MAX_TIME = 15f
         private const val COOLDOWN = 300
@@ -483,6 +424,9 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 COOLDOWN_REPLACEMENT.replace("{cooldown}", COOLDOWN.toString())
             }"
         }
+
+        private val SYSTEM_ACTIVATION_SOUND = "gigacannon_charge"
+        private val SHIP_TELEPORTED_SOUND = "tachyon_lance_fire"
     }
 
 }
