@@ -150,6 +150,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
 
     companion object {
         private const val COST_CREDITS: Float = 500000f
+        private const val ITEM = "et_missileautoloader"
 
         private const val NUMBER_OF_REFIRES = 2
         private const val NEARLY_FIRED_THRESHOLD: Float = 0.1f
