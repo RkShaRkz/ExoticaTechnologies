@@ -16,14 +16,18 @@ import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
+import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
+import java.awt.Color
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
 class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     private lateinit var originalShip: ShipAPI
+
+    private val logger: Logger = Logger.getLogger(MissileSpamSystem::class.java)
 
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
         return (Utilities.hasItem(fleet.cargo, ITEM)
@@ -88,12 +92,41 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
             super.onActivate()
 
             systemActivated.compareAndSet(false, true)
+            ship.addAfterimage(
+                    Color.GREEN.brighter(),
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    ABILITY_DURATION_IN_SEC,
+                    0f,
+                    true,
+                    false,
+                    true
+            )
+
+            // avoid doing this if debug isn't set
+            if (DEBUG) {
+                debugLog("onActivate()\tAffected weapons: ${convertListOfWeaponsToListOfIDs(affectedWeapons)}")
+                for (weapon in affectedWeapons) {
+                    debugLog("onActivate()\tweapon: ${weapon.id}, reloadProgress: ${weapon.ammoTracker.reloadProgress}, refireDelay: ${weapon.refireDelay}")
+                }
+            }
         }
 
         override fun onFinished() {
             super.onFinished()
 
             systemActivated.compareAndSet(true, false)
+            // Restore all weapons original refire delays
+            for (weapon in affectedWeapons) {
+                refireMap[weapon]?.let {
+                    debugLog("onFinished()\trestoring weapon: ${weapon.id} refire delay from ${weapon.refireDelay} to ${it.originalRefireDelay}")
+                    weapon.refireDelay = it.originalRefireDelay
+                }
+            }
         }
 
         override fun advance(amount: Float, isPaused: Boolean) {
@@ -108,6 +141,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                             // put in map if not already there
                             if (refireMap.contains(weapon).not()) {
                                 refireMap[weapon] = RefireData(weapon, NUMBER_OF_REFIRES)
+                                weapon.refireDelay = NEARLY_FIRED_THRESHOLD //just so it's not 0
                             } else {
                                 // if it's already in the map, do nothing
                             }
@@ -144,13 +178,27 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                 }
             }
         }
+
+        private fun convertListOfWeaponsToListOfIDs(weaponList: List<WeaponAPI>) : List<String> {
+            val retVal = mutableListOf<String>()
+            for (weapon in weaponList) {
+                retVal.add(weapon.id)
+            }
+            return retVal
+        }
     }
 
     data class RefireData(val weapon: WeaponAPI, val refires: Int) {
+        val originalRefireDelay = weapon.refireDelay
         val refiresRemaining = max(refires, 0)
     }
 
+    private fun debugLog(log: String) {
+        if (DEBUG) logger.info("[MissileSpamSystem] $log")
+    }
+
     companion object {
+        private const val DEBUG = true
         private const val COST_CREDITS: Float = 500000f
         private const val ITEM = "et_missileautoloader"
 
