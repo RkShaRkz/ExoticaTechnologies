@@ -110,5 +110,6 @@
     <orderEntry type="library" exported="" name="json-20230618" level="project" />
     <orderEntry type="library" exported="" name="lombok" level="project" />
     <orderEntry type="library" exported="" name="log4j.apache.extras" level="project" />
+    <orderEntry type="library" name="tests" level="project" />
   </component>
 </module>

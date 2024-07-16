@@ -65,7 +65,8 @@
 			"SubsumedAlphaCore": "graphics/icons/exotics/subsumedalphacore.png",
 			"SubsumedBetaCore": "graphics/icons/exotics/subsumedbetacore.png",
 			"SubsumedGammaCore": "graphics/icons/exotics/subsumedgammacore.png",
-			"GuardianShield": "graphics/icons/exotics/guardianshield.png"
+			"GuardianShield": "graphics/icons/exotics/guardianshield.png",
+			"RewindSystem": "graphics/icons/exotics/rewindsystem.png"
 		},
 		"upgrades": {
 			"AdvancedFluxCoils": "graphics/icons/upgrades/advancedfluxcoils.png",

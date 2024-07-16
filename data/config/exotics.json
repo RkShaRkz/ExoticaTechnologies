@@ -153,5 +153,9 @@
   "GuardianShield": {
     "name": "Guardian Shield",
     "exoticClass": "exoticatechnologies.modifications.exotics.impl.GuardianShield"
+  },
+  "RewindSystem": {
+    "name": "Rewind System",
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.RewindSystem"
   }
 }
