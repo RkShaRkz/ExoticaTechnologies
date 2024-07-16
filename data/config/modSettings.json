@@ -105,7 +105,8 @@
       "FullMetalSalvo",
       "HyperspecLPC",
       "GuardianShield",
-      "RewindSystem"
+      "RewindSystem",
+      "MissileSpamSystem"
     ],
     "rngUpgradeWhitelist": [
       "WeldedArmor",
