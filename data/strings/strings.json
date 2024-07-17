@@ -573,7 +573,7 @@
 	},
 	"MissileSpamSystem": {
 		"description": "A system capable of enhancing missile reload servos, enabling them to pump out more missiles in less time.",
-		"tooltip": "Adds a system that teleports you back to where you were in the past, and restores your weapons / flux / health to how it was then.",
-		"longDescription": "=Adds a rewinding mechanism system= that takes you back ${how_much} seconds in the past, restoring all ship's parameters along with location *as they were then.* ${cooldown_string}"
+		"tooltip": "Doubles the rate of fire of all missile weapons and adds a system that makes missile weapon's refire delay shorter while also giving them two free reloads.",
+		"longDescription": "=Adds a missile barrage system= that shortens each missile weapon's refire delay to ${spam_ability_boost} and passively increases missile rate of fire by ${passive_boost}. ${cooldown_string}"
 	}
 }
