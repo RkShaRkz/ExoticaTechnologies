@@ -570,5 +570,10 @@
 		"description": "A system capable of rewinding you back to a previous state in time, useful for getting out of unexpected problems, or just undoing bad ideas. More of a teleportation device than a revival system, possibly useful for both.",
 		"tooltip": "Adds a system that teleports you back to where you were in the past, and restores your weapons / flux / health to how it was then.",
 		"longDescription": "=Adds a rewinding mechanism system= that takes you back ${how_much} seconds in the past, restoring all ship's parameters along with location *as they were then.* ${cooldown_string}"
+	},
+	"MissileSpamSystem": {
+		"description": "A system capable of enhancing missile reload servos, enabling them to pump out more missiles in less time.",
+		"tooltip": "Adds a system that teleports you back to where you were in the past, and restores your weapons / flux / health to how it was then.",
+		"longDescription": "=Adds a rewinding mechanism system= that takes you back ${how_much} seconds in the past, restoring all ship's parameters along with location *as they were then.* ${cooldown_string}"
 	}
 }
