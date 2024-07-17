@@ -6,7 +6,6 @@ import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.WeaponAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
-import com.fs.starfarer.api.impl.campaign.ids.Tags
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.Misc
@@ -23,6 +22,7 @@ import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
+import kotlin.math.min
 
 class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     private lateinit var originalShip: ShipAPI
@@ -56,17 +56,18 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
     private fun shouldAffectWeapon(weapon: WeaponAPI): Boolean {
         return weapon.slot != null
                 && (weapon.spec.mountType == WeaponAPI.WeaponType.MISSILE || weapon.type == WeaponAPI.WeaponType.MISSILE || weapon.spec.type == WeaponAPI.WeaponType.MISSILE || weapon.slot.weaponType == WeaponAPI.WeaponType.MISSILE)
-                && !weapon.spec.hasTag(Tags.NO_RELOAD)
-                && weapon.spec.maxAmmo > 1
-                && weapon.ammoTracker != null
-                && weapon.ammoTracker.usesAmmo()
-                && weapon.ammoTracker.ammoPerSecond == 0f
+//                && !weapon.spec.hasTag(Tags.NO_RELOAD)
+//                && weapon.spec.maxAmmo > 1
+//                && weapon.ammoTracker != null
+//                && weapon.ammoTracker.usesAmmo()
+//                && weapon.ammoTracker.ammoPerSecond == 0f
+        //FIXME well, we don't care if the weapons use ammo or not, we just care if they're missiles.
     }
 
     inner class MissileSpammer(ship: ShipAPI) : MagicSubsystem(ship) {
         private val affectedWeapons = ship.allWeapons.filter { weapon -> shouldAffectWeapon(weapon) }
         private var systemActivated = AtomicBoolean(false)
-        private val refireMap = HashMap<WeaponAPI, RefireData>()
+        private val refireMap = HashMap<String, RefireData>() //map of WeaponID,RefireData
 
         override fun getBaseActiveDuration(): Float = ABILITY_DURATION_IN_SEC
 
@@ -107,6 +108,18 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                     true
             )
 
+            // Generate the refireMap *and* set each affected weapon's refire rate to something low
+            for (weapon in affectedWeapons) {
+                // put in map if not already there
+                if (refireMap.contains(weapon.id).not()) {
+                    refireMap[weapon.id] = RefireData(weapon, NUMBER_OF_FREE_RELOADS)
+                    // Set it's refire rate to be 33% of what it was, or 1, whichever is lower
+                    weapon.refireDelay = min(1f, weapon.refireDelay/3)
+                } else {
+                    // if it's already in the map, do nothing
+                }
+            }
+
             // avoid doing this if debug isn't set
             if (DEBUG) {
                 debugLog("onActivate()\tAffected weapons: ${convertListOfWeaponsToListOfIDs(affectedWeapons)}")
@@ -122,11 +135,13 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
             systemActivated.compareAndSet(true, false)
             // Restore all weapons original refire delays
             for (weapon in affectedWeapons) {
-                refireMap[weapon]?.let {
+                refireMap[weapon.id]?.let {
                     debugLog("onFinished()\trestoring weapon: ${weapon.id} refire delay from ${weapon.refireDelay} to ${it.originalRefireDelay}")
                     weapon.refireDelay = it.originalRefireDelay
                 }
             }
+
+            refireMap.clear()
         }
 
         override fun advance(amount: Float, isPaused: Boolean) {
@@ -135,42 +150,21 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
             if (!isPaused) {
                 if (systemActivated.get()) {
                     // Go through all affected weapons, if anyone's reload status is close to 0, presume it just fired
-                    // and add it to "refire again" list
+                    // and add it to "refire again" list - refiring being "free reloads"
                     for (weapon in affectedWeapons) {
-                        if (weapon.ammoTracker.reloadProgress <= NEARLY_FIRED_THRESHOLD) {
-                            // put in map if not already there
-                            if (refireMap.contains(weapon).not()) {
-                                refireMap[weapon] = RefireData(weapon, NUMBER_OF_REFIRES)
-                                weapon.refireDelay = NEARLY_FIRED_THRESHOLD //just so it's not 0
-                            } else {
-                                // if it's already in the map, do nothing
-                            }
-                        }
-
-                        // Otherwise, refill RefireData only if it's at 0 and the weapon is present in the map
-                        if (refireMap.contains(weapon) && weapon.ammoTracker.reloadProgress >= ALMOST_RELOADED) {
-                            // check the number of refires and refill if necessary
-                            // but after a "missile spam" volley, we will require one full reload cycle
-                            refireMap[weapon]?.let {
-                                if (it.refires == 0) {
-                                    // refill, we're empty
-                                    refireMap[weapon] = RefireData(weapon, NUMBER_OF_REFIRES)
-                                }
-                            }
-                        }
-
                         // Finally, deal with the actual missile duplication by going through the map,
                         // adding one ammo and reloading the weapon if it nearly fired, and decrementing the refires
-                        if (weapon.ammoTracker.reloadProgress <= NEARLY_FIRED_THRESHOLD) {
-                            refireMap[weapon]?.let {
-                                var refires = it.refiresRemaining
-                                if (refires > 0) {
-                                    refires--
+                        if (weapon.ammoTracker.reloadProgress <= RECENTLY_EMPTIED_CLIP_THRESHOLD) {
+                            refireMap[weapon.id]?.let {
+                                debugLog("weapon ${weapon.id} has recently emptied clip, reloading\tfree reloads remaining: ${it.freeReloadsRemaining}")
+                                var reloads = it.freeReloadsRemaining
+                                if (reloads > 0 && weapon.usesAmmo() && weapon.ammoTracker.ammo == 0) {
+                                    reloads--
                                     if (MISSILE_SPAM_AMMO_IS_FREE) {
                                         weapon.ammoTracker.addOneAmmo()
                                     }
                                     weapon.ammoTracker.reloadProgress = 1f
-                                    refireMap[weapon] = RefireData(weapon, refires)
+                                    refireMap[weapon.id] = RefireData(weapon, reloads)
                                 }
                             }
                         }
@@ -188,9 +182,9 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         }
     }
 
-    data class RefireData(val weapon: WeaponAPI, val refires: Int) {
+    data class RefireData(val weapon: WeaponAPI, val reloads: Int) {
         val originalRefireDelay = weapon.refireDelay
-        val refiresRemaining = max(refires, 0)
+        val freeReloadsRemaining = max(reloads, 0)
     }
 
     private fun debugLog(log: String) {
@@ -202,9 +196,9 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         private const val COST_CREDITS: Float = 500000f
         private const val ITEM = "et_missileautoloader"
 
-        private const val NUMBER_OF_REFIRES = 2
-        private const val NEARLY_FIRED_THRESHOLD: Float = 0.1f
-        private const val ALMOST_RELOADED: Float = 1 - NEARLY_FIRED_THRESHOLD
+        private const val NUMBER_OF_FREE_RELOADS = 2
+        private const val RECENTLY_EMPTIED_CLIP_THRESHOLD: Float = 0.1f
+        private const val ALMOST_RELOADED_THRESHOLD: Float = 1 - RECENTLY_EMPTIED_CLIP_THRESHOLD
         private const val ABILITY_DURATION_IN_SEC = 10f
         private const val ABILITY_COOLDOWN_IN_SEC = 60f
         private const val MISSILE_SPAM_AMMO_IS_FREE = false
