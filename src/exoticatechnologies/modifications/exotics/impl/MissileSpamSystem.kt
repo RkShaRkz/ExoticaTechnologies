@@ -131,7 +131,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
             if (DEBUG) {
                 debugLog("onActivate()\tAffected weapons: ${convertListOfWeaponsToListOfIDs(affectedWeapons)}")
                 for (weapon in affectedWeapons) {
-                    debugLog("onActivate()\tweapon: ${weapon.id}, reloadProgress: ${weapon.ammoTracker.reloadProgress}, refireDelay: ${weapon.refireDelay}")
+                    logWeaponStats(weapon)
                 }
             }
         }
