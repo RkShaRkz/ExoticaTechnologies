@@ -74,7 +74,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
     inner class MissileSpammer(ship: ShipAPI) : MagicSubsystem(ship) {
         private val affectedWeapons = ship.allWeapons.filter { weapon -> shouldAffectWeapon(weapon) }
         private var systemActivated = AtomicBoolean(false)
-        private val refireMap = HashMap<String, RefireData>() //map of WeaponID,RefireData
+        private val refireMap = HashMap<WeaponAPI, RefireData>() //map of WeaponID,RefireData
 
         override fun getBaseActiveDuration(): Float = ABILITY_DURATION_IN_SEC
 
@@ -118,8 +118,8 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
             // Generate the refireMap *and* set each affected weapon's refire rate to something low
             for (weapon in affectedWeapons) {
                 // put in map if not already there
-                if (refireMap.contains(weapon.id).not()) {
-                    refireMap[weapon.id] = RefireData(weapon, NUMBER_OF_FREE_RELOADS)
+                if (refireMap.contains(weapon).not()) {
+                    refireMap[weapon] = RefireData(weapon, NUMBER_OF_FREE_RELOADS)
                     // Set it's refire rate to be 33% of what it was, or 1, whichever is lower
                     weapon.refireDelay = min(REFIRE_DELAY_MIN, weapon.refireDelay * REFIRE_DELAY_MULT)
                 } else {
@@ -142,7 +142,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
             systemActivated.compareAndSet(true, false)
             // Restore all weapons original refire delays
             for (weapon in affectedWeapons) {
-                refireMap[weapon.id]?.let {
+                refireMap[weapon]?.let {
                     debugLog("onFinished()\trestoring weapon: ${weapon.id} refire delay from ${weapon.refireDelay} to ${it.originalRefireDelay}")
                     weapon.refireDelay = it.originalRefireDelay
                 }
@@ -162,7 +162,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                         // Finally, deal with the actual missile duplication by going through the map,
                         // adding one ammo and reloading the weapon if it nearly fired, and decrementing the refires
                         if (weapon.ammoTracker.reloadProgress <= RECENTLY_EMPTIED_CLIP_THRESHOLD) {
-                            refireMap[weapon.id]?.let {
+                            refireMap[weapon]?.let {
                                 debugLog("weapon ${weapon.id} has recently emptied clip, reloading\tfree reloads remaining: ${it.freeReloadsRemaining}")
                                 var reloads = it.freeReloadsRemaining
                                 if (reloads > 0 && weapon.usesAmmo() && weapon.ammoTracker.ammo == 0) {
@@ -171,7 +171,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                                         weapon.ammoTracker.addOneAmmo()
                                     }
                                     weapon.ammoTracker.reloadProgress = 1f
-                                    refireMap[weapon.id] = RefireData(weapon, reloads)
+                                    refireMap[weapon] = RefireData(weapon, reloads)
                                 }
                             }
                         }
@@ -183,7 +183,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         }
 
         private fun logWeaponStats(weapon: WeaponAPI) {
-            debugLog("Weapon ID: ${weapon.id}, reloadProgress: ${weapon.ammoTracker.reloadProgress}, refireDelay: ${weapon.refireDelay}")
+            debugLog("Weapon ID: ${weapon.id}, reloadProgress: ${weapon.ammoTracker.reloadProgress}, refireDelay: ${weapon.refireDelay}, cooldown: ${weapon.cooldown}, cooldownRemaining: ${weapon.cooldownRemaining}")
         }
 
         private fun convertListOfWeaponsToListOfIDs(weaponList: List<WeaponAPI>) : List<String> {
