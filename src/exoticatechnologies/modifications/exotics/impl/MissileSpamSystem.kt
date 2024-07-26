@@ -91,7 +91,9 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
             val hasEnemiesInRange = enemiesInRange.isNotEmpty()
             val atLeastOneMissileWeaponHasAmmo = affectedWeapons.any { it.ammoTracker.ammo > 0 }
 
-            return hasMissileWeapons && atLeastOneMissileWeaponHasAmmo && hasEnemiesInRange
+            val retVal = hasMissileWeapons && atLeastOneMissileWeaponHasAmmo && hasEnemiesInRange
+//            debugLog("shouldActivateAI()\thasMissileWeapons: ${hasMissileWeapons}, atLeastOneMissileWeaponHasAmmo: ${atLeastOneMissileWeaponHasAmmo}, hasEnemiesInRange: ${hasEnemiesInRange}\treturning ${retVal}")
+            return retVal
         }
 
         override fun getDisplayText() = "Missile Spam System"
@@ -114,14 +116,17 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                     false,
                     true
             )
-
+            val originalMissileRoF = ship.mutableStats.missileRoFMult.modifiedValue
+            ship.mutableStats.missileRoFMult.modifyMult(ACTIVE_BUFF_ID, ACTIVE_BUFF_MISSILE_ROF_MULT)
+            debugLog("onActivate()\tapplied buff ${ACTIVE_BUFF_ID}: buffed missileRoFMult to ${ship.mutableStats.missileRoFMult.modifiedValue} from ${originalMissileRoF}")
+            /*
             // Generate the refireMap *and* set each affected weapon's refire rate to something low
             for (weapon in affectedWeapons) {
                 // put in map if not already there
                 if (refireMap.contains(weapon).not()) {
                     refireMap[weapon] = RefireData(weapon, NUMBER_OF_FREE_RELOADS)
                     // Set it's refire rate to be 33% of what it was, or 1, whichever is lower
-                    weapon.refireDelay = min(REFIRE_DELAY_MIN, weapon.refireDelay * REFIRE_DELAY_MULT)
+                    weapon.refireDelay = min(REFIRE_DELAY_MIN, weapon.refireDelay * REFIRE_DELAY_MULT) //0.001f
                 } else {
                     // if it's already in the map, do nothing
                 }
@@ -134,23 +139,28 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                     logWeaponStats(weapon)
                 }
             }
+             */
         }
 
         override fun onFinished() {
             super.onFinished()
 
             systemActivated.compareAndSet(true, false)
+            val buffedMissileRoF = ship.mutableStats.missileRoFMult.modifiedValue
+            ship.mutableStats.missileRoFMult.unmodify(ACTIVE_BUFF_ID)
+            debugLog("onFinished()\tunapplied buff ${ACTIVE_BUFF_ID}: restoring missileRoFMult to ${ship.mutableStats.missileRoFMult.modifiedValue} from ${buffedMissileRoF}")
             // Restore all weapons original refire delays
-            for (weapon in affectedWeapons) {
-                refireMap[weapon]?.let {
-                    debugLog("onFinished()\trestoring weapon: ${weapon.id} refire delay from ${weapon.refireDelay} to ${it.originalRefireDelay}")
-                    weapon.refireDelay = it.originalRefireDelay
-                }
-            }
-
-            refireMap.clear()
+//            for (weapon in affectedWeapons) {
+//                refireMap[weapon]?.let {
+//                    debugLog("onFinished()\trestoring weapon: ${weapon.id} refire delay from ${weapon.refireDelay} to ${it.originalRefireDelay}")
+//                    weapon.refireDelay = it.originalRefireDelay
+//                }
+//            }
+//
+//            refireMap.clear()
         }
 
+        /*
         override fun advance(amount: Float, isPaused: Boolean) {
             super.advance(amount, isPaused)
 
@@ -181,6 +191,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                 }
             }
         }
+         */
 
         private fun logWeaponStats(weapon: WeaponAPI) {
             debugLog("Weapon ID: ${weapon.id}, reloadProgress: ${weapon.ammoTracker.reloadProgress}, refireDelay: ${weapon.refireDelay}, cooldown: ${weapon.cooldown}, cooldownRemaining: ${weapon.cooldownRemaining}")
@@ -213,12 +224,14 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         private const val RECENTLY_EMPTIED_CLIP_THRESHOLD: Float = 0.1f
         private const val ABILITY_DURATION_IN_SEC = 10f
         private const val ABILITY_COOLDOWN_IN_SEC = 60f
-        private const val MISSILE_SPAM_AMMO_IS_FREE = false
+        private const val MISSILE_SPAM_AMMO_IS_FREE = false //TODO make this setting relevant again. dont just delete it.
 
         private const val REFIRE_DELAY_MULT = 1/3f
         private const val REFIRE_DELAY_MIN = 1f
 
         private const val PASSIVE_BUFF_MISSILE_ROF_MULT = 2f
+        private const val ACTIVE_BUFF_ID = "MissileSpamSystemRoFIncrease"
+        private const val ACTIVE_BUFF_MISSILE_ROF_MULT = 60f
 
         private const val COOLDOWN_REPLACEMENT = "*Has a cooldown of {cooldown} seconds*."
         private val cooldownString: String by lazy {
@@ -236,5 +249,6 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         }
 
         val passiveBoostString = "${PASSIVE_BUFF_MISSILE_ROF_MULT*100}%%"
+        val activeBoostString = "${ACTIVE_BUFF_MISSILE_ROF_MULT*100}%%"
     }
 }
