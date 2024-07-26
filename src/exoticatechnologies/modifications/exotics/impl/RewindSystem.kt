@@ -35,6 +35,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 
     private val logger: Logger = Logger.getLogger(RewindSystem::class.java)
 
+    override fun getBasePrice(): Int = 2500000
+
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
         return Utilities.hasItem(fleet.cargo, ITEM)
     }
