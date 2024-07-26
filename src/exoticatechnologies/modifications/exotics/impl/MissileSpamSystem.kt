@@ -23,6 +23,7 @@ import java.awt.Color
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
+    override var color = RADIOACTIVE_GREEN
     private lateinit var originalShip: ShipAPI
 
     private val logger: Logger = Logger.getLogger(MissileSpamSystem::class.java)
@@ -155,5 +156,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         val activeBoostString = "*${ACTIVE_BUFF_MISSILE_ROF_MULT * 100}%%*"
 
         val activeDurationString = "*${ABILITY_DURATION_IN_SEC} seconds*"
+
+        private val RADIOACTIVE_GREEN = Color(0x00FF0A)
     }
 }
