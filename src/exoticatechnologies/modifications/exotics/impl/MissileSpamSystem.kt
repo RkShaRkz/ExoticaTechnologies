@@ -43,8 +43,9 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
 
     override fun modifyToolTip(tooltip: TooltipMakerAPI, title: UIComponentAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData, expand: Boolean) {
         StringUtils.getTranslation(key, "longDescription")
-                .format("spam_ability_boost", spamAbilityBoostString)
                 .format("passive_boost", passiveBoostString)
+                .format("active_boost", activeBoostString)
+                .format("active_duration", activeDurationString)
                 .format("cooldown_string", cooldownString)
                 .addToTooltip(tooltip, title)
     }
@@ -220,11 +221,8 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         private const val COST_CREDITS: Float = 500000f
         private const val ITEM = "et_missileautoloader"
 
-        private const val NUMBER_OF_FREE_RELOADS = 2
-        private const val RECENTLY_EMPTIED_CLIP_THRESHOLD: Float = 0.1f
         private const val ABILITY_DURATION_IN_SEC = 10f
         private const val ABILITY_COOLDOWN_IN_SEC = 60f
-        private const val MISSILE_SPAM_AMMO_IS_FREE = false //TODO make this setting relevant again. dont just delete it.
 
         private const val REFIRE_DELAY_MULT = 1/3f
         private const val REFIRE_DELAY_MIN = 1f
@@ -250,5 +248,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
 
         val passiveBoostString = "${PASSIVE_BUFF_MISSILE_ROF_MULT*100}%%"
         val activeBoostString = "${ACTIVE_BUFF_MISSILE_ROF_MULT*100}%%"
+
+        val activeDurationString = "${ABILITY_DURATION_IN_SEC} seconds"
     }
 }
