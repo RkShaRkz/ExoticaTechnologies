@@ -151,9 +151,9 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
             }"
         }
 
-        val passiveBoostString = "${PASSIVE_BUFF_MISSILE_ROF_MULT * 100}%%"
-        val activeBoostString = "${ACTIVE_BUFF_MISSILE_ROF_MULT * 100}%%"
+        val passiveBoostString = "*${PASSIVE_BUFF_MISSILE_ROF_MULT * 100}%%*"
+        val activeBoostString = "*${ACTIVE_BUFF_MISSILE_ROF_MULT * 100}%%*"
 
-        val activeDurationString = "${ABILITY_DURATION_IN_SEC} seconds"
+        val activeDurationString = "*${ABILITY_DURATION_IN_SEC} seconds*"
     }
 }
