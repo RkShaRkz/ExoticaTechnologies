@@ -89,7 +89,7 @@ class MarketCargoListener(val dialog: InteractionDialogAPI, val marketData: Mark
             if (plugin is UpgradeSpecialItemPlugin) {
                 bounty += plugin.upgrade!!.getCreditCostForResources(plugin.upgradeLevel) * stack.size
             } else if (plugin is ExoticSpecialItemPlugin) {
-                bounty += 250000 * stack.size
+                bounty += plugin.getBasePrice() * stack.size
             }
         }
         return bounty

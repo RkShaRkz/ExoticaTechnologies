@@ -211,6 +211,8 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
         expand: Boolean
     )
 
+    open fun getBasePrice() = 250000
+
     companion object {
         const val ITEM = "et_exotic"
         operator fun get(exoticKey: String?): Exotic? {

@@ -85,6 +85,17 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
         }
     }
 
+    public fun getBasePrice(): Int {
+        // This is using an elvis operator because even when it's nullguarded properly
+        // kotlin complains that since 'exotic' is a mutable property, it could have changed
+        // and it just doesn't make any sense to use a 'let' call in a null-guarded part of the if()
+        //
+        // Of course I would have used 'return if(exotic != null) { return exotic.getBasePrice() } else { 250000 }
+        val price = exotic?.getBasePrice() ?: 250000
+
+        return price
+    }
+
     private enum class Param {
         EXOTIC_ID, EXOTIC_TYPE, IGNORE_CRATE;
 
