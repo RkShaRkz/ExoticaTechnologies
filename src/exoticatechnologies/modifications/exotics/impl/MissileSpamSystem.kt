@@ -28,13 +28,13 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
 
     private val logger: Logger = Logger.getLogger(MissileSpamSystem::class.java)
 
+    override fun getBasePrice(): Int = COST_CREDITS.toInt()
+
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
-        return (Utilities.hasItem(fleet.cargo, ITEM)
-                && fleet.cargo.credits.get() >= COST_CREDITS)
+        return Utilities.hasItem(fleet.cargo, ITEM)
     }
 
     override fun removeItemsFromFleet(fleet: CampaignFleetAPI, member: FleetMemberAPI, market: MarketAPI?): Boolean {
-        fleet.cargo.credits.subtract(COST_CREDITS)
         Utilities.takeItemQuantity(fleet.cargo, ITEM, 1f)
         return true
     }
