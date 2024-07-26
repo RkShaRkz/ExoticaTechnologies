@@ -126,17 +126,6 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
             debugLog("onFinished()\tunapplied buff ${ACTIVE_BUFF_ID}: restoring missileRoFMult to ${ship.mutableStats.missileRoFMult.modifiedValue} from ${buffedMissileRoF}")
         }
 
-        private fun logWeaponStats(weapon: WeaponAPI) {
-            debugLog("Weapon ID: ${weapon.id}, reloadProgress: ${weapon.ammoTracker.reloadProgress}, refireDelay: ${weapon.refireDelay}, cooldown: ${weapon.cooldown}, cooldownRemaining: ${weapon.cooldownRemaining}")
-        }
-
-        private fun convertListOfWeaponsToListOfIDs(weaponList: List<WeaponAPI>): List<String> {
-            val retVal = mutableListOf<String>()
-            for (weapon in weaponList) {
-                retVal.add(weapon.id)
-            }
-            return retVal
-        }
     }
 
     private fun debugLog(log: String) {
