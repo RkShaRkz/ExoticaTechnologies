@@ -44,11 +44,14 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
     ) {
         super.createTooltip(tooltip, expanded, transferHandler, stackSource, useGray)
 
-        exoticData?.type?.getItemDescTranslation()?.let {
-            StringUtils.getTranslation("ExoticTypes", "ItemTypeText")
-                    .format("typeName", exoticData!!.type.name)
-                    .format("typeDescription", it.toStringNoFormats())
-                    .addToTooltip(tooltip)
+        exoticData?.let { data ->
+            data.type.getItemDescTranslation()?.let {
+                StringUtils.getTranslation("ExoticTypes", "ItemTypeText")
+                        .format("typeName", type.name)
+                        .format("typeDescription", it.toStringNoFormats())
+                        .addToTooltip(tooltip)
+
+            }
         }
     }
 
@@ -56,10 +59,19 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
         when (Param[index]) {
             Param.EXOTIC_ID -> {
                 modId = param
-                exoticData = ExoticData(modId!!)
-                if (exoticData!!.key != modId) {
-                    modId = exoticData!!.key
-                    stack.specialDataIfSpecial.data.replace(param, modId!!)
+//                exoticData = ExoticData(modId!!)
+//                if (exoticData!!.key != modId) {
+//                    modId = exoticData!!.key
+//                    stack.specialDataIfSpecial.data.replace(param, modId!!)
+//                }
+                modId?.let {safeModId ->
+                    exoticData = ExoticData(safeModId)
+                    exoticData?.let {safeExoticData ->
+                        if (safeExoticData.key != safeModId) {
+                            modId = safeExoticData.key
+                            stack.specialDataIfSpecial.data.replace(param, safeModId)
+                        }
+                    }
                 }
             }
 
@@ -73,9 +85,15 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
                     stack.specialDataIfSpecial.data = newData //fix saves
                     ignoreCrate = param.toBoolean()
 
-                    exoticData!!.type = ExoticType.NORMAL
+//                    exoticData!!.type = ExoticType.NORMAL
+                    exoticData?.let {
+                        it.type = ExoticType.NORMAL
+                    }
                 } else {
-                    exoticData!!.type = ExoticType.valueOf(param)
+//                    exoticData!!.type = ExoticType.valueOf(param)
+                    exoticData?.let {
+                        it.type = ExoticType.valueOf(param)
+                    }
                 }
             }
 
