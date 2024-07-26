@@ -18,6 +18,11 @@ import exoticatechnologies.util.StringUtils
 import org.json.JSONObject
 import java.util.*
 
+/**
+ * Abstract base class for all Exotic systems in the ExoticaTech mod.
+ *
+ * @see getBasePrice
+ */
 abstract class Exotic(key: String, settings: JSONObject) : Modification(key, settings) {
     var loreDescription: String? = null
     open val textDescription: String?
@@ -211,6 +216,9 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
         expand: Boolean
     )
 
+    /**
+     * Base price of this exotic system in the Exotica planet/station options.
+     */
     open fun getBasePrice() = 250000
 
     companion object {

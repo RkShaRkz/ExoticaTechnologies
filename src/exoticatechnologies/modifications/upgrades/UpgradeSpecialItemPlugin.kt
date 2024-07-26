@@ -20,6 +20,10 @@ import java.util.*
 
 class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
     var upgradeLevel = 0
+
+    /**
+     * The [Upgrade] instance of this special item plugin
+     */
     var upgrade: Upgrade? = null
         get() {
             if (field == null) {
@@ -168,6 +172,19 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
                 return values()[index]
             }
         }
+    }
+
+    /**
+     * Nothing fancy here, this is just syntactic sugar for
+     *
+     * ```plugin.upgrade!!.getCreditCostForResources(plugin.upgradeLevel) * stack.size```
+     *
+     * minus the doublebang of course.
+     *
+     * **NOTE**: Beware, if the [upgrade] is null, **this will return 0**.
+     */
+    final fun calculateCreditCost(level: Int): Int {
+        return upgrade?.getCreditCostForResources(level) ?: 0
     }
 
 
