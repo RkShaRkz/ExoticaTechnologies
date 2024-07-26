@@ -574,6 +574,6 @@
 	"MissileSpamSystem": {
 		"description": "A system capable of enhancing missile reload servos, enabling them to pump out more missiles in less time.",
 		"tooltip": "Doubles the rate of fire of all missile weapons and adds a system that makes missile weapons' refire much faster while it's active.",
-		"longDescription": "=Adds a missile barrage system= that passively increases missile rate of fire to ${passive_boost}, while it further increases it by an additional ${active_boost} on top of for ${active_duration} when that system is activated. ${cooldown_string}"
+		"longDescription": "=Adds a missile barrage system= that passively increases missile rate of fire to ${passive_boost}, which - when activated - further increases it by an additional ${active_boost} on top of that (stacking) for ${active_duration}. ${cooldown_string}"
 	}
 }
