@@ -55,7 +55,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         StringUtils.getTranslation(key, "longDescription")
                 .format("ammo_regen_percent", getPeriodReloadAmount(member, mods, exoticData))
                 .format("ammo_regen_period", getPeriodDuration(member, mods, exoticData))
-                .formatFloat("duration", getPeriodDuration(member, mods, exoticData))
+                .formatFloat("duration", calculateSystemActivationDuration(member, mods, exoticData))
                 .format("ammo_regen_fail_chance", getFailChance(member, mods, exoticData))
                 .formatFloat("fail_min_damage", getFailMinDamage(member, mods, exoticData))
                 .formatFloat("fail_max_damage", getFailMaxDamage(member, mods, exoticData))
@@ -150,7 +150,9 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
     ) : MagicSubsystem(ship) {
         private val affectedWeapons = ship.allWeapons.filter { weapon -> shouldAffectWeapon(weapon) }
         private var systemActivated = AtomicBoolean(false)
-        private val timeCounter = IntervalUtil(9.9f, 10.1f)
+        private val timeCounter = IntervalUtil(
+                getPeriodDuration(member, mods, exoticData) - EPSILON, getPeriodDuration(member, mods, exoticData) + EPSILON
+        )
         private val random = Random(System.nanoTime())
 
         override fun getBaseActiveDuration(): Float = calculateSystemActivationDuration(member, mods, exoticData)
@@ -311,5 +313,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         private const val RELOAD_SUCCESS_SOUND = "ammo_creator_reload_success"
         private const val RELOAD_FAIL_SOUND = "ammo_creator_reload_fail"
+
+        private const val EPSILON = 0.1f
     }
 }
