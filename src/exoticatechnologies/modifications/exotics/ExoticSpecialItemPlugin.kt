@@ -8,6 +8,7 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI
 import exoticatechnologies.modifications.ModSpecialItemPlugin
 import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.StringUtils
+import org.apache.log4j.Logger
 
 open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
     /**
@@ -107,8 +108,15 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
         // and it just doesn't make any sense to use a 'let' call in a null-guarded part of the if()
         //
         // Of course I would have used 'return if(exotic != null) { return exotic.getBasePrice() } else { 250000 }
-        val price = exotic?.getBasePrice() ?: 250000
+        val price: Int = if (exotic != null) {
+            exotic!!.getBasePrice()
+        } else {
+//            log.error("exotic was null\t\texoticData: ${exoticData}, exoticData.exotic.name: ${exoticData?.exotic?.name}, exoticData.exotic.cost: ${exoticData?.exotic?.getBasePrice()}")
+            // Read the base price from exoticData's exotic, or fallback to 250000
+            exoticData?.exotic?.getBasePrice() ?: 250000
+        }
 
+//        log.info("<-- getBasePrice() returning ${price}")
         return price
     }
 
@@ -120,5 +128,9 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
                 return values()[index]
             }
         }
+    }
+
+    companion object {
+        private val log: Logger = Logger.getLogger(ExoticSpecialItemPlugin::class.java)
     }
 }
