@@ -165,5 +165,13 @@
       #note that weight can be below 1, but is always rounded above 1. the effective result of these two parameters is ships with 6 slots having the max weight of 3
       {"id": "missileSlots", "operator": ">=", "expected": 2, "cannotApplyReason": "The ship must have more than two missile slots.", "weight": 0.5, "maxWeight": 3}
     ]
+  },
+  "AmmoCraftingSystem": {
+    "name": "Ammo Crafting System",
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.AmmoCraftingSystem",
+    "conditions": [
+      #note that weight can be below 1, but is always rounded above 1. the effective result of these two parameters is ships with 6 slots having the max weight of 3
+      {"id": "ammoWeapons", "operator": ">=", "expected": 2, "cannotApplyReason": "The ship must have more than two ammo-based weapons.", "weight": 0.5, "maxWeight": 3}
+    ]
   }
 }
