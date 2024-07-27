@@ -92,12 +92,10 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
         }
 
         override fun getBaseCooldownDuration(): Float {
-            return COOLDOWN.toFloat()
+            return COOLDOWN * getNegativeMult(member, mods, exoticData)
         }
 
         override fun advance(amount: Float, isPaused: Boolean) {
-            if (isPaused) return //lets try this as an improvement
-
             if (state == State.ACTIVE) {
                 gigaProjectiles(ship)
             }
@@ -140,12 +138,12 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
                     score += 10f
                 }
 
-                var dist = Misc.getDistance(ship.location, target.location)
+                val dist = Misc.getDistance(ship.location, target.location)
                 if (dist > ExoticaCombatUtils.getMaxWeaponRange(ship, false)) {
                     return false
                 }
 
-                var avgRange = ExoticaCombatUtils.getAverageWeaponRange(ship, false)
+                val avgRange = ExoticaCombatUtils.getAverageWeaponRange(ship, false)
                 score += (avgRange / dist).coerceAtMost(6f)
 
                 if (score > 10f) {
@@ -159,7 +157,7 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
     companion object {
         private const val DAMAGE_BUFF = 100f
         private const val RATE_OF_FIRE_DEBUFF = -33f
-        private const val COOLDOWN = 8
+        private const val COOLDOWN = 8f
         private const val BUFF_DURATION = 2
     }
 }
