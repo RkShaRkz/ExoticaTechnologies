@@ -43,8 +43,8 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         StringUtils.getTranslation(key, "longDescription")
                 .format("passive_boost", passiveBoostString)
                 .format("active_boost", activeBoostString)
-                .format("active_duration", activeDurationString)
-                .format("cooldown_string", cooldownString)
+                .formatFloat("duration", ABILITY_DURATION_IN_SEC * getPositiveMult(member, mods, exoticData))
+                .formatFloat("cooldown", ABILITY_COOLDOWN_IN_SEC * getNegativeMult(member, mods, exoticData))
                 .addToTooltip(tooltip, title)
     }
 
@@ -66,7 +66,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                         || weapon.type == WeaponAPI.WeaponType.MISSILE
                         || weapon.spec.type == WeaponAPI.WeaponType.MISSILE
                         || weapon.slot.weaponType == WeaponAPI.WeaponType.MISSILE
-                   )
+                    )
     }
 
     inner class MissileSpammer(
@@ -112,7 +112,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                     0f,
                     0f,
                     0f,
-                    ABILITY_DURATION_IN_SEC,
+                    baseActiveDuration,
                     0f,
                     true,
                     false,
@@ -150,17 +150,8 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         private const val ACTIVE_BUFF_ID = "MissileSpamSystemRoFIncrease"
         private const val ACTIVE_BUFF_MISSILE_ROF_MULT = 60f
 
-        private const val COOLDOWN_REPLACEMENT = "*Has a cooldown of {cooldown} seconds*."
-        private val cooldownString: String by lazy {
-            "${
-                COOLDOWN_REPLACEMENT.replace("{cooldown}", ABILITY_COOLDOWN_IN_SEC.toString())
-            }"
-        }
-
         val passiveBoostString = "*${PASSIVE_BUFF_MISSILE_ROF_MULT * 100}%%*"
         val activeBoostString = "*${ACTIVE_BUFF_MISSILE_ROF_MULT * 100}%%*"
-
-        val activeDurationString = "*${ABILITY_DURATION_IN_SEC} seconds*"
 
         private val RADIOACTIVE_GREEN = Color(0x00FF0A)
     }
