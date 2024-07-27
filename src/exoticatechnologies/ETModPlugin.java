@@ -207,7 +207,7 @@ public class ETModPlugin extends BaseModPlugin {
         @Override
         public void settingsChanged(@NotNull String modId) {
             if (modId.equalsIgnoreCase(MOD_ID)) {
-                ETModSettings.MAX_EXOTICS = safeUnboxing(LunaSettings.getInt(MOD_ID, "exoticatechnologies_maxExotics"));
+                ETModSettings.MAX_EXOTICS = safeUnboxing(LunaSettings.getInt(MOD_ID, "exoticatechnologies_maxExoticas"));
             }
         }
 
