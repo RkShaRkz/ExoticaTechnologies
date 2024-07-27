@@ -3,18 +3,25 @@ package exoticatechnologies.modifications.exotics
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.campaign.CargoStackAPI
 import com.fs.starfarer.api.campaign.CargoTransferHandlerAPI
-import com.fs.starfarer.api.campaign.SpecialItemPlugin.SpecialItemRendererAPI
 import com.fs.starfarer.api.graphics.SpriteAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
-import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ModSpecialItemPlugin
-import exoticatechnologies.modifications.exotics.impl.HackedMissileForge
 import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.StringUtils
-import kotlin.Int
-import kotlin.String
+import org.apache.log4j.Logger
 
+/**
+ * Base class for [Exotic] systems wrapped in a chip item
+ *
+ * @see exotic
+ * @see ModSpecialItemPlugin
+ * @see com.fs.starfarer.api.campaign.impl.items.BaseSpecialItemPlugin
+ */
 open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
+    /**
+     * The [Exotic] instance wrapped in this special item plugin
+     * @see exoticData
+     */
     var exotic: Exotic? = null
 
     var exoticData: ExoticData? = null
@@ -38,19 +45,22 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
         get() = Global.getSettings().getSprite("exotics", exoticData!!.key)
 
     override fun createTooltip(
-        tooltip: TooltipMakerAPI,
-        expanded: Boolean,
-        transferHandler: CargoTransferHandlerAPI,
-        stackSource: Any,
-        useGray: Boolean
+            tooltip: TooltipMakerAPI,
+            expanded: Boolean,
+            transferHandler: CargoTransferHandlerAPI,
+            stackSource: Any,
+            useGray: Boolean
     ) {
         super.createTooltip(tooltip, expanded, transferHandler, stackSource, useGray)
 
-        exoticData?.type?.getItemDescTranslation()?.let {
-            StringUtils.getTranslation("ExoticTypes", "ItemTypeText")
-                .format("typeName", exoticData!!.type.name)
-                .format("typeDescription", it.toStringNoFormats())
-                .addToTooltip(tooltip)
+        exoticData?.let { data ->
+            data.type.getItemDescTranslation()?.let {
+                StringUtils.getTranslation("ExoticTypes", "ItemTypeText")
+                        .format("typeName", type.name)
+                        .format("typeDescription", it.toStringNoFormats())
+                        .addToTooltip(tooltip)
+
+            }
         }
     }
 
@@ -58,31 +68,55 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
         when (Param[index]) {
             Param.EXOTIC_ID -> {
                 modId = param
-                exoticData = ExoticData(modId!!)
-                if (exoticData!!.key != modId) {
-                    modId = exoticData!!.key
-                    stack.specialDataIfSpecial.data.replace(param, modId!!)
+                modId?.let {safeModId ->
+                    exoticData = ExoticData(safeModId)
+                    exoticData?.let {safeExoticData ->
+                        if (safeExoticData.key != safeModId) {
+                            modId = safeExoticData.key
+                            stack.specialDataIfSpecial.data.replace(param, safeModId)
+                        }
+                    }
                 }
             }
 
             Param.EXOTIC_TYPE -> {
                 if (param == "true" || param == "false") {
                     val split = stack.specialDataIfSpecial.data
-                        .split(",".toRegex())
-                        .dropLastWhile { it.isEmpty() }
-                        .toTypedArray()
+                            .split(",".toRegex())
+                            .dropLastWhile { it.isEmpty() }
+                            .toTypedArray()
                     val newData = String.format("%s,NORMAL,%s", split[0], split[1])
                     stack.specialDataIfSpecial.data = newData //fix saves
                     ignoreCrate = param.toBoolean()
 
-                    exoticData!!.type = ExoticType.NORMAL
+                    exoticData?.let {
+                        it.type = ExoticType.NORMAL
+                    }
                 } else {
-                    exoticData!!.type = ExoticType.valueOf(param)
+                    exoticData?.let {
+                        it.type = ExoticType.valueOf(param)
+                    }
                 }
             }
 
             Param.IGNORE_CRATE -> ignoreCrate = param.toBoolean()
         }
+    }
+
+    public fun getBasePrice(): Int {
+        // This is using an elvis operator because even when it's nullguarded properly
+        // kotlin complains that since 'exotic' is a mutable property, it could have changed
+        // and it just doesn't make any sense to use a 'let' call in a null-guarded part of the if()
+        //
+        // Of course I would have used 'return if(exotic != null) { return exotic.getBasePrice() } else { 250000 }
+        val price: Int = if (exotic != null) {
+            exotic!!.getBasePrice()
+        } else {
+            // Read the base price from exoticData's exotic, or fallback to 250000
+            exoticData?.exotic?.getBasePrice() ?: Exotic.DEFAULT_BASE_PRICE
+        }
+
+        return price
     }
 
     private enum class Param {
@@ -93,5 +127,9 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
                 return values()[index]
             }
         }
+    }
+
+    companion object {
+        private val log: Logger = Logger.getLogger(ExoticSpecialItemPlugin::class.java)
     }
 }

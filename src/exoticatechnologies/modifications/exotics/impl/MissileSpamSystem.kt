@@ -28,13 +28,13 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
 
     private val logger: Logger = Logger.getLogger(MissileSpamSystem::class.java)
 
+    override fun getBasePrice(): Int = COST_CREDITS.toInt()
+
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
-        return (Utilities.hasItem(fleet.cargo, ITEM)
-                && fleet.cargo.credits.get() >= COST_CREDITS)
+        return Utilities.hasItem(fleet.cargo, ITEM)
     }
 
     override fun removeItemsFromFleet(fleet: CampaignFleetAPI, member: FleetMemberAPI, market: MarketAPI?): Boolean {
-        fleet.cargo.credits.subtract(COST_CREDITS)
         Utilities.takeItemQuantity(fleet.cargo, ITEM, 1f)
         return true
     }
@@ -43,8 +43,8 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         StringUtils.getTranslation(key, "longDescription")
                 .format("passive_boost", passiveBoostString)
                 .format("active_boost", activeBoostString)
-                .format("active_duration", activeDurationString)
-                .format("cooldown_string", cooldownString)
+                .formatFloat("duration", ABILITY_DURATION_IN_SEC * getPositiveMult(member, mods, exoticData))
+                .formatFloat("cooldown", ABILITY_COOLDOWN_IN_SEC * getNegativeMult(member, mods, exoticData))
                 .addToTooltip(tooltip, title)
     }
 
@@ -52,7 +52,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         super.applyToShip(id, member, ship, mods, exoticData)
 
         originalShip = ship
-        val subsystem = MissileSpammer(ship)
+        val subsystem = MissileSpammer(ship, member, mods, exoticData)
         MagicSubsystemsManager.addSubsystemToShip(ship, subsystem)
 
         // passives
@@ -66,16 +66,21 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                         || weapon.type == WeaponAPI.WeaponType.MISSILE
                         || weapon.spec.type == WeaponAPI.WeaponType.MISSILE
                         || weapon.slot.weaponType == WeaponAPI.WeaponType.MISSILE
-                   )
+                    )
     }
 
-    inner class MissileSpammer(ship: ShipAPI) : MagicSubsystem(ship) {
+    inner class MissileSpammer(
+            ship: ShipAPI,
+            val member: FleetMemberAPI,
+            val mods: ShipModifications,
+            val exoticData: ExoticData
+    ) : MagicSubsystem(ship) {
         private val affectedWeapons = ship.allWeapons.filter { weapon -> shouldAffectWeapon(weapon) }
         private var systemActivated = AtomicBoolean(false)
 
-        override fun getBaseActiveDuration(): Float = ABILITY_DURATION_IN_SEC
+        override fun getBaseActiveDuration(): Float = ABILITY_DURATION_IN_SEC * getPositiveMult(member, mods, exoticData)
 
-        override fun getBaseCooldownDuration(): Float = ABILITY_COOLDOWN_IN_SEC
+        override fun getBaseCooldownDuration(): Float = ABILITY_COOLDOWN_IN_SEC * getNegativeMult(member, mods, exoticData)
 
         override fun shouldActivateAI(amount: Float): Boolean {
             // If we have non-empty missile weapons and targets in range - yes
@@ -107,7 +112,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                     0f,
                     0f,
                     0f,
-                    ABILITY_DURATION_IN_SEC,
+                    baseActiveDuration,
                     0f,
                     true,
                     false,
@@ -145,17 +150,8 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         private const val ACTIVE_BUFF_ID = "MissileSpamSystemRoFIncrease"
         private const val ACTIVE_BUFF_MISSILE_ROF_MULT = 60f
 
-        private const val COOLDOWN_REPLACEMENT = "*Has a cooldown of {cooldown} seconds*."
-        private val cooldownString: String by lazy {
-            "${
-                COOLDOWN_REPLACEMENT.replace("{cooldown}", ABILITY_COOLDOWN_IN_SEC.toString())
-            }"
-        }
-
         val passiveBoostString = "*${PASSIVE_BUFF_MISSILE_ROF_MULT * 100}%%*"
         val activeBoostString = "*${ACTIVE_BUFF_MISSILE_ROF_MULT * 100}%%*"
-
-        val activeDurationString = "*${ABILITY_DURATION_IN_SEC} seconds*"
 
         private val RADIOACTIVE_GREEN = Color(0x00FF0A)
     }

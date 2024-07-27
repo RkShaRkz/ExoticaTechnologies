@@ -20,6 +20,11 @@ import java.awt.Color
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
+/**
+ * Abstract base class for all Upgrade systems in the ExoticaTech mod.
+ *
+ * Remember to override [color] to change the item's name in the description title.
+ */
 open class Upgrade(key: String, settings: JSONObject) : Modification(key, settings) {
     val resourceRatios: MutableMap<String, Float> = LinkedHashMap()
     val upgradeEffects: MutableList<UpgradeModEffect> = ArrayList()

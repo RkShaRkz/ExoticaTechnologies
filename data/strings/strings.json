@@ -569,11 +569,11 @@
 	"RewindSystem": {
 		"description": "A system capable of rewinding you back to a previous state in time, useful for getting out of unexpected problems, or just undoing bad ideas. More of a teleportation device than a revival system, possibly useful for both.",
 		"tooltip": "Adds a system that teleports you back to where you were in the past, and restores your weapons / flux / health to how it was then.",
-		"longDescription": "=Adds a rewinding mechanism system= that takes you back ${how_much} seconds in the past, restoring all ship's parameters along with location *as they were then.* ${cooldown_string}"
+		"longDescription": "=Adds a rewinding mechanism system= that takes you back ${how_much} seconds in the past, restoring all ship's parameters along with location *as they were then*. *Has a cooldown of ${cooldown} seconds*."
 	},
 	"MissileSpamSystem": {
 		"description": "A system capable of enhancing missile reload servos, enabling them to pump out more missiles in less time.",
 		"tooltip": "Doubles the rate of fire of all missile weapons and adds a system that makes missile weapons' refire much faster while it's active.",
-		"longDescription": "=Adds a missile barrage system= that passively increases missile rate of fire to ${passive_boost}, which - when activated - further increases it by an additional ${active_boost} on top of that (stacking) for ${active_duration}. ${cooldown_string}"
+		"longDescription": "=Adds a missile barrage system= that passively increases missile rate of fire to ${passive_boost}, which - when activated - further increases it by an additional ${active_boost} on top of that (stacking) for *${duration} seconds*. *Has a cooldown of ${cooldown} seconds*."
 	}
 }

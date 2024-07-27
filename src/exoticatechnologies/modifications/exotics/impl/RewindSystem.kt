@@ -35,6 +35,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 
     private val logger: Logger = Logger.getLogger(RewindSystem::class.java)
 
+    override fun getBasePrice(): Int = 2500000
+
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
         return Utilities.hasItem(fleet.cargo, ITEM)
     }
@@ -54,7 +56,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             expand: Boolean) {
         StringUtils.getTranslation(key, "longDescription")
                 .format("how_much", calculateTooltipStringReplacement())
-                .format("cooldown_string", cooldownString)
+                .formatFloat("cooldown", COOLDOWN * getNegativeMult(member, mods, exoticData))
                 .addToTooltip(tooltip, title)
     }
 
@@ -67,11 +69,16 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         super.applyToShip(id, member, ship, mods, exoticData)
 
         originalShip = ship
-        val subsystem = RewindSubsystem(ship)
+        val subsystem = RewindSubsystem(ship, member, mods, exoticData)
         MagicSubsystemsManager.addSubsystemToShip(ship, subsystem)
     }
 
-    inner class RewindSubsystem(ship: ShipAPI) : MagicSubsystem(ship) {
+    inner class RewindSubsystem(
+            ship: ShipAPI,
+            val member: FleetMemberAPI,
+            val mods: ShipModifications,
+            val exoticData: ExoticData
+    ) : MagicSubsystem(ship) {
         private var engine: CombatEngineAPI = Global.getCombatEngine()
         private val secondsTracker = IntervalUtil(0.95f, 1.05f)
         private val arcTimer = IntervalUtil(0.25f, 0.35f)
@@ -108,7 +115,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             return findActivationCandidate().isPresent()
         }
 
-        override fun getBaseCooldownDuration() = COOLDOWN.toFloat()
+        override fun getBaseCooldownDuration() = COOLDOWN * getNegativeMult(member, mods, exoticData)
 
         override fun onActivate() {
             super.onActivate()
@@ -417,13 +424,6 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         private const val MAX_TIME = 15f
         private const val COOLDOWN = 300
         private const val PHASE_IN_DURATION = 2f;
-
-        private const val COOLDOWN_REPLACEMENT = "*Has a cooldown of {cooldown} seconds*."
-        private val cooldownString: String by lazy {
-            "${
-                COOLDOWN_REPLACEMENT.replace("{cooldown}", COOLDOWN.toString())
-            }"
-        }
 
         private val SYSTEM_ACTIVATION_SOUND = "gigacannon_charge"
         private val SHIP_TELEPORTED_SOUND = "tachyon_lance_fire"

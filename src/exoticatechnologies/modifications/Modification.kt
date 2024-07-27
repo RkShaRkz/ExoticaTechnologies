@@ -14,6 +14,9 @@ import org.json.JSONObject
 import org.lazywizard.lazylib.ext.json.optFloat
 import java.awt.Color
 
+/**
+ * Base class for both [Exotic] systems and [Upgrade]able systems.
+ */
 abstract class Modification(val key: String, val settings: JSONObject) {
     companion object {
         @JvmStatic
