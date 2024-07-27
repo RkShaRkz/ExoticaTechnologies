@@ -9,6 +9,7 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.config.FactionConfigLoader
 import exoticatechnologies.modifications.ModSpecialItemPlugin
+import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.util.RenderUtils
 import exoticatechnologies.util.RomanNumeral
 import org.apache.log4j.Logger
@@ -18,16 +19,25 @@ import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
 import java.util.*
 
+/**
+ * Base class for [Exotic] systems wrapped in a chip item
+ *
+ * @see upgrade
+ * @see upgradeLevel
+ * @see calculateCreditCost
+ * @see ModSpecialItemPlugin
+ * @see com.fs.starfarer.api.campaign.impl.items.BaseSpecialItemPlugin
+ */
 class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
     var upgradeLevel = 0
 
     /**
      * The [Upgrade] instance of this special item plugin
+     * @see calculateCreditCost
      */
     var upgrade: Upgrade? = null
         get() {
             if (field == null) {
-//                field = UpgradesHandler.UPGRADES[modId]!!
                 // Lets do it safer
                 if (UpgradesHandler.UPGRADES[modId] != null) {
                     field = UpgradesHandler.UPGRADES[modId]
@@ -39,7 +49,6 @@ class UpgradeSpecialItemPlugin : ModSpecialItemPlugin() {
         }
 
     override fun getName(): String {
-//        return String.format("%s - %s (%s)", super.getName(), upgrade!!.name, upgradeLevel)
         return if (upgrade != null) {
             upgrade?.let {
                 String.format("%s - %s (%s)", super.getName(), it.name, upgradeLevel)

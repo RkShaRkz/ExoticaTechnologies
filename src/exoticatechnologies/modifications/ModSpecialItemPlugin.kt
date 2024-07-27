@@ -10,6 +10,10 @@ import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.exotics.ExoticsHandler
 import exoticatechnologies.modifications.upgrades.UpgradesHandler
 
+/**
+ * Base class for all ExoticaTechnologies mod's items, representing either [exoticatechnologies.modifications.exotics.Exotic] systems
+ * or [exoticatechnologies.modifications.upgrades.Upgrade] systems wrapped in a chip item
+ */
 abstract class ModSpecialItemPlugin : BaseSpecialItemPlugin() {
     open var modId: String? = null
 

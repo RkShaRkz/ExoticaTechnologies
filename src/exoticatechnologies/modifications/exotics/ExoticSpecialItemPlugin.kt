@@ -10,9 +10,17 @@ import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.StringUtils
 import org.apache.log4j.Logger
 
+/**
+ * Base class for [Exotic] systems wrapped in a chip item
+ *
+ * @see exotic
+ * @see ModSpecialItemPlugin
+ * @see com.fs.starfarer.api.campaign.impl.items.BaseSpecialItemPlugin
+ */
 open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
     /**
-     * The [Exotic] instance of this special item plugin
+     * The [Exotic] instance wrapped in this special item plugin
+     * @see exoticData
      */
     var exotic: Exotic? = null
 
