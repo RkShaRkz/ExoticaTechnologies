@@ -16,7 +16,6 @@ import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
-import exoticatechnologies.util.datastructures.ExoticStuffHolder
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
@@ -30,7 +29,6 @@ import kotlin.random.Random
 class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     override var color = Color(0xAE1919)
     private lateinit var originalShip: ShipAPI
-    private lateinit var stuffHolder: ExoticStuffHolder
 
     private val logger: Logger = Logger.getLogger(AmmoCraftingSystem::class.java)
 
@@ -68,7 +66,6 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         super.applyToShip(id, member, ship, mods, exoticData)
 
         originalShip = ship
-        stuffHolder = ExoticStuffHolder(member, mods, exoticData)
         val subsystem: MagicSubsystem = AmmoCreator(ship, member, mods, exoticData)
         MagicSubsystemsManager.addSubsystemToShip(ship, subsystem)
     }
@@ -102,24 +99,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         return RELOADING_FAILS_CAUSE_DAMAGE_MIN_DAMAGE * getNegativeMult(member, mods, exoticData)
     }
 
-    private fun getFailMinDamage(stuffHolder: ExoticStuffHolder): Float {
-        return getFailMinDamage(
-                member = stuffHolder.member,
-                mods = stuffHolder.mods,
-                exoticData = stuffHolder.exoticData
-        )
-    }
-
     private fun getFailMaxDamage(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
         return RELOADING_FAILS_CAUSE_DAMAGE_MAX_DAMAGE * getNegativeMult(member, mods, exoticData)
-    }
-
-    private fun getFailMaxDamage(stuffHolder: ExoticStuffHolder): Float {
-        return getFailMaxDamage(
-                member = stuffHolder.member,
-                mods = stuffHolder.mods,
-                exoticData = stuffHolder.exoticData
-        )
     }
 
     private fun shouldAffectWeapon(weapon: WeaponAPI): Boolean {
@@ -150,8 +131,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 )
     }
 
-    private fun reloadWeapon(weapon: WeaponAPI) {
-        val reloadAmount = weapon.ammoTracker.maxAmmo * getPeriodReloadAmount(member = stuffHolder.member, mods = stuffHolder.mods, exoticData = stuffHolder.exoticData)
+    private fun reloadWeapon(weapon: WeaponAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData) {
+        val reloadAmount = weapon.ammoTracker.maxAmmo * getPeriodReloadAmount(member = member, mods = mods, exoticData = exoticData)
         weapon.ammoTracker.reloadSize = reloadAmount
 //        weapon.ammoTracker.ammoPerSecond = max(
 //                1f, weapon.ammoTracker.reloadSize * getPeriodReloadAmount(member = stuffHolder.member, mods = stuffHolder.mods, exoticData = stuffHolder.exoticData)
@@ -177,12 +158,12 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         override fun shouldActivateAI(amount: Float): Boolean {
             // This one is simple, if we have at least two weapons that aren't on max ammo - we should turn it on
-            var weaponsNotOnFullAmmo = 0;
+            var weaponsNotOnFullAmmo = 0
             for (weapon in affectedWeapons) {
                 if (weapon.ammoTracker.ammo < weapon.ammoTracker.maxAmmo) {
                     weaponsNotOnFullAmmo++
                 }
-                if (weaponsNotOnFullAmmo >= MIN_NONFULL_WEAPONS_NEEDED_FOR_ACTIVATION + 1) break;
+                if (weaponsNotOnFullAmmo >= MIN_NONFULL_WEAPONS_NEEDED_FOR_ACTIVATION + 1) break
             }
 
             return weaponsNotOnFullAmmo >= MIN_NONFULL_WEAPONS_NEEDED_FOR_ACTIVATION
@@ -222,7 +203,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                                 ship,
                                                 ship.location,
                                                 MathUtils.getRandomNumberInRange(
-                                                        getFailMinDamage(stuffHolder), getFailMaxDamage(stuffHolder)
+                                                        getFailMinDamage(member, mods, exoticData), getFailMaxDamage(member, mods, exoticData)
                                                 ),
                                                 DamageType.ENERGY,
                                                 0f,
@@ -246,7 +227,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                         } else {
                             // success
                             for (weapon in affectedWeapons) {
-                                reloadWeapon(weapon)
+                                reloadWeapon(weapon, member, mods, exoticData)
                             }
                             spawnGoodAfterimage()
                         }
