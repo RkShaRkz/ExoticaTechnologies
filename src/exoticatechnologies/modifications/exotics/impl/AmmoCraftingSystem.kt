@@ -14,6 +14,7 @@ import com.fs.starfarer.api.util.IntervalUtil
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
+import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
 import exoticatechnologies.util.datastructures.ExoticStuffHolder
 import org.apache.log4j.Logger
@@ -52,7 +53,15 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             exoticData: ExoticData,
             expand: Boolean
     ) {
-        TODO("Not yet implemented")
+        StringUtils.getTranslation(key, "longDescription")
+                .format("ammo_regen_percent", getPeriodReloadAmount(member, mods, exoticData))
+                .format("ammo_regen_period", getPeriodDuration(member, mods, exoticData))
+                .formatFloat("duration", getPeriodDuration(member, mods, exoticData))
+                .format("ammo_regen_fail_chance", getFailChance(member, mods, exoticData))
+                .formatFloat("fail_min_damage", getFailMinDamage(member, mods, exoticData))
+                .formatFloat("fail_max_damage", getFailMaxDamage(member, mods, exoticData))
+                .formatFloat("cooldown", calculateSystemCooldownDuration(member, mods, exoticData))
+                .addToTooltip(tooltip, title)
     }
 
     override fun applyToShip(id: String, member: FleetMemberAPI, ship: ShipAPI, mods: ShipModifications, exoticData: ExoticData) {
@@ -87,6 +96,30 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
     private fun getFailChance(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Int {
         return (RELOADING_FAIL_CHANCE_PERCENT * getNegativeMult(member, mods, exoticData)).roundToInt()
+    }
+
+    private fun getFailMinDamage(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return RELOADING_FAILS_CAUSE_DAMAGE_MIN_DAMAGE * getNegativeMult(member, mods, exoticData)
+    }
+
+    private fun getFailMinDamage(stuffHolder: ExoticStuffHolder): Float {
+        return getFailMinDamage(
+                member = stuffHolder.member,
+                mods = stuffHolder.mods,
+                exoticData = stuffHolder.exoticData
+        )
+    }
+
+    private fun getFailMaxDamage(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return RELOADING_FAILS_CAUSE_DAMAGE_MAX_DAMAGE * getNegativeMult(member, mods, exoticData)
+    }
+
+    private fun getFailMaxDamage(stuffHolder: ExoticStuffHolder): Float {
+        return getFailMaxDamage(
+                member = stuffHolder.member,
+                mods = stuffHolder.mods,
+                exoticData = stuffHolder.exoticData
+        )
     }
 
     private fun shouldAffectWeapon(weapon: WeaponAPI): Boolean {
@@ -189,7 +222,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                                 ship,
                                                 ship.location,
                                                 MathUtils.getRandomNumberInRange(
-                                                        RELOADING_FAILS_CAUSE_DAMAGE_MIN_DAMAGE, RELOADING_FAILS_CAUSE_DAMAGE_MAX_DAMAGE
+                                                        getFailMinDamage(stuffHolder), getFailMaxDamage(stuffHolder)
                                                 ),
                                                 DamageType.ENERGY,
                                                 0f,

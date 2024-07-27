@@ -575,5 +575,10 @@
 		"description": "A system capable of enhancing missile reload servos, enabling them to pump out more missiles in less time.",
 		"tooltip": "Doubles the rate of fire of all missile weapons and adds a system that makes missile weapons' refire much faster while it's active.",
 		"longDescription": "=Adds a missile barrage system= that passively increases missile rate of fire to ${passive_boost}, which - when activated - further increases it by an additional ${active_boost} on top of that (stacking) for *${duration} seconds*. *Has a cooldown of ${cooldown} seconds*."
+	},
+	"AmmoCraftingSystem": {
+		"description": "The Ammo Crafting System is capable of generating ammunition on-the-fly, ensuring sustained combat capability while it constantly resupplies weapons with fresh ammo. ",
+		"tooltip": "Adds a system that regenerates a portion of ammo for all ammo-using weapons every period of time.",
+		"longDescription": "=Adds a ammunition creating system= which, when activated, regenerates ${ammo_regen_percent}%% every ${ammo_regen_period} seconds for *${duration} seconds*. However, it has a very reliable and has a ${ammo_regen_fail_chance}%% of failing, in which case it will unfortunately =damage your ship for ${fail_min_damage} to ${fail_max_damage} damage=. After finishing with it's working cycle, it *has a cooldown of ${cooldown} seconds*."
 	}
 }
