@@ -35,6 +35,8 @@ public class ETModPlugin extends BaseModPlugin {
     private static CampaignEventListener campaignListener = null;
     private static SalvageListener salvageListener = null;
 
+    public static final String MOD_ID = "exoticatechnologies";
+
     @Override
     public void onApplicationLoad() {
         ETModSettings.loadModSettings();
