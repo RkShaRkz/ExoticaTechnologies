@@ -7,7 +7,14 @@
 	"ui_char_increase_skill_new":[
 		{"file":"sounds/ui/ui_char_increase_skill_new.ogg","pitch":1,"volume":1}
 	],
-
+	"ammo_creator_reload_success":
+	[
+		{"file":"sounds/ammo_creator_reload_1.ogg","pitch":1.0,"volume":1.0},
+		{"file":"sounds/ammo_creator_reload_2.ogg","pitch":1.0,"volume":1.0},
+	],
+	"ammo_creator_reload_fail":[
+		{"file":"sounds/ammo_creator_reload_fail.ogg","pitch":1,"volume":1}
+	],
 }
 
 

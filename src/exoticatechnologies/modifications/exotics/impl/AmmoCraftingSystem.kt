@@ -16,6 +16,7 @@ import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
+import exoticatechnologies.util.playSound
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
@@ -224,12 +225,14 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             }
                             spawnBadAfterimage()
                             spawnFailedReloadText()
+                            playSound(RELOAD_FAIL_SOUND, ship)
                         } else {
                             // success
                             for (weapon in affectedWeapons) {
                                 reloadWeapon(weapon, member, mods, exoticData)
                             }
                             spawnGoodAfterimage()
+                            playSound(RELOAD_SUCCESS_SOUND, ship)
                         }
                     }
                 }
@@ -305,5 +308,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         private const val BASE_COOLDOWN_DURATION_IN_SECONDS = 60            //60secs
 
         private const val AFTERIMAGE_BLIP_DURATION = 2f
+
+        private const val RELOAD_SUCCESS_SOUND = "ammo_creator_reload_success"
+        private const val RELOAD_FAIL_SOUND = "ammo_creator_reload_fail"
     }
 }
