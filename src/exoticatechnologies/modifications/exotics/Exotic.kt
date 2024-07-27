@@ -221,12 +221,14 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
     /**
      * Base price of this exotic system in the Exotica planet/station options.
      */
-    open fun getBasePrice() = 250000
+    open fun getBasePrice() = DEFAULT_BASE_PRICE
 
     companion object {
         const val ITEM = "et_exotic"
         operator fun get(exoticKey: String?): Exotic? {
             return ExoticsHandler.EXOTICS[exoticKey]
         }
+
+        public const val DEFAULT_BASE_PRICE = 250000
     }
 }

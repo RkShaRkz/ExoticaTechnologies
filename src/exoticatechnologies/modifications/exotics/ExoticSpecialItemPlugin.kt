@@ -113,7 +113,7 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
         } else {
 //            log.error("exotic was null\t\texoticData: ${exoticData}, exoticData.exotic.name: ${exoticData?.exotic?.name}, exoticData.exotic.cost: ${exoticData?.exotic?.getBasePrice()}")
             // Read the base price from exoticData's exotic, or fallback to 250000
-            exoticData?.exotic?.getBasePrice() ?: 250000
+            exoticData?.exotic?.getBasePrice() ?: Exotic.DEFAULT_BASE_PRICE
         }
 
 //        log.info("<-- getBasePrice() returning ${price}")
