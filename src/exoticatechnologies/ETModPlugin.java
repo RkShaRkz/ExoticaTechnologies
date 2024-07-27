@@ -26,6 +26,9 @@ import exoticatechnologies.ui.impl.shop.overview.OverviewPanelUIPlugin;
 import exoticatechnologies.util.FleetMemberUtils;
 import exoticatechnologies.util.Utilities;
 import lombok.extern.log4j.Log4j;
+import lunalib.lunaSettings.LunaSettings;
+import lunalib.lunaSettings.LunaSettingsListener;
+import org.jetbrains.annotations.NotNull;
 import org.lazywizard.console.Console;
 import org.lazywizard.lazylib.MathUtils;
 
@@ -36,10 +39,21 @@ public class ETModPlugin extends BaseModPlugin {
     private static SalvageListener salvageListener = null;
 
     public static final String MOD_ID = "exoticatechnologies";
+    public static final boolean HAVE_LUNALIB = Global.getSettings().getModManager().isModEnabled("lunalib");
+    private static final MyLunaSettingsListener LunaSettingsListenerInstance = new MyLunaSettingsListener();
 
     @Override
     public void onApplicationLoad() {
         ETModSettings.loadModSettings();
+
+        if (HAVE_LUNALIB) {
+            LunaSettings.addSettingsListener(LunaSettingsListenerInstance);
+
+            // Force a refresh of settings, since some stuff from Game's "Settings" aren't
+            // updated (overwritten) until a change happens and they actually get overwritten
+            // by stuff saved in LunaSettings
+            LunaSettingsListenerInstance.settingsChanged(MOD_ID);
+        }
 
         UpgradesHandler.initialize();
         ExoticsHandler.initialize();
@@ -183,5 +197,29 @@ public class ETModPlugin extends BaseModPlugin {
 
     public static boolean isDebugUpgradeCosts() {
         return debugUpgradeCosts;
+    }
+
+    /**
+     * The {@link LunaSettingsListener} used for updating the backing settings whenever something is changed
+     * in Luna that has to do with our mod.
+     */
+    private static class MyLunaSettingsListener implements LunaSettingsListener {
+        @Override
+        public void settingsChanged(@NotNull String modId) {
+            if (modId.equalsIgnoreCase(MOD_ID)) {
+                ETModSettings.MAX_EXOTICS = safeUnboxing(LunaSettings.getInt(MOD_ID, "exoticatechnologies_maxExotics"));
+            }
+        }
+
+        private int safeUnboxing(Integer object) {
+            int retVal;
+            if (object == null) {
+                retVal = 0;
+            } else {
+                retVal = object;
+            }
+
+            return retVal;
+        }
     }
 }

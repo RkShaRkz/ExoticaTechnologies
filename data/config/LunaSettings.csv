@@ -1,0 +1,3 @@
+fieldID,fieldName,fieldType,defaultValue,secondaryValue,fieldDescription,minValue,maxValue,tab
+,,,,,,,,
+exoticatechnologies_maxExotics,Max Number of Exotics per Ship,Int,2,,Maximum number of Exotics per Ship (vanilla value is 2),0,10,General

@@ -37,6 +37,7 @@
 	"graphics": {
 		"misc":{
 			"flux_smoke": "graphics/fx/particlealpha_textured.png",
+			"lunasetting_icon": "graphics/icons/icon-lunasettings.png"
 		},
 		"ui": {
 			"shimmer": "graphics/fx/shimmer.png",
