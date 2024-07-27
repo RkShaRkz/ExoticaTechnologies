@@ -60,11 +60,6 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
         when (Param[index]) {
             Param.EXOTIC_ID -> {
                 modId = param
-//                exoticData = ExoticData(modId!!)
-//                if (exoticData!!.key != modId) {
-//                    modId = exoticData!!.key
-//                    stack.specialDataIfSpecial.data.replace(param, modId!!)
-//                }
                 modId?.let {safeModId ->
                     exoticData = ExoticData(safeModId)
                     exoticData?.let {safeExoticData ->
@@ -86,12 +81,10 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
                     stack.specialDataIfSpecial.data = newData //fix saves
                     ignoreCrate = param.toBoolean()
 
-//                    exoticData!!.type = ExoticType.NORMAL
                     exoticData?.let {
                         it.type = ExoticType.NORMAL
                     }
                 } else {
-//                    exoticData!!.type = ExoticType.valueOf(param)
                     exoticData?.let {
                         it.type = ExoticType.valueOf(param)
                     }
@@ -111,12 +104,10 @@ open class ExoticSpecialItemPlugin : ModSpecialItemPlugin() {
         val price: Int = if (exotic != null) {
             exotic!!.getBasePrice()
         } else {
-//            log.error("exotic was null\t\texoticData: ${exoticData}, exoticData.exotic.name: ${exoticData?.exotic?.name}, exoticData.exotic.cost: ${exoticData?.exotic?.getBasePrice()}")
             // Read the base price from exoticData's exotic, or fallback to 250000
             exoticData?.exotic?.getBasePrice() ?: Exotic.DEFAULT_BASE_PRICE
         }
 
-//        log.info("<-- getBasePrice() returning ${price}")
         return price
     }
 

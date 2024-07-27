@@ -47,7 +47,7 @@ class MarketCargoListener(val dialog: InteractionDialogAPI, val marketData: Mark
     }
 
     override fun cancelledCargoSelection() {
-        //donothing
+        //do nothing
     }
 
     override fun recreateTextPanel(
@@ -87,7 +87,6 @@ class MarketCargoListener(val dialog: InteractionDialogAPI, val marketData: Mark
         for (stack in cargo.stacksCopy) {
             val plugin = stack.plugin
             if (plugin is UpgradeSpecialItemPlugin) {
-//                bounty += plugin.upgrade!!.getCreditCostForResources(plugin.upgradeLevel) * stack.size
                 bounty += plugin.calculateCreditCost(plugin.upgradeLevel)
             } else if (plugin is ExoticSpecialItemPlugin) {
                 bounty += plugin.getBasePrice() * stack.size
