@@ -21,6 +21,8 @@ import java.util.*
 /**
  * Abstract base class for all Exotic systems in the ExoticaTech mod.
  *
+ * Remember to override [color] to change the item's name in the description title.
+ *
  * @see getBasePrice
  */
 abstract class Exotic(key: String, settings: JSONObject) : Modification(key, settings) {
