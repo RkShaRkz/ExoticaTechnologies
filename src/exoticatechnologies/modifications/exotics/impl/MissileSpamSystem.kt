@@ -52,7 +52,7 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         super.applyToShip(id, member, ship, mods, exoticData)
 
         originalShip = ship
-        val subsystem = MissileSpammer(ship)
+        val subsystem = MissileSpammer(ship, member, mods, exoticData)
         MagicSubsystemsManager.addSubsystemToShip(ship, subsystem)
 
         // passives
@@ -69,13 +69,18 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                    )
     }
 
-    inner class MissileSpammer(ship: ShipAPI) : MagicSubsystem(ship) {
+    inner class MissileSpammer(
+            ship: ShipAPI,
+            val member: FleetMemberAPI,
+            val mods: ShipModifications,
+            val exoticData: ExoticData
+    ) : MagicSubsystem(ship) {
         private val affectedWeapons = ship.allWeapons.filter { weapon -> shouldAffectWeapon(weapon) }
         private var systemActivated = AtomicBoolean(false)
 
-        override fun getBaseActiveDuration(): Float = ABILITY_DURATION_IN_SEC
+        override fun getBaseActiveDuration(): Float = ABILITY_DURATION_IN_SEC * getPositiveMult(member, mods, exoticData)
 
-        override fun getBaseCooldownDuration(): Float = ABILITY_COOLDOWN_IN_SEC
+        override fun getBaseCooldownDuration(): Float = ABILITY_COOLDOWN_IN_SEC * getNegativeMult(member, mods, exoticData)
 
         override fun shouldActivateAI(amount: Float): Boolean {
             // If we have non-empty missile weapons and targets in range - yes
