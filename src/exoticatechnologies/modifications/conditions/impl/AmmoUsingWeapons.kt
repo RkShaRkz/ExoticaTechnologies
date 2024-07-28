@@ -7,8 +7,8 @@ import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.conditions.OperatorCondition
 
 
-class AmmoWeapons : OperatorCondition() {
-    override val key = "ammoWeapons"
+class AmmoUsingWeapons : OperatorCondition() {
+    override val key = "ammoUsingWeapons"
 
     override fun getActual(member: FleetMemberAPI, mods: ShipModifications?, variant: ShipVariantAPI): Any? {
         return variant.fittedWeaponSlots
