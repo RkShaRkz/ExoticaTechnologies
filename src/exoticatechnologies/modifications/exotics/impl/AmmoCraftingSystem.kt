@@ -20,6 +20,7 @@ import exoticatechnologies.util.playSound
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
+import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
@@ -231,7 +232,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                 Global
                                         .getCombatEngine()
                                         .spawnExplosion(
-                                                ship.location,
+//                                                ship.location,
+                                                generateRandomLocationOnShip(ship, ship.location),
                                                 ship.velocity,
 //                                                Color.ORANGE.brighter(),
                                                 Color(0x9B3707),
@@ -256,6 +258,39 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     }
                 }
             }
+        }
+
+        private fun generateRandomLocationOnShip(ship: ShipAPI, location: Vector2f): Vector2f {
+            // First things first, lets grab a random location on the ship
+            val segmentLocation = if( ship.exactBounds != null) {
+                ship.exactBounds.segments.random().p1
+            } else {
+                location
+            }
+
+
+            // Just find a point between segmentLocation and location; if they're the same point apply jittering
+            val retVal = if (segmentLocation != location) {
+                // do a random point here
+                Vector2f(
+                        MathUtils.getRandomNumberInRange(segmentLocation.x, location.x),
+                        MathUtils.getRandomNumberInRange(segmentLocation.y, location.y)
+                )
+            } else {
+                // take half of ship's width/height, randomize teh values, add it to location and use that
+                val shipWidth = ship.spriteAPI.width
+                val shipHeigh = ship.spriteAPI.height
+
+                val randXjitter = MathUtils.getRandomNumberInRange(-shipWidth/2, shipWidth/2)
+                val randYjitter = MathUtils.getRandomNumberInRange(-shipHeigh/2, shipHeigh/2)
+
+                Vector2f(
+                        location.x + randXjitter,
+                        location.y + randYjitter
+                )
+            }
+
+            return retVal
         }
 
         private fun spawnFailedReloadText() {
