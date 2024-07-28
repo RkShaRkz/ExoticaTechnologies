@@ -248,7 +248,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             Global.getCombatEngine().addFloatingText(
                     ship.location,
                     "Krrr-*CLANK*",
-                    14f,
+//                    14f,
+                    24f,
                     Color.WHITE.brighter(),
                     ship,
                     2f,
