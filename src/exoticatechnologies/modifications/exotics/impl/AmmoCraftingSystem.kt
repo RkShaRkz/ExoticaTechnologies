@@ -213,12 +213,13 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                         debugLog("Period has passed, rolled chance for reloading\trolledChance: ${rolledChance}\tfail chance: ${getFailChance(member, mods, exoticData)}")
                         if (rolledChance < getFailChance(member, mods, exoticData)) {
                             // failed
+                            val randomLocationOnShip = generateRandomLocationOnShip(ship)
                             if (RELOADING_FAILS_CAUSE_DAMAGE) {
                                 Global
                                         .getCombatEngine()
                                         .applyDamage(
                                                 ship,
-                                                ship.location,
+                                                randomLocationOnShip,
                                                 MathUtils.getRandomNumberInRange(
                                                         getFailMinDamage(member, mods, exoticData), getFailMaxDamage(member, mods, exoticData)
                                                 ),
@@ -228,22 +229,21 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                                 true,
                                                 ship
                                         )
-
-                                Global
-                                        .getCombatEngine()
-                                        .spawnExplosion(
-//                                                ship.location,
-                                                generateRandomLocationOnShip(ship, ship.location),
-                                                ship.velocity,
-//                                                Color.ORANGE.brighter(),
-                                                Color(0x9B3707),
-//                                                30f,
-                                                250f,
-                                                AFTERIMAGE_BLIP_DURATION
-                                        )
                             }
+                            Global
+                                    .getCombatEngine()
+                                    .spawnExplosion(
+//                                                ship.location,
+                                            randomLocationOnShip,
+                                            ship.velocity,
+//                                                Color.ORANGE.brighter(),
+                                            Color(0x9B3707),
+//                                                30f,
+                                            250f,
+                                            AFTERIMAGE_BLIP_DURATION
+                                    )
                             spawnBadAfterimage()
-                            spawnFailedReloadText()
+                            spawnFailedReloadText(randomLocationOnShip)
                             playSound(RELOAD_FAIL_SOUND, ship)
                         } else {
                             // success
@@ -260,42 +260,65 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             }
         }
 
-        private fun generateRandomLocationOnShip(ship: ShipAPI, location: Vector2f): Vector2f {
+        private fun generateRandomLocationOnShip(ship: ShipAPI): Vector2f {
+            val shipLocation = ship.location
             // First things first, lets grab a random location on the ship
             val segmentLocation = if( ship.exactBounds != null) {
                 ship.exactBounds.segments.random().p1
             } else {
-                location
+                shipLocation
             }
-
+            debugLog("--> generateRandomLocationOnShip()\tshipLocation: ${shipLocation}\tsegmentLocation: ${segmentLocation}")
 
             // Just find a point between segmentLocation and location; if they're the same point apply jittering
-            val retVal = if (segmentLocation != location) {
+            val retVal = if (segmentLocation != shipLocation) {
                 // do a random point here
+                val minX: Float
+                val minY: Float
+                val maxX: Float
+                val maxY: Float
+                if (segmentLocation.x < shipLocation.x) {
+                    minX = segmentLocation.x
+                    maxX = shipLocation.x
+                } else {
+                    minX = shipLocation.x
+                    maxX = segmentLocation.x
+                }
+                if (segmentLocation.y < shipLocation.y) {
+                    minY = segmentLocation.y
+                    maxY = shipLocation.y
+                } else {
+                    minY = shipLocation.y
+                    maxY = segmentLocation.y
+                }
+
                 Vector2f(
-                        MathUtils.getRandomNumberInRange(segmentLocation.x, location.x),
-                        MathUtils.getRandomNumberInRange(segmentLocation.y, location.y)
+                        MathUtils.getRandomNumberInRange(minX, maxX),
+                        MathUtils.getRandomNumberInRange(minY, maxY)
                 )
             } else {
                 // take half of ship's width/height, randomize teh values, add it to location and use that
                 val shipWidth = ship.spriteAPI.width
-                val shipHeigh = ship.spriteAPI.height
+                val shipHeight = ship.spriteAPI.height
 
-                val randXjitter = MathUtils.getRandomNumberInRange(-shipWidth/2, shipWidth/2)
-                val randYjitter = MathUtils.getRandomNumberInRange(-shipHeigh/2, shipHeigh/2)
+                debugLog("generateRandomLocationOnShip()\tship width: ${shipWidth}\tship height: ${shipHeight}")
+
+                val randXjitter = MathUtils.getRandomNumberInRange(-shipWidth/3, shipWidth/3)
+                val randYjitter = MathUtils.getRandomNumberInRange(-shipHeight/3, shipHeight/3)
 
                 Vector2f(
-                        location.x + randXjitter,
-                        location.y + randYjitter
+                        shipLocation.x + randXjitter,
+                        shipLocation.y + randYjitter
                 )
             }
 
+            debugLog("<-- generateRandomLocationOnShip()\tretVal: ${retVal}")
             return retVal
         }
 
-        private fun spawnFailedReloadText() {
+        private fun spawnFailedReloadText(location: Vector2f) {
             Global.getCombatEngine().addFloatingText(
-                    ship.location,
+                    location,
                     "Krrr-*CLANK*",
 //                    14f,
                     24f,
@@ -325,7 +348,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         private fun spawnBadAfterimage() {
             ship.addAfterimage(
-                    Color.DARK_GRAY.darker(),
+                    Color.DARK_GRAY.darker(),   //Color(0x2D2A2A),
                     0f,
                     0f,
                     0f,
