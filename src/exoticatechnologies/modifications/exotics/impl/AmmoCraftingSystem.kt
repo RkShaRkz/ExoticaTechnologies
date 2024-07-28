@@ -85,7 +85,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
     }
 
     private fun getPeriodReloadAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
-        return RELOADING_AMOUNT_PER_PERIOD_PERCENT * getPositiveMult(member, mods, exoticData)
+        return (RELOADING_AMOUNT_PER_PERIOD_PERCENT/100f) * getPositiveMult(member, mods, exoticData)
     }
 
     private fun getPeriodDuration(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
@@ -196,7 +196,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     if (timeCounter.intervalElapsed()) {
                         // Another period seconds passed, roll a die and reload
                         val rolledChance = random.nextInt(0,99)
-                        debugLog("Period has passed, rolled chance for reloading\trolledChance: ${rolledChance}")
+                        debugLog("Period has passed, rolled chance for reloading\trolledChance: ${rolledChance}\tfail chance: ${getFailChance(member, mods, exoticData)}")
                         if (rolledChance < getFailChance(member, mods, exoticData)) {
                             // failed
                             if (RELOADING_FAILS_CAUSE_DAMAGE) {
@@ -231,7 +231,9 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             playSound(RELOAD_FAIL_SOUND, ship)
                         } else {
                             // success
+                            debugLog("Reloading weapons\trefill amount: ${getPeriodReloadAmount(member, mods, exoticData)}")
                             for (weapon in affectedWeapons) {
+                                debugLog("Reloading ${weapon.id}\treload amount: ${weapon.ammoTracker.maxAmmo * getPeriodReloadAmount(member, mods, exoticData)}")
                                 reloadWeapon(weapon, member, mods, exoticData)
                             }
                             spawnGoodAfterimage()
