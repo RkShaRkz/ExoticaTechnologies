@@ -98,6 +98,9 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         return RELOADING_AMOUNT_PER_PERIOD_PERCENT * getPositiveMult(member, mods, exoticData)
     }
 
+    /**
+     * Returns the [RELOADING_PERIOD_DURATION_IN_SECONDS] modified by [getNegativeMult]
+     */
     private fun getPeriodDuration(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
         return RELOADING_PERIOD_DURATION_IN_SECONDS * getNegativeMult(member, mods, exoticData)
     }
@@ -148,7 +151,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 //        weapon.ammoTracker.ammoPerSecond = max(
 //                1f, weapon.ammoTracker.reloadSize * getPeriodReloadAmount(member = stuffHolder.member, mods = stuffHolder.mods, exoticData = stuffHolder.exoticData)
 //        ) // 1 or 10% of reloadSize, whichever is higher - 10% of 8 is 0.8 so we want to reload at least a whole bullet in that case
-        weapon.ammoTracker.ammoPerSecond = weapon.ammoTracker.reloadSize
+        weapon.ammoTracker.ammoPerSecond = weapon.ammoTracker.reloadSize / getPeriodDuration(member = member, mods = mods, exoticData = exoticData)
         weapon.ammoTracker.resetAmmo()
     }
 
