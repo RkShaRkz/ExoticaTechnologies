@@ -29,7 +29,8 @@ abstract class ConditionDict {
                         CargoSpace(),
                         Hullmods(),
                         MissileSlots(),
-                        AmmoUsingWeapons()
+                        AmmoUsingWeapons(),
+                        ReloadableAmmoUsingWeapons()
                     )
                         .forEach {
                             mutableDict!![it.key] = it
