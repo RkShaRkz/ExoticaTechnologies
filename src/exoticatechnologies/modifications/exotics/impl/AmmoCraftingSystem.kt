@@ -53,7 +53,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             expand: Boolean
     ) {
         StringUtils.getTranslation(key, "longDescription")
-                .format("ammo_regen_percent", getPeriodReloadAmount(member, mods, exoticData))
+                .format("ammo_regen_percent", getPeriodReloadAmountPercentage(member, mods, exoticData))
                 .format("ammo_regen_period", getPeriodDuration(member, mods, exoticData))
                 .formatFloat("duration", calculateSystemActivationDuration(member, mods, exoticData))
                 .format("ammo_regen_fail_chance", getFailChance(member, mods, exoticData))
@@ -74,7 +74,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
     private fun calculateSystemActivationDuration(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
         // Calculate how many periods are required to fill up ammo to 100%
         // then multiply that with number of period durations
-        val requiredPeriodsCount = 100 / getPeriodReloadAmount(member, mods, exoticData)
+        val requiredPeriodsCount = 100 / getPeriodReloadAmountPercentage(member, mods, exoticData)
         val requiredActivationsDuration = requiredPeriodsCount * getPeriodDuration(member, mods, exoticData)
 
         return requiredActivationsDuration
@@ -84,8 +84,18 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         return BASE_COOLDOWN_DURATION_IN_SECONDS * getNegativeMult(member, mods, exoticData)
     }
 
+    /**
+     * Returns the [RELOADING_AMOUNT_PER_PERIOD_PERCENT] modified by [getPositiveMult] as a decimal number, e.g. 0.3 for 30%
+     */
     private fun getPeriodReloadAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
         return (RELOADING_AMOUNT_PER_PERIOD_PERCENT/100f) * getPositiveMult(member, mods, exoticData)
+    }
+
+    /**
+     * Returns the [RELOADING_AMOUNT_PER_PERIOD_PERCENT] modified by [getPositiveMult] as a whole number, e.g. 30 for 30%
+     */
+    private fun getPeriodReloadAmountPercentage(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return RELOADING_AMOUNT_PER_PERIOD_PERCENT * getPositiveMult(member, mods, exoticData)
     }
 
     private fun getPeriodDuration(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
