@@ -167,7 +167,6 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 getPeriodDuration(member, mods, exoticData) - EPSILON, getPeriodDuration(member, mods, exoticData) + EPSILON
         )
         private val random = Random(System.nanoTime())
-        private val reloadDataRestoreMap = mutableMapOf<WeaponAPI, ReloadData>()
 
         override fun getBaseActiveDuration(): Float = calculateSystemActivationDuration(member, mods, exoticData)
 
@@ -191,11 +190,6 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         override fun onActivate() {
             super.onActivate()
 
-            // Create a map of data we can restore to after the system turns off
-            for (weapon in affectedWeapons) {
-                reloadDataRestoreMap[weapon] = ReloadData(weapon.ammoTracker.reloadSize, weapon.ammoTracker.ammoPerSecond)
-            }
-
             systemActivated.compareAndSet(false, true)
         }
 
@@ -203,16 +197,6 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             super.onFinished()
 
             systemActivated.compareAndSet(true, false)
-
-            // Restore from the map and clear the map
-            for (weapon in affectedWeapons) {
-                // The map was created when the system was activated so we can't run into a situation when
-                // we don't have data for a given weapon
-                weapon.ammoTracker.reloadSize = reloadDataRestoreMap.getValue(weapon).originalReloadSize
-                weapon.ammoTracker.ammoPerSecond = reloadDataRestoreMap.getValue(weapon).originalAmmoPerSecond
-            }
-            // Finally, clear the map just in case
-            reloadDataRestoreMap.clear()
         }
 
         override fun advance(amount: Float, isPaused: Boolean) {
@@ -325,11 +309,6 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
     private fun debugLog(log: String) {
         if (DEBUG) logger.info("[AmmoCraftingSystem] $log")
     }
-
-    private data class ReloadData(
-            val originalReloadSize: Float,
-            val originalAmmoPerSecond: Float
-    )
 
 
     companion object {
