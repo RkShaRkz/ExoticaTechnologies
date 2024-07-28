@@ -24,6 +24,8 @@ import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -146,24 +148,11 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
     }
 
     private fun reloadWeapon(weapon: WeaponAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData) {
-        val reloadAmount = weapon.ammoTracker.maxAmmo * getPeriodReloadAmount(member = member, mods = mods, exoticData = exoticData)
-        weapon.ammoTracker.reloadSize = reloadAmount
-//        weapon.ammoTracker.ammoPerSecond = max(
-//                1f, weapon.ammoTracker.reloadSize * getPeriodReloadAmount(member = stuffHolder.member, mods = stuffHolder.mods, exoticData = stuffHolder.exoticData)
-//        ) // 1 or 10% of reloadSize, whichever is higher - 10% of 8 is 0.8 so we want to reload at least a whole bullet in that case
-        weapon.ammoTracker.ammoPerSecond = weapon.ammoTracker.reloadSize / getPeriodDuration(member = member, mods = mods, exoticData = exoticData)
-        weapon.ammoTracker.resetAmmo()
-        //TODO fix this
-        // This approach is completely wrong.
-        // Namely, the way this is doing it now, while it may look like it has some sense at surface-level,
-        // it completely throws any kind of control in the garbage.
-        // If the system activation starts with a few fails - no big deal, everything is good.
-        // But after the first time this method fires, even on every subsequent failure - it will still replenish ammo.
-        // This is due to the fact that we've given it a "replenish speed" and the game replenishes for us.
-        // Instead, we should abandon this approach, and just use weapon.ammoTracker.setAmmo = currentAmmo + reloadAmount
-        // the "resetAmmo()" call instantly replenishes the weapon to the max.
-        // We should also make sure the reload actually only reloads when it's called and not carry over into other periods
-        // like this current "ammoPerSecond" solution does.
+        val reloadAmount = max(
+                1f, weapon.ammoTracker.maxAmmo * getPeriodReloadAmount(member = member, mods = mods, exoticData = exoticData)
+        ).roundToInt()  // 1 ammo or 10% of maxAmmo, whichever is higher - 10% of 8 is 0.8 so we want to reload at least 1 bullet in that case
+
+        weapon.ammoTracker.ammo = min(weapon.ammoTracker.maxAmmo, weapon.ammoTracker.ammo + reloadAmount)
     }
 
     inner class AmmoCreator(
