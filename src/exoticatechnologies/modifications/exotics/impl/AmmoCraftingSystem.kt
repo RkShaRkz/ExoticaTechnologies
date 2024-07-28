@@ -195,7 +195,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     timeCounter.advance(amount)
                     if (timeCounter.intervalElapsed()) {
                         // Another period seconds passed, roll a die and reload
-                        val rolledChance = random.nextInt() % 100
+                        val rolledChance = random.nextInt(0,99)
                         debugLog("Period has passed, rolled chance for reloading\trolledChance: ${rolledChance}")
                         if (rolledChance < getFailChance(member, mods, exoticData)) {
                             // failed
