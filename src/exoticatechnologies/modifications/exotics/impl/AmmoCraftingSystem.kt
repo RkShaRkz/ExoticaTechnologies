@@ -221,7 +221,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                                 ship.location,
                                                 ship.velocity,
                                                 Color.ORANGE.brighter(),
-                                                30f,
+//                                                30f,
+                                                150f,
                                                 AFTERIMAGE_BLIP_DURATION
                                         )
                             }
