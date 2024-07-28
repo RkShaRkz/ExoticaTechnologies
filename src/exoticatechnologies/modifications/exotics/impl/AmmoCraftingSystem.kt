@@ -246,9 +246,10 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                         .spawnExplosion(
                                                 ship.location,
                                                 ship.velocity,
-                                                Color.ORANGE.brighter(),
+//                                                Color.ORANGE.brighter(),
+                                                Color(0x9B3707),
 //                                                30f,
-                                                150f,
+                                                250f,
                                                 AFTERIMAGE_BLIP_DURATION
                                         )
                             }
