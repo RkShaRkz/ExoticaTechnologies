@@ -285,14 +285,21 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
                 debugLog("generateRandomLocationOnShip()\tsegmentX: ${segmentX}, segmentY: ${segmentY}")
 
-                val randX = MathUtils.getRandomNumberInRange(-segmentX, segmentX)
-                val randY = MathUtils.getRandomNumberInRange(-segmentY, segmentY)
+//                val randX = MathUtils.getRandomNumberInRange(-segmentX, segmentX)
+//                val randY = MathUtils.getRandomNumberInRange(-segmentY, segmentY)
+                // We are going to get a random point between the ship location (middle of the ship) and this segment X/Y one
+                val randX = MathUtils.getRandomNumberInRange(shipLocation.x, segmentX)
+                val randY = MathUtils.getRandomNumberInRange(shipLocation.y, segmentY)
 
                 debugLog("generateRandomLocationOnShip()\trandX: ${randX}, randY: ${randY}")
 
+//                Vector2f(
+//                        shipLocation.x + randX,
+//                        shipLocation.y + randY
+//                )
                 Vector2f(
-                        shipLocation.x + randX,
-                        shipLocation.y + randY
+                        randX,
+                        randY
                 )
             } else {
                 debugLog("generateRandomLocationOnShip()\tsegment location == ship location")
