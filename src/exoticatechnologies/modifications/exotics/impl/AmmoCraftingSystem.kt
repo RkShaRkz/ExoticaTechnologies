@@ -92,7 +92,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
      * Returns the [RELOADING_AMOUNT_PER_PERIOD_PERCENT] modified by [getPositiveMult] as a decimal number, e.g. 0.3 for 30%
      */
     private fun getPeriodReloadAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
-        return (RELOADING_AMOUNT_PER_PERIOD_PERCENT/100f) * getPositiveMult(member, mods, exoticData)
+        return (RELOADING_AMOUNT_PER_PERIOD_PERCENT / 100f) * getPositiveMult(member, mods, exoticData)
     }
 
     /**
@@ -210,7 +210,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     timeCounter.advance(amount)
                     if (timeCounter.intervalElapsed()) {
                         // Another period seconds passed, roll a die and reload
-                        val rolledChance = random.nextInt(0,100) //the until is exclusive, so we need 100 to make it [0,99]
+                        val rolledChance = random.nextInt(0, 100) //the until is exclusive, so we need 100 to make it [0,99]
                         debugLog("Period has passed, rolled chance for reloading\trolledChance: ${rolledChance}\tfail chance: ${getFailChance(member, mods, exoticData)}")
                         if (rolledChance < getFailChance(member, mods, exoticData)) {
                             // failed
@@ -266,7 +266,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             val shipLocation = ship.location
             debugLog("--> generateRandomLocationOnShip()\tshipLocation: ${shipLocation}")
             // First things first, lets grab a random location on the ship
-            val segmentLocation = if( ship.exactBounds != null) {
+            val segmentLocation = if (ship.exactBounds != null) {
                 debugLog("generateRandomLocationOnShip()\tsegments size: ${ship.exactBounds.segments.size}")
                 ship.exactBounds.segments.random().p1
             } else {
@@ -280,8 +280,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             val retVal = if (segmentLocation != shipLocation) {
                 debugLog("generateRandomLocationOnShip()\tsegment location != ship location")
                 // do a random point here
-                val segmentX = segmentLocation.x/2
-                val segmentY = segmentLocation.y/2
+                val segmentX = segmentLocation.x / 2
+                val segmentY = segmentLocation.y / 2
 
                 debugLog("generateRandomLocationOnShip()\tsegmentX: ${segmentX}, segmentY: ${segmentY}")
 
@@ -302,8 +302,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
                 debugLog("generateRandomLocationOnShip()\tship width: ${shipWidth}\tship height: ${shipHeight}")
 
-                val randXjitter = MathUtils.getRandomNumberInRange(-shipWidth/3, shipWidth/3)
-                val randYjitter = MathUtils.getRandomNumberInRange(-shipHeight/3, shipHeight/3)
+                val randXjitter = MathUtils.getRandomNumberInRange(-shipWidth / 3, shipWidth / 3)
+                val randYjitter = MathUtils.getRandomNumberInRange(-shipHeight / 3, shipHeight / 3)
                 debugLog("generateRandomLocationOnShip()\trandXjitter: ${randXjitter}, randYjitter: ${randYjitter}")
 
                 Vector2f(
@@ -317,16 +317,18 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         }
 
         private fun spawnFailedReloadText(location: Vector2f) {
-            Global.getCombatEngine().addFloatingText(
-                    location,
-                    "Krrr-*CLANK*",
-//                    14f,
-                    24f,
-                    Color.WHITE.brighter(),
-                    ship,
-                    2f,
-                    2f
-            )
+            Global
+                    .getCombatEngine()
+                    .addFloatingText(
+                            location,
+                            "Krrr-*CLANK*",
+//                            14f,
+                            24f,
+                            Color.WHITE.brighter(),
+                            ship,
+                            2f,
+                            2f
+                    )
         }
 
         private fun spawnGoodAfterimage() {
@@ -348,7 +350,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         private fun spawnBadAfterimage() {
             ship.addAfterimage(
-                    Color.DARK_GRAY.darker(),   //Color(0x2D2A2A),
+                    Color(0x2D2A2A),
                     0f,
                     0f,
                     0f,
@@ -368,21 +370,23 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     .getCombatEngine()
                     .spawnExplosion(
                             location,
-                            Vector2f(0f,0f),
+                            Vector2f(0f, 0f),
                             Color(0x9B3707),
                             25f,
                             100f
                     )
 
-            Global.getCombatEngine().addFloatingText(
-                    location,
-                    location.toString(),
-                    34f,
-                    Color.WHITE.brighter(),
-                    SimpleEntity(location),
-                    5f,
-                    calculateSystemActivationDuration(member, mods, exoticData)
-            )
+            Global
+                    .getCombatEngine()
+                    .addFloatingText(
+                            location,
+                            location.toString(),
+                            34f,
+                            Color.WHITE.brighter(),
+                            SimpleEntity(location),
+                            5f,
+                            calculateSystemActivationDuration(member, mods, exoticData)
+                    )
         }
     }
 
