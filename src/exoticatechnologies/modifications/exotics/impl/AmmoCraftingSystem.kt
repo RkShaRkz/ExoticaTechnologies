@@ -262,17 +262,22 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         private fun generateRandomLocationOnShip(ship: ShipAPI): Vector2f {
             val shipLocation = ship.location
+            debugLog("--> generateRandomLocationOnShip()\tshipLocation: ${shipLocation}")
             // First things first, lets grab a random location on the ship
             val segmentLocation = if( ship.exactBounds != null) {
+                debugLog("generateRandomLocationOnShip()\tsegments size: ${ship.exactBounds.segments.size}")
                 ship.exactBounds.segments.random().p1
             } else {
                 shipLocation
             }
-            debugLog("--> generateRandomLocationOnShip()\tshipLocation: ${shipLocation}\tsegmentLocation: ${segmentLocation}")
+
+            debugLog("generateRandomLocationOnShip()\tsegmentLocation: ${segmentLocation}")
+
 
             // Just find a point between segmentLocation and location; if they're the same point apply jittering
             val retVal = if (segmentLocation != shipLocation) {
                 // do a random point here
+                /*
                 val minX: Float
                 val minY: Float
                 val maxX: Float
@@ -295,6 +300,10 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 Vector2f(
                         MathUtils.getRandomNumberInRange(minX, maxX),
                         MathUtils.getRandomNumberInRange(minY, maxY)
+                )*/
+                Vector2f(
+                        shipLocation.x + segmentLocation.x,
+                        shipLocation.y + segmentLocation.y
                 )
             } else {
                 // take half of ship's width/height, randomize teh values, add it to location and use that
