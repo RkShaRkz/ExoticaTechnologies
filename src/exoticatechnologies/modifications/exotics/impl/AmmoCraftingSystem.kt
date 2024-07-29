@@ -235,12 +235,9 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             Global
                                     .getCombatEngine()
                                     .spawnExplosion(
-//                                                ship.location,
                                             randomLocationOnShip,
                                             ship.velocity,
-//                                                Color.ORANGE.brighter(),
                                             Color(0x9B3707),
-//                                                30f,
                                             250f,
                                             AFTERIMAGE_BLIP_DURATION
                                     )
@@ -287,12 +284,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
                 debugLog("generateRandomLocationOnShip()\tsegmentX: ${segmentX}, segmentY: ${segmentY}")
 
-//                val randX = MathUtils.getRandomNumberInRange(-segmentX, segmentX)
-//                val randY = MathUtils.getRandomNumberInRange(-segmentY, segmentY)
                 // We are going to get a random point between the ship location (middle of the ship) and this segment X/Y one
-//                val randX = MathUtils.getRandomNumberInRange(shipLocation.x, segmentX)
-//                val randY = MathUtils.getRandomNumberInRange(shipLocation.y, segmentY)
-
                 var diffX = shipLocation.x - segmentLocation.x
                 var diffY = shipLocation.y - segmentLocation.y
                 debugLog("generateRandomLocationOnShip()\tdiffX: ${diffX}, diffY: ${diffY}")
@@ -323,10 +315,6 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
                 debugLog("generateRandomLocationOnShip()\trandX: ${randX}, randY: ${randY}")
 
-//                Vector2f(
-//                        shipLocation.x + randX,
-//                        shipLocation.y + randY
-//                )
                 Vector2f(
                         randX,
                         randY
@@ -359,8 +347,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     .addFloatingText(
                             location,
                             "Krrr-*CLANK*",
-//                            14f,
-                            24f,
+                            24f,    //TODO consider using shipsize-based size here
                             Color.WHITE.brighter(),
                             ship,
                             2f,
@@ -403,27 +390,29 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         }
 
         private fun spawnDebugInfo(location: Vector2f) {
-            Global
-                    .getCombatEngine()
-                    .spawnExplosion(
-                            location,
-                            Vector2f(0f, 0f),
-                            Color(0x9B3707),
-                            25f,
-                            100f
-                    )
+            if (DEBUG) {
+                Global
+                        .getCombatEngine()
+                        .spawnExplosion(
+                                location,
+                                Vector2f(0f, 0f),
+                                Color(0x9B3707),
+                                25f,
+                                100f
+                        )
 
-            Global
-                    .getCombatEngine()
-                    .addFloatingText(
-                            location,
-                            location.toString(),
-                            34f,
-                            Color.WHITE.brighter(),
-                            SimpleEntity(location),
-                            5f,
-                            calculateSystemActivationDuration(member, mods, exoticData)
-                    )
+                Global
+                        .getCombatEngine()
+                        .addFloatingText(
+                                location,
+                                location.toString(),
+                                34f,
+                                Color.WHITE.brighter(),
+                                SimpleEntity(location),
+                                5f,
+                                calculateSystemActivationDuration(member, mods, exoticData)
+                        )
+            }
         }
     }
 
@@ -433,7 +422,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
 
     companion object {
-        private const val DEBUG = true
+        private const val DEBUG = false
         private const val COST_CREDITS: Float = 350000f
         private const val ITEM = "et_ammocreationmachine"
 
