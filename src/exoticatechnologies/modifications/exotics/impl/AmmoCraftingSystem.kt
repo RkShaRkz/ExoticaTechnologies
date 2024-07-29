@@ -26,6 +26,7 @@ import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -295,7 +296,9 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 var diffX = shipLocation.x - segmentLocation.x
                 var diffY = shipLocation.y - segmentLocation.y
                 debugLog("generateRandomLocationOnShip()\tdiffX: ${diffX}, diffY: ${diffY}")
-                val relativeLocation = if (diffX > 1000 || diffY > 1000) {
+                // I'm going to abs this, because I don't want to care if the diff is -1300 or not, it's still larger than 1000
+                // And that's the most usual case I'm seeing, diffs that are beyond a -1000
+                val relativeLocation = if (abs(diffX) > 1000 || abs(diffY) > 1000) {
                     // Even though this could technically be a valid number, more likely this means that
                     // our ship was at e.g. [0, -1500] and the segment at like [-133, -48] which just means
                     // there's no way this segment location isn't relative.
