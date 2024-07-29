@@ -277,33 +277,43 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             // Just find a point between segmentLocation and location; if they're the same point apply jittering
             val retVal = if (segmentLocation != shipLocation) {
                 // do a random point here
-                /*
-                val minX: Float
-                val minY: Float
-                val maxX: Float
-                val maxY: Float
-                if (segmentLocation.x < shipLocation.x) {
-                    minX = segmentLocation.x
-                    maxX = shipLocation.x
+                val segmentX = segmentLocation.x/2
+                val segmentY = segmentLocation.y/2
+                // Now, I don't want to use MathUtils due to their formula
+                // rng.nextFloat() * (max - min) + min;
+                // so if i just take MathUtils.getNumberInRange(-5,5) that will always end up being a non-random -5
+                val rand = Random(System.nanoTime())
+                val minX:Float
+                val maxX:Float
+                val minY:Float
+                val maxY:Float
+                if (segmentX < 0) {
+                    minX = segmentX
+                    maxX = -segmentX
                 } else {
-                    minX = shipLocation.x
-                    maxX = segmentLocation.x
-                }
-                if (segmentLocation.y < shipLocation.y) {
-                    minY = segmentLocation.y
-                    maxY = shipLocation.y
-                } else {
-                    minY = shipLocation.y
-                    maxY = segmentLocation.y
+                    maxX = segmentX
+                    minX = -segmentX
                 }
 
+                if (segmentY < 0) {
+                    minY = segmentY
+                    maxY = -segmentY
+                } else {
+                    maxY = segmentY
+                    minY = -segmentY
+                }
+
+                val randX = rand.nextInt(minX.toInt(), maxX.toInt())
+                val randY = rand.nextInt(minY.toInt(), maxY.toInt())
+                //TODO on second thought, use MathUtils.getRandomNumberInRange() instead of this, it'll work fine.
+
+//                Vector2f(
+//                        shipLocation.x + segmentLocation.x,
+//                        shipLocation.y + segmentLocation.y
+//                )
                 Vector2f(
-                        MathUtils.getRandomNumberInRange(minX, maxX),
-                        MathUtils.getRandomNumberInRange(minY, maxY)
-                )*/
-                Vector2f(
-                        shipLocation.x + segmentLocation.x,
-                        shipLocation.y + segmentLocation.y
+                        shipLocation.x + randX,
+                        shipLocation.y + randY
                 )
             } else {
                 // take half of ship's width/height, randomize teh values, add it to location and use that
