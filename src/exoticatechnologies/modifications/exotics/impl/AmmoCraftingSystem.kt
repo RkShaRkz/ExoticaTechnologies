@@ -264,7 +264,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         private fun generateRandomLocationOnShip(ship: ShipAPI): Vector2f {
             val shipLocation = ship.location
-            debugLog("--> generateRandomLocationOnShip()\tshipLocation: ${shipLocation}")
+            debugLog("--> generateRandomLocationOnShip()\tshipLocation: ${shipLocation}\tship name: ${ship.name}")
+            debugLog("generateRandomLocationOnShip()\tship sprite width: ${ship.spriteAPI.width}, height: ${ship.spriteAPI.height}")
             // First things first, lets grab a random location on the ship
             val segmentLocation = if (ship.exactBounds != null) {
                 debugLog("generateRandomLocationOnShip()\tsegments size: ${ship.exactBounds.segments.size}")
@@ -288,8 +289,34 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 //                val randX = MathUtils.getRandomNumberInRange(-segmentX, segmentX)
 //                val randY = MathUtils.getRandomNumberInRange(-segmentY, segmentY)
                 // We are going to get a random point between the ship location (middle of the ship) and this segment X/Y one
-                val randX = MathUtils.getRandomNumberInRange(shipLocation.x, segmentX)
-                val randY = MathUtils.getRandomNumberInRange(shipLocation.y, segmentY)
+//                val randX = MathUtils.getRandomNumberInRange(shipLocation.x, segmentX)
+//                val randY = MathUtils.getRandomNumberInRange(shipLocation.y, segmentY)
+
+                var diffX = shipLocation.x - segmentLocation.x
+                var diffY = shipLocation.y - segmentLocation.y
+                debugLog("generateRandomLocationOnShip()\tdiffX: ${diffX}, diffY: ${diffY}")
+                val relativeLocation = if (diffX > 1000 || diffY > 1000) {
+                    // Even though this could technically be a valid number, more likely this means that
+                    // our ship was at e.g. [0, -1500] and the segment at like [-133, -48] which just means
+                    // there's no way this segment location isn't relative.
+                    true
+                } else { false }
+
+                if (relativeLocation) {
+                    debugLog("based on the diff amount, it was determined that the segmentLocation had to be relative, so diffX/Y are being recalibrated")
+                    diffX = segmentLocation.x
+                    diffY = segmentLocation.y
+                    debugLog("recalibrated diffX: ${diffX}, diffY: ${diffY}")
+                }
+
+                val roundedDiffX = diffX.roundToInt()
+                val roundedDiffY = diffY.roundToInt()
+
+                val scaledDiffX = (3/4f * roundedDiffX).roundToInt()
+                val scaledDiffY = (3/4f * roundedDiffY).roundToInt()
+
+                val randX = MathUtils.getRandomNumberInRange(shipLocation.x, shipLocation.x + scaledDiffX)
+                val randY = MathUtils.getRandomNumberInRange(shipLocation.y, shipLocation.y + scaledDiffY)
 
                 debugLog("generateRandomLocationOnShip()\trandX: ${randX}, randY: ${randY}")
 
