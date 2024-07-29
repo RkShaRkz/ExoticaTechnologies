@@ -280,8 +280,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             val retVal = if (segmentLocation != shipLocation) {
                 debugLog("generateRandomLocationOnShip()\tsegment location != ship location")
                 // do a random point here
-                val segmentX = segmentLocation.x / 2
-                val segmentY = segmentLocation.y / 2
+                val segmentX = segmentLocation.x
+                val segmentY = segmentLocation.y
 
                 debugLog("generateRandomLocationOnShip()\tsegmentX: ${segmentX}, segmentY: ${segmentY}")
 
