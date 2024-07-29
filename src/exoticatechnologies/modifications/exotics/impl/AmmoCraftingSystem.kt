@@ -20,6 +20,7 @@ import exoticatechnologies.util.playSound
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
+import org.lazywizard.lazylib.combat.entities.SimpleEntity
 import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
@@ -245,6 +246,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             spawnBadAfterimage()
                             spawnFailedReloadText(randomLocationOnShip)
                             playSound(RELOAD_FAIL_SOUND, ship)
+                            spawnDebugInfo(randomLocationOnShip)
                         } else {
                             // success
                             debugLog("Reloading weapons\trefill amount: ${getPeriodReloadAmount(member, mods, exoticData)}")
@@ -276,46 +278,24 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
             // Just find a point between segmentLocation and location; if they're the same point apply jittering
             val retVal = if (segmentLocation != shipLocation) {
+                debugLog("generateRandomLocationOnShip()\tsegment location != ship location")
                 // do a random point here
                 val segmentX = segmentLocation.x/2
                 val segmentY = segmentLocation.y/2
-                // Now, I don't want to use MathUtils due to their formula
-                // rng.nextFloat() * (max - min) + min;
-                // so if i just take MathUtils.getNumberInRange(-5,5) that will always end up being a non-random -5
-                val rand = Random(System.nanoTime())
-                val minX:Float
-                val maxX:Float
-                val minY:Float
-                val maxY:Float
-                if (segmentX < 0) {
-                    minX = segmentX
-                    maxX = -segmentX
-                } else {
-                    maxX = segmentX
-                    minX = -segmentX
-                }
 
-                if (segmentY < 0) {
-                    minY = segmentY
-                    maxY = -segmentY
-                } else {
-                    maxY = segmentY
-                    minY = -segmentY
-                }
+                debugLog("generateRandomLocationOnShip()\tsegmentX: ${segmentX}, segmentY: ${segmentY}")
 
-                val randX = rand.nextInt(minX.toInt(), maxX.toInt())
-                val randY = rand.nextInt(minY.toInt(), maxY.toInt())
-                //TODO on second thought, use MathUtils.getRandomNumberInRange() instead of this, it'll work fine.
+                val randX = MathUtils.getRandomNumberInRange(-segmentX, segmentX)
+                val randY = MathUtils.getRandomNumberInRange(-segmentY, segmentY)
 
-//                Vector2f(
-//                        shipLocation.x + segmentLocation.x,
-//                        shipLocation.y + segmentLocation.y
-//                )
+                debugLog("generateRandomLocationOnShip()\trandX: ${randX}, randY: ${randY}")
+
                 Vector2f(
                         shipLocation.x + randX,
                         shipLocation.y + randY
                 )
             } else {
+                debugLog("generateRandomLocationOnShip()\tsegment location == ship location")
                 // take half of ship's width/height, randomize teh values, add it to location and use that
                 val shipWidth = ship.spriteAPI.width
                 val shipHeight = ship.spriteAPI.height
@@ -324,6 +304,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
                 val randXjitter = MathUtils.getRandomNumberInRange(-shipWidth/3, shipWidth/3)
                 val randYjitter = MathUtils.getRandomNumberInRange(-shipHeight/3, shipHeight/3)
+                debugLog("generateRandomLocationOnShip()\trandXjitter: ${randXjitter}, randYjitter: ${randYjitter}")
 
                 Vector2f(
                         shipLocation.x + randXjitter,
@@ -379,6 +360,28 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     true,
                     false,
                     true
+            )
+        }
+
+        private fun spawnDebugInfo(location: Vector2f) {
+            Global
+                    .getCombatEngine()
+                    .spawnExplosion(
+                            location,
+                            Vector2f(0f,0f),
+                            Color(0x9B3707),
+                            25f,
+                            100f
+                    )
+
+            Global.getCombatEngine().addFloatingText(
+                    location,
+                    location.toString(),
+                    34f,
+                    Color.WHITE.brighter(),
+                    SimpleEntity(location),
+                    5f,
+                    calculateSystemActivationDuration(member, mods, exoticData)
             )
         }
     }
