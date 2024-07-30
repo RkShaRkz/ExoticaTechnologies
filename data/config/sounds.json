@@ -13,7 +13,8 @@
 		{"file":"sounds/ammo_creator_reload_2.ogg","pitch":1.0,"volume":1.0},
 	],
 	"ammo_creator_reload_fail":[
-		{"file":"sounds/ammo_creator_reload_fail.ogg","pitch":1,"volume":1}
+		{"file":"sounds/ammo_creator_reload_fail_1.ogg","pitch":1,"volume":1},
+		{"file":"sounds/ammo_creator_reload_fail_2.ogg","pitch":1,"volume":1}
 	],
 }
 
