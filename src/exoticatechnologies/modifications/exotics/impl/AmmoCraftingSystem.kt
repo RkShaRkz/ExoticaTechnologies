@@ -286,8 +286,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 debugLog("generateRandomLocationOnShip()\tsegmentX: ${segmentX}, segmentY: ${segmentY}")
 
                 // We are going to get a random point between the ship location (middle of the ship) and this segment X/Y one
-                var diffX = shipLocation.x - segmentLocation.x
-                var diffY = shipLocation.y - segmentLocation.y
+                var diffX = segmentLocation.x - shipLocation.x//shipLocation.x - segmentLocation.x
+                var diffY = segmentLocation.y - shipLocation.y//shipLocation.y - segmentLocation.y
                 debugLog("generateRandomLocationOnShip()\tdiffX: ${diffX}, diffY: ${diffY}")
                 // I'm going to abs this, because I don't want to care if the diff is -1300 or not, it's still larger than 1000
                 // And that's the most usual case I'm seeing, diffs that are beyond a -1000
