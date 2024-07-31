@@ -19,7 +19,7 @@ class ReloadableAmmoUsingWeapons : OperatorCondition() {
         val weaponIds = fittedWeaponSlots.map { slotId -> variant.getWeaponId(slotId) }
         val weaponSpecAPIs = weaponIds.map { weaponId -> Global.getSettings().getWeaponSpec(weaponId) }
         val reloadingAmmoUsingWeapons = weaponSpecAPIs.map { weaponSpecAPI ->
-            log("WeaponSpecAPI: ${weaponSpecAPI}\tuses ammo ? ${weaponSpecAPI.usesAmmo()}\thas NO_RELOAD tag ? ${weaponSpecAPI.hasTag(Tags.NO_RELOAD)}")
+            log("WeaponSpecAPI: ${weaponSpecAPI}, name: ${weaponSpecAPI.weaponName}\tuses ammo ? ${weaponSpecAPI.usesAmmo()}\thas NO_RELOAD tag ? ${weaponSpecAPI.hasTag(Tags.NO_RELOAD)}")
             weaponSpecAPI.usesAmmo() && !weaponSpecAPI.hasTag(Tags.NO_RELOAD)
         }
         val count = reloadingAmmoUsingWeapons.count { it }
@@ -33,10 +33,13 @@ class ReloadableAmmoUsingWeapons : OperatorCondition() {
     }
 
     private fun log(log: String) {
-        logger.info("[ReloadableAmmoUsingWeapons] $log")
+        if (DEBUG) {
+            logger.info("[ReloadableAmmoUsingWeapons] $log")
+        }
     }
 
     companion object {
+        private val DEBUG = true
         private val logger: Logger = Logger.getLogger(ReloadableAmmoUsingWeapons::class.java)
     }
 }
