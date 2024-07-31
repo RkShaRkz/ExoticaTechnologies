@@ -243,6 +243,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                     )
                             spawnBadAfterimage()
                             spawnFailedReloadText(randomLocationOnShip)
+                            spawnVisualFlair(ship, randomLocationOnShip)
                             playSound(RELOAD_FAIL_SOUND, ship)
                             spawnDebugInfo(randomLocationOnShip)
                         } else {
@@ -387,6 +388,60 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     false,
                     true
             )
+        }
+
+        private fun spawnVisualFlair(ship: ShipAPI, location: Vector2f) {
+            // We want to spawn one big arc from ship.location to location
+            // and then, do two more things:
+            // 1. spawn a smaller arc from location to rand(ship.location +/- 20)
+            // 2. spawn 5 small arcs from location to (location +/-10)
+
+            // Main arc
+            Global
+                    .getCombatEngine()
+                    .spawnEmpArcVisual(
+                            ship.location,
+                            ship,
+                            location,
+                            ship,
+                            10f,
+                            Color.BLUE.brighter(),
+                            Color.WHITE
+                    )
+
+            // Additional flair - part1: smaller arc back - from location to shipLocation +/- 20
+            Global
+                    .getCombatEngine()
+                    .spawnEmpArcVisual(
+                            location,
+                            ship,
+                            Vector2f(
+                                    ship.location.x + MathUtils.getRandomNumberInRange(-20, 20),
+                                    ship.location.y + MathUtils.getRandomNumberInRange(-20, 20)
+                            ),
+                            ship,
+                            6f,
+                            Color.BLUE.darker().darker(),
+                            Color.WHITE
+                    )
+
+            // Additional flair - part2: cluster arc around location - from location to location +/- 20
+            for (counter in 1..5) {
+                Global
+                        .getCombatEngine()
+                        .spawnEmpArcVisual(
+                                location,
+                                ship,
+                                Vector2f(
+                                        location.x + 5 + MathUtils.getRandomNumberInRange(-10, 10),
+                                        location.y + 5 + MathUtils.getRandomNumberInRange(-10, 10)
+                                ),
+                                ship,
+                                3f,
+                                Color.BLUE.brighter().brighter(),
+                                Color.WHITE
+                        )
+            }
         }
 
         private fun spawnDebugInfo(location: Vector2f) {
