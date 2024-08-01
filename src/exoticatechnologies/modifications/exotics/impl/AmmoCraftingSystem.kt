@@ -152,11 +152,13 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
     }
 
     private fun reloadWeapon(weapon: WeaponAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData) {
+        debugLog("--> reloadWeapon()\tweapon name: ${weapon.displayName}, weapon max ammo: ${weapon.ammoTracker.maxAmmo}\tweapon current ammo: ${weapon.ammoTracker.ammo}")
         val reloadAmount = max(
                 1f, weapon.ammoTracker.maxAmmo * getPeriodReloadAmount(member = member, mods = mods, exoticData = exoticData)
         ).roundToInt()  // 1 ammo or 10% of maxAmmo, whichever is higher - 10% of 8 is 0.8 so we want to reload at least 1 bullet in that case
 
         weapon.ammoTracker.ammo = min(weapon.ammoTracker.maxAmmo, weapon.ammoTracker.ammo + reloadAmount)
+        debugLog("<-- reloadWeapon()\tweapon current ammo: ${weapon.ammoTracker.ammo}\treloadAmount: ${reloadAmount}")
     }
 
     inner class AmmoCreator(
