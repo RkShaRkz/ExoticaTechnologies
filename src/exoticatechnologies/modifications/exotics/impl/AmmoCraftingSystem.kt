@@ -486,8 +486,8 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         private const val RELOADING_FAIL_CHANCE_PERCENT = 30                //30%
 
         private const val RELOADING_FAILS_CAUSE_DAMAGE = true
-        private const val RELOADING_FAILS_CAUSE_DAMAGE_MIN_DAMAGE = 10f
-        private const val RELOADING_FAILS_CAUSE_DAMAGE_MAX_DAMAGE = 100f
+        private const val RELOADING_FAILS_CAUSE_DAMAGE_MIN_DAMAGE = 100f
+        private const val RELOADING_FAILS_CAUSE_DAMAGE_MAX_DAMAGE = 400f
         private const val MIN_NONFULL_WEAPONS_NEEDED_FOR_ACTIVATION = 1
 
         private const val BASE_COOLDOWN_DURATION_IN_SECONDS = 60            //60secs
