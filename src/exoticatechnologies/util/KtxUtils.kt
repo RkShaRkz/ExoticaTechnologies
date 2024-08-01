@@ -24,20 +24,18 @@ fun playSound(soundId: String, ship: ShipAPI, pitch: Float = 1.0f, volume: Float
  * walk through all segments and return *all* weapons on the ship
  */
 fun getAllShipWeapons(ship: ShipAPI): List<WeaponAPI> {
-    AnonymousLogger.log("--> getAllShipWeapons()\tship: ${ship}\tship hullspec hullname: ${ship.hullSpec.hullName}\tship childModulesCopy size: ${ship.childModulesCopy.size}\tis ship with modules: ${ship.isShipWithModules}")
+//    AnonymousLogger.log("--> getAllShipWeapons()\tship: ${ship}\tship hullspec hullname: ${ship.hullSpec.hullName}\tship childModulesCopy size: ${ship.childModulesCopy.size}\tis ship with modules: ${ship.isShipWithModules}")
     val weaponList: MutableList<WeaponAPI> = mutableListOf()
     weaponList.addAll(ship.allWeapons)
-    AnonymousLogger.log("getAllShipWeapons()\tship: ${ship}\tship's all weapons: ${ship.allWeapons.map { weapon -> weapon.id }}")
-    AnonymousLogger.log("getAllShipWeapons()\tship.variant.stationModules.size: ${ship.variant.stationModules.size}")
+//    AnonymousLogger.log("getAllShipWeapons()\tship: ${ship}\tship's all weapons: ${ship.allWeapons.map { weapon -> weapon.id }}")
+//    AnonymousLogger.log("getAllShipWeapons()\tship.variant.stationModules.size: ${ship.variant.stationModules.size}")
     if (ship.childModulesCopy.isNotEmpty()) {
         for (module in ship.childModulesCopy) {
-            AnonymousLogger.log("getAllShipWeapons()\tmodule: ${module}\tmodule name: ${module.name}\tmodule hullspec hullname: ${module.hullSpec.hullName}\tmodule's all weapons: ${module.allWeapons.map { weapon -> weapon.id }}")
+//            AnonymousLogger.log("getAllShipWeapons()\tmodule: ${module}\tmodule name: ${module.name}\tmodule hullspec hullname: ${module.hullSpec.hullName}\tmodule's all weapons: ${module.allWeapons.map { weapon -> weapon.id }}")
             weaponList.addAll(module.allWeapons)
         }
     }
-    AnonymousLogger.log("<-- getAllShipWeapons()\treturning ${weaponList.map {weapon -> weapon.id} }")
-
-
+//    AnonymousLogger.log("<-- getAllShipWeapons()\treturning ${weaponList.map {weapon -> weapon.id} }")
 
     return weaponList
 }
