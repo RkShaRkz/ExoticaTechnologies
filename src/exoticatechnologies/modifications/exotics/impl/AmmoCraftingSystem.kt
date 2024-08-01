@@ -28,7 +28,6 @@ import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -178,16 +177,17 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
         override fun getBaseCooldownDuration(): Float = calculateSystemCooldownDuration(member, mods, exoticData)
 
         override fun shouldActivateAI(amount: Float): Boolean {
-            // This one is simple, if we have at least two weapons that aren't on max ammo - we should turn it on
-            var weaponsNotOnFullAmmo = 0
+            // This one is simple, if we have at least one weapon that's <=25% ammo - we should turn it on
+            // NOTE: this used to be at least two non-full weapons
+            var weaponsOnLessThanQuarterAmmo = 0
             for (weapon in affectedWeapons) {
-                if (weapon.ammoTracker.ammo < weapon.ammoTracker.maxAmmo) {
-                    weaponsNotOnFullAmmo++
+                if (weapon.ammoTracker.ammo <= weapon.ammoTracker.maxAmmo * 0.25f) {
+                    weaponsOnLessThanQuarterAmmo++
                 }
-                if (weaponsNotOnFullAmmo >= MIN_NONFULL_WEAPONS_NEEDED_FOR_ACTIVATION + 1) break
+                if (weaponsOnLessThanQuarterAmmo >= MIN_NONFULL_WEAPONS_NEEDED_FOR_ACTIVATION + 1) break
             }
 
-            return weaponsNotOnFullAmmo >= MIN_NONFULL_WEAPONS_NEEDED_FOR_ACTIVATION
+            return weaponsOnLessThanQuarterAmmo >= MIN_NONFULL_WEAPONS_NEEDED_FOR_ACTIVATION
         }
 
         override fun getDisplayText() = "Ammo Crafting System"
