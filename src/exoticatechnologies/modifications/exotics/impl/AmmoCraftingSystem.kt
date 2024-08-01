@@ -310,10 +310,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 )
 
                 // Check if it's actually on the ship, recalibrate otherwise
-                if (CollisionUtils.isPointWithinBounds(candidate, ship)) {
-                    // great, return that
-                    candidate
-                } else {
+                if (!CollisionUtils.isPointWithinBounds(candidate, ship)) {
                     // it's out-of-bounds, get something that's within bounds instead
                     candidate = CollisionUtils.getNearestPointOnBounds(candidate, ship)
                     debugLog("generateRandomLocationOnShip()\tcandidate was out-of-bounds, recalibrated to: ${candidate}")
