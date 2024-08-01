@@ -19,6 +19,8 @@ import exoticatechnologies.util.Utilities
 import exoticatechnologies.util.playSound
 import org.apache.log4j.Logger
 import org.json.JSONObject
+import org.lazywizard.lazylib.CollisionUtils
+import org.lazywizard.lazylib.LazyLib
 import org.lazywizard.lazylib.MathUtils
 import org.lazywizard.lazylib.combat.entities.SimpleEntity
 import org.lwjgl.util.vector.Vector2f
@@ -206,7 +208,6 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             super.advance(amount, isPaused)
 
             if (!isPaused) {
-
                 if (systemActivated.get()) {
                     timeCounter.advance(amount)
                     if (timeCounter.intervalElapsed()) {
@@ -265,6 +266,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             val shipLocation = ship.location
             debugLog("--> generateRandomLocationOnShip()\tshipLocation: ${shipLocation}\tship name: ${ship.name}")
             debugLog("generateRandomLocationOnShip()\tship sprite width: ${ship.spriteAPI.width}, height: ${ship.spriteAPI.height}")
+            ship.exactBounds.update(ship.location, ship.facing)
             // First things first, lets grab a random location on the ship
             val segmentLocation = if (ship.exactBounds != null) {
                 debugLog("generateRandomLocationOnShip()\tsegments size: ${ship.exactBounds.segments.size}")
@@ -286,9 +288,10 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 debugLog("generateRandomLocationOnShip()\tsegmentX: ${segmentX}, segmentY: ${segmentY}")
 
                 // We are going to get a random point between the ship location (middle of the ship) and this segment X/Y one
-                var diffX = segmentLocation.x - shipLocation.x//shipLocation.x - segmentLocation.x
-                var diffY = segmentLocation.y - shipLocation.y//shipLocation.y - segmentLocation.y
+                val diffX = segmentLocation.x - shipLocation.x//shipLocation.x - segmentLocation.x
+                val diffY = segmentLocation.y - shipLocation.y//shipLocation.y - segmentLocation.y
                 debugLog("generateRandomLocationOnShip()\tdiffX: ${diffX}, diffY: ${diffY}")
+                /*
                 // I'm going to abs this, because I don't want to care if the diff is -1300 or not, it's still larger than 1000
                 // And that's the most usual case I'm seeing, diffs that are beyond a -1000
                 val relativeLocation = if (abs(diffX) > 1000 || abs(diffY) > 1000) {
@@ -304,9 +307,11 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     diffY = segmentLocation.y
                     debugLog("recalibrated diffX: ${diffX}, diffY: ${diffY}")
                 }
+                 */
 
                 val roundedDiffX = diffX.roundToInt()
                 val roundedDiffY = diffY.roundToInt()
+                LazyLib.getSupportedGameVersion()
 
                 val scaledDiffX = (3/4f * roundedDiffX).roundToInt()
                 val scaledDiffY = (3/4f * roundedDiffY).roundToInt()
@@ -316,10 +321,23 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
                 debugLog("generateRandomLocationOnShip()\trandX: ${randX}, randY: ${randY}")
 
-                Vector2f(
+                var candidate = Vector2f(
                         randX,
                         randY
                 )
+
+                // Check if it's actually on the ship, recalibrate otherwise
+                if (CollisionUtils.isPointWithinBounds(candidate, ship)) {
+                    // great, return that
+                    candidate
+                } else {
+                    // it's out-of-bounds, get something that's within bounds instead
+                    candidate = CollisionUtils.getNearestPointOnBounds(candidate, ship)
+                    debugLog("generateRandomLocationOnShip()\tcandidate was out-of-bounds, recalibrated to: ${candidate}")
+                }
+
+                // return the candidate
+                candidate
             } else {
                 debugLog("generateRandomLocationOnShip()\tsegment location == ship location")
                 // take half of ship's width/height, randomize teh values, add it to location and use that
