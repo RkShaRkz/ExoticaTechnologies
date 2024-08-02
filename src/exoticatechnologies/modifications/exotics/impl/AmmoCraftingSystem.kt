@@ -375,7 +375,7 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         private fun spawnBadAfterimage() {
             ship.addAfterimage(
-                    Color(0x4F3352),//Color(0x36454F)//Color(0x2D2A2A),
+                    Color(0x4F3352),
                     0f,
                     0f,
                     0f,
