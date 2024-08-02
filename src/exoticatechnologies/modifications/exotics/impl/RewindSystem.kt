@@ -20,6 +20,7 @@ import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.datastructures.RingBuffer
+import exoticatechnologies.util.playSound
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.combat.entities.SimpleEntity
@@ -287,7 +288,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                             deploySavedState(rewindCandidate.get())
                             rewindCandidate = Optional.empty()
                             performedTeleport.compareAndSet(false, true)
-                            playSound(SHIP_TELEPORTED_SOUND)
+                            playSound(SHIP_TELEPORTED_SOUND, ship)
                         } else {
                             logger.error("rewindCandidate was not present in teleportTimer part for deploying the rewind candidate!!!")
                         }
@@ -302,7 +303,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                         deploySavedState(rewindCandidate.get())
                         rewindCandidate = Optional.empty()
                         justTurnedOff.compareAndSet(true, false)
-                        playSound(SHIP_TELEPORTED_SOUND)
+                        playSound(SHIP_TELEPORTED_SOUND, ship)
                     } else {
                         logger.error("rewindCandidate was not present in fallback part after justTurnedOff and not teleported!!!")
                     }
@@ -317,16 +318,6 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             }
         }
 
-        private fun playSound(soundId: String) {
-            Global.getSoundPlayer().playSound(
-                    soundId,
-                    1.0f,
-                    1.0f,
-                    ship.location,
-                    ship.velocity
-            )
-        }
-
         /**
          * Sets the [systemActivated] atomic boolean only if it's unset, and marks the activation time.
          * Also plays the "system_phase_teleporter" sound
@@ -334,7 +325,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         private fun turnOnSystem() {
             systemActivated.compareAndSet(false, true)
             activationTime = timeElapsed;
-            playSound(SYSTEM_ACTIVATION_SOUND)
+            playSound(SYSTEM_ACTIVATION_SOUND, ship)
         }
 
         /**
