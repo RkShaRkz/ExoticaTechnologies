@@ -170,30 +170,6 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 shieldController.controlShield(amount)
                 shieldController.shieldPushOutEffect(amount)
                 shieldController.transferFlux(amount, workingMode = FluxTransferMode.ONE_WAY, transfer = USE_TRANSFER)
-
-                // Try to tackle the problematic case of the ship retreating and the shield drone remaining while still
-                // hosting the shield somewhere
-                if (Global.getCombatEngine().isEntityInPlay(ship).not()) {
-                    drone?.let { Global.getCombatEngine().removeEntity(it) }
-                }
-                // Also check if the ship is in the retreated ships list
-                val enemyRetreatedShips = Global.getCombatEngine().getFleetManager(FleetSide.ENEMY).retreatedCopy
-                val playerRetreatedShips = Global.getCombatEngine().getFleetManager(FleetSide.PLAYER).retreatedCopy
-                if (enemyRetreatedShips.contains<Any?>(ship)) {
-                    drone?.let { Global.getCombatEngine().removeEntity(it) }
-                }
-                if (playerRetreatedShips.contains<Any?>(ship)) {
-                    drone?.let { Global.getCombatEngine().removeEntity(it) }
-                }
-            }
-        }
-
-        override fun dronesExplodeWhenShipDies() = true
-
-        override fun onShipDeath() {
-            super.onShipDeath()
-            drone?.let {
-                Global.getCombatEngine().removeEntity(it)
             }
         }
 
