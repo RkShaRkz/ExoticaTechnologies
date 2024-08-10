@@ -9,6 +9,8 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
+import exoticatechnologies.combat.ExoticaEveryFramePlugin
+import exoticatechnologies.combat.ExoticaShipRemovalReason
 import exoticatechnologies.modifications.Modification
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.conditions.toList
@@ -150,6 +152,9 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
     ) {
     }
 
+    /**
+     * Will be called by [ExoticaEveryFramePlugin] while the [ship] is active in combat (present and alive)
+     */
     open fun advanceInCombatAlways(
         ship: ShipAPI,
         member: FleetMemberAPI,
@@ -217,6 +222,25 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
         exoticData: ExoticData,
         expand: Boolean
     )
+
+    open fun onOwnerShipRemovedFromCombat(
+            ship: ShipAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData,
+            reason: ExoticaShipRemovalReason
+    ) {
+
+    }
+
+    open fun onOwnerShipEnteredCombat(
+            ship: ShipAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
+    ) {
+
+    }
 
     /**
      * Base price of this exotic system in the Exotica planet/station options.
