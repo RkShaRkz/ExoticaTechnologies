@@ -7,6 +7,8 @@ import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
+import exoticatechnologies.combat.ExoticaEveryFramePlugin
+import exoticatechnologies.combat.ExoticaShipRemovalReason
 import exoticatechnologies.modifications.Modification
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.conditions.toList
@@ -145,6 +147,9 @@ open class Upgrade(key: String, settings: JSONObject) : Modification(key, settin
         }
     }
 
+    /**
+     * Will be called by [ExoticaEveryFramePlugin] while the [ship] is active in combat (present and alive)
+     */
     open fun advanceInCombatAlways(ship: ShipAPI, member: FleetMemberAPI, mods: ShipModifications) {
         for (effect in upgradeEffects) {
             effect.advanceInCombatAlways(ship, member, mods, this)
@@ -249,6 +254,30 @@ open class Upgrade(key: String, settings: JSONObject) : Modification(key, settin
 
     fun getCreditCostForResources(level: Int): Int {
         return getCreditCostForResources(getResourceCosts(level))
+    }
+
+    /**
+     * Called when the ship hosting this [Upgrade] leaves or is removed from combat, either by retreating or dying.
+     */
+    open fun onOwnerShipRemovedFromCombat(
+            ship: ShipAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            reason: ExoticaShipRemovalReason
+    ) {
+
+    }
+
+    /**
+     * Called when the ship hosting this [Upgrade] enters combat.
+     * Should be called only once per ship.
+     */
+    open fun onOwnerShipEnteredCombat(
+            ship: ShipAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications
+    ) {
+
     }
 
     /**

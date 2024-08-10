@@ -11,6 +11,7 @@ import com.fs.starfarer.api.ui.UIPanelAPI
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.util.reflect.ReflectionUtils
+import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.lazywizard.lazylib.VectorUtils
 import org.lwjgl.util.vector.Vector2f
@@ -131,6 +132,10 @@ fun playSound(soundId: String, ship: ShipAPI, pitch: Float = 1.0f, volume: Float
     )
 }
 
+fun getNamesOfShipsInListOfShips(shipList: List<ShipAPI>): List<String> {
+    return shipList.map { ship -> ship.name }
+}
+
 /**
  * For simple ships, this is exactly the same as [ShipAPI.getAllWeapons] but for multi-segmented ships, it will
  * walk through all segments and return *all* weapons on the ship
@@ -153,6 +158,20 @@ fun getAllShipWeapons(ship: ShipAPI): List<WeaponAPI> {
 }
 val <T> T.exhaustive: T
     get() = this
+
+fun log(logMsg: String, logger: Logger, logLevel: Level = Level.DEBUG) {
+    with(logger) {
+        when (logLevel) {
+            Level.DEBUG -> this.debug(logMsg)
+            Level.INFO -> this.info(logMsg)
+            Level.WARN -> this.warn(logMsg)
+            Level.ERROR -> this.error(logMsg)
+            Level.FATAL -> this.fatal(logMsg)
+
+            else -> { /* do nothing */ }
+        }.exhaustive
+    }
+}
 
 object AnonymousLogger {
     private val logger: Logger = Logger.getLogger(AnonymousLogger::class.java)

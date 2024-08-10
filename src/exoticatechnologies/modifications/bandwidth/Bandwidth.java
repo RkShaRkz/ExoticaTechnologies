@@ -10,8 +10,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-//@Log4j
-//@RequiredArgsConstructor
 public enum Bandwidth {
     TERRIBLE(0f, "terrible", new Color(200, 100, 100), 50),
     CRUDE(50f, "crude", new Color(200, 150, 100), 60),

@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-//@Log4j
 public class ExoticaTechHM extends BaseHullMod {
     private static final Color hullmodColor = new Color(94, 206, 226);
     private static final Logger log = Logger.getLogger(ExoticaTechHM.class);

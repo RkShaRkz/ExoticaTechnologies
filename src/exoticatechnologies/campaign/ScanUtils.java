@@ -33,7 +33,6 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
-//@Log4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ScanUtils {
     private static final float NOTABLE_BANDWIDTH = 180f;
