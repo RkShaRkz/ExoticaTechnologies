@@ -200,7 +200,7 @@ open class Upgrade(key: String, settings: JSONObject) : Modification(key, settin
             val levelList: MutableList<UpgradeModEffect> = levelToEffectMap.getOrPut(startingLevel) { mutableListOf() }
             levelList.add(effect)
         }
-        for (startingLevel in 0 until maxLevel) {
+        for (startingLevel in 0 .. maxLevel) {
             if (levelToEffectMap.containsKey(startingLevel)) {
                 val levelList: List<UpgradeModEffect> = levelToEffectMap[startingLevel]!!
                 if (startingLevel > 1) {
