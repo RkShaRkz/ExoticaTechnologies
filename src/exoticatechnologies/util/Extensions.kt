@@ -151,6 +151,8 @@ fun getAllShipWeapons(ship: ShipAPI): List<WeaponAPI> {
 
     return weaponList
 }
+val <T> T.exhaustive: T
+    get() = this
 
 object AnonymousLogger {
     private val logger: Logger = Logger.getLogger(AnonymousLogger::class.java)

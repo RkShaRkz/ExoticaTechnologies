@@ -20,7 +20,7 @@ import java.awt.Color
 import java.util.*
 
 /**
- * Base class for [Exotic] systems wrapped in a chip item
+ * Base class for [Upgrade]s wrapped in a chip item
  *
  * @see upgrade
  * @see upgradeLevel
