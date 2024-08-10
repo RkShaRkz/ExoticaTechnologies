@@ -8,7 +8,6 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ModSpecialItemPlugin
 import exoticatechnologies.modifications.exotics.Exotic
-import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.modifications.exotics.ExoticSpecialItemPlugin
 import exoticatechnologies.modifications.upgrades.Upgrade
 import exoticatechnologies.modifications.upgrades.UpgradeSpecialItemPlugin
@@ -71,6 +70,8 @@ class MarketCargoListener(val dialog: InteractionDialogAPI, val marketData: Mark
             return
         }
 
+        // Otherwise, remove the items from the market, add them to the player's inventory
+        // and deduce the necessary amount of credits, along with showing the total in the panel
         marketData.cargo.removeAll(cargo)
         Global.getSector().playerFleet.cargo.addAll(cargo)
         Global.getSector().playerFleet.cargo.credits.subtract(bounty)
@@ -120,13 +121,7 @@ class MarketCargoListener(val dialog: InteractionDialogAPI, val marketData: Mark
         val retVal = mutableListOf<ModSpecialItemPlugin>()
         for (stack in cargo.stacksCopy) {
             val plugin = stack.plugin
-            // Since the stack.plugin is a SpecialItemPlugin, which is a superclass of the ModSpecialItemPlugin's
-            // superclass, we just have to do it like this
-            if (plugin is UpgradeSpecialItemPlugin) {
-                retVal.add(plugin)
-            } else if (plugin is ExoticSpecialItemPlugin) {
-                retVal.add(plugin)
-            }
+            retVal.add(plugin as ModSpecialItemPlugin)
         }
 
         return retVal
