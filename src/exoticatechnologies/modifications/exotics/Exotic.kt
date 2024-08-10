@@ -230,5 +230,9 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
         }
 
         public const val DEFAULT_BASE_PRICE = 250000
+
+        fun getNewSpecialItemData(key:String, exoticType: ExoticType): SpecialItemData {
+            return SpecialItemData(ITEM, String.format("%s,%s", key, exoticType.nameKey))
+        }
     }
 }

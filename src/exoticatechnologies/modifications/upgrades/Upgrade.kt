@@ -274,5 +274,9 @@ open class Upgrade(key: String, settings: JSONObject) : Modification(key, settin
         operator fun get(upgradeKey: String?): Upgrade {
             return UpgradesHandler.UPGRADES[upgradeKey]!!
         }
+
+        fun getNewSpecialItemData(key: String, level: Int): SpecialItemData {
+            return SpecialItemData(ITEM, String.format("%s,%s", key, level))
+        }
     }
 }
