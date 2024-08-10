@@ -10,6 +10,7 @@ import com.fs.starfarer.api.mission.FleetSide
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.IntervalUtil
+import exoticatechnologies.combat.ExoticaShipRemovalReason
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
@@ -26,6 +27,7 @@ import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystemsManager
 import org.magiclib.subsystems.drones.MagicDroneSubsystem
 import java.awt.Color
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.min
 
@@ -34,6 +36,13 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
     override var color = Color(0xD93636)
     private lateinit var originalShip: ShipAPI
     private lateinit var originalOwnersShield: ShieldAPI
+    private lateinit var subsystem: GuardianShieldDrone
+
+    /**
+     * This flag is used to handle edge-case when a ship with a turned-on GuardianShield retreats and the shield just
+     * remains floating around the map
+     */
+    private val systemDeactivatedForGood = AtomicBoolean(false)
 
     private val logger: Logger = Logger.getLogger(GuardianShieldDrone::class.java)
 
@@ -73,7 +82,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         ship.setShield(ShieldAPI.ShieldType.NONE, 0f, 0f, 0f)
 
         // Secondly, give the ship a new subsystem to summon a drone hosting the Guardian Shield that will follow the ship around
-        val subsystem = GuardianShieldDrone(ship)
+        subsystem = GuardianShieldDrone(ship)
         subsystem.setDronesToSpawn(1)
         MagicSubsystemsManager.addSubsystemToShip(ship, subsystem)
     }
@@ -90,6 +99,25 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     originalOwnersShield.arc
             )
         }
+    }
+
+    override fun onOwnerShipRemovedFromCombat(ship: ShipAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData, reason: ExoticaShipRemovalReason) {
+        super.onOwnerShipRemovedFromCombat(ship, member, mods, exoticData, reason)
+
+        log("--> onOwnerShipRemovedFromCombat(ship=$ship, member=$member, mods=$mods, exoticData=$exoticData, reason=$reason)")
+        if (::subsystem.isInitialized) {
+            log("ship was removed from combat, removing shield drone")
+            subsystem.removeDroneAndDeactivateForGood()
+        }
+    }
+
+    override fun onOwnerShipEnteredCombat(ship: ShipAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData) {
+        super.onOwnerShipEnteredCombat(ship, member, mods, exoticData)
+
+        log("--> onOwnerShipEnteredCombat(ship=$ship, member=$member, mods=$mods, exoticData=$exoticData)\t\tsystemDeactivatedForGood: ${systemDeactivatedForGood.get()}")
+        systemDeactivatedForGood.set(false)
+
+        log("<-- onOwnerShipEnteredCombat()\t\tsystemDeactivatedForGood: ${systemDeactivatedForGood.get()}")
     }
 
     inner class GuardianShieldDrone(ship: ShipAPI) : MagicDroneSubsystem(ship) {
@@ -125,6 +153,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         override fun requiresTarget(): Boolean = false
 
         override fun shouldActivateAI(amount: Float): Boolean {
+            if (systemDeactivatedForGood.get()) return false
+
             if (engine.isPaused) {
                 return false
             }
@@ -170,21 +200,6 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 shieldController.controlShield(amount)
                 shieldController.shieldPushOutEffect(amount)
                 shieldController.transferFlux(amount, workingMode = FluxTransferMode.ONE_WAY, transfer = USE_TRANSFER)
-
-                // Try to tackle the problematic case of the ship retreating and the shield drone remaining while still
-                // hosting the shield somewhere
-                if (Global.getCombatEngine().isEntityInPlay(ship).not()) {
-                    drone?.let { Global.getCombatEngine().removeEntity(it) }
-                }
-                // Also check if the ship is in the retreated ships list
-                val enemyRetreatedShips = Global.getCombatEngine().getFleetManager(FleetSide.ENEMY).retreatedCopy
-                val playerRetreatedShips = Global.getCombatEngine().getFleetManager(FleetSide.PLAYER).retreatedCopy
-                if (enemyRetreatedShips.contains<Any?>(ship)) {
-                    drone?.let { Global.getCombatEngine().removeEntity(it) }
-                }
-                if (playerRetreatedShips.contains<Any?>(ship)) {
-                    drone?.let { Global.getCombatEngine().removeEntity(it) }
-                }
             }
         }
 
@@ -198,6 +213,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         }
 
         private fun systemOn() {
+            // If system was deactivated for good, never turn on anymore
+            if (systemDeactivatedForGood.get()) return
             // Enable turning the shield on *only* if neither the drone nor the host ship are overloaded or venting
             //
             // Had to be added because the shield was "flashing" / "flickering" (tried turning on before cancelling)
@@ -231,6 +248,17 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     ship.mutableStats.hardFluxDissipationFraction.unmodify(GUARDIAN_SHIELD_HARDFLUX_DISSIPATION_DEBUFF_ID)
                 }
             }
+        }
+
+        public fun removeDroneAndDeactivateForGood() {
+            log("--> removeDrone()\tdrone: ${drone}\tsystemDeactivatedForGood: ${systemDeactivatedForGood.get()}")
+            drone?.let {
+                systemDeactivatedForGood.compareAndSet(false, true)
+                systemOff()
+                Global.getCombatEngine().removeEntity(it)
+            }
+            drone = null
+            log("<-- removeDrone()\tdrone: ${drone}\tsystemDeactivatedForGood: ${systemDeactivatedForGood.get()}")
         }
 
         override fun spawnDrone(): ShipAPI {
