@@ -18,7 +18,6 @@ import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.ui.impl.shop.exotics.methods.ExoticMethod
 import exoticatechnologies.util.StringUtils
 import org.json.JSONObject
-import java.util.*
 
 /**
  * Abstract base class for all Exotic systems in the ExoticaTech mod.
@@ -223,6 +222,9 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
         expand: Boolean
     )
 
+    /**
+     * Called when the ship hosting this [Exotic] leaves or is removed from combat, either by retreating or dying.
+     */
     open fun onOwnerShipRemovedFromCombat(
             ship: ShipAPI,
             member: FleetMemberAPI,
@@ -233,6 +235,10 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
 
     }
 
+    /**
+     * Called when the ship hosting this [Exotic] enters combat.
+     * Should be called only once per ship.
+     */
     open fun onOwnerShipEnteredCombat(
             ship: ShipAPI,
             member: FleetMemberAPI,
