@@ -13,6 +13,7 @@ import exoticatechnologies.modifications.exotics.Exotic;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
 import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
+import exoticatechnologies.util.AnonymousLogger;
 import exoticatechnologies.util.ExtensionsKt;
 import exoticatechnologies.util.FleetMemberUtils;
 import lombok.extern.log4j.Log4j;
@@ -28,6 +29,7 @@ public class ExoticaTechHM extends BaseHullMod {
     private static final Logger log = Logger.getLogger(ExoticaTechHM.class);
 
     public static void addToFleetMember(FleetMemberAPI member, ShipVariantAPI variant) {
+        AnonymousLogger.INSTANCE.log("--> addToFleetMember(member="+member+", variant="+variant+")");
         if (variant == null) {
             return;
         }
@@ -38,6 +40,7 @@ public class ExoticaTechHM extends BaseHullMod {
             variant.removePermaMod("exoticatech");
         }
 
+        AnonymousLogger.INSTANCE.log("addToFleetMember()\t\tmods: "+mods+", mods.shouldApplyHullmod() ? "+mods.shouldApplyHullmod());
         if (mods.shouldApplyHullmod()) {
 
             ExtensionsKt.fixVariant(member);
@@ -45,6 +48,8 @@ public class ExoticaTechHM extends BaseHullMod {
 
             member.updateStats();
         }
+
+        AnonymousLogger.INSTANCE.log("<-- addToFleetMember()\t\tmember variant has exoticatech hullmod ? "+member.getVariant().getHullMods().contains("exoticatech")+"\tvariant has exoticatech hullmod ? "+variant.getHullMods().contains("exoticatech"));
     }
 
     public static void addToFleetMember(FleetMemberAPI member) {
@@ -162,6 +167,7 @@ public class ExoticaTechHM extends BaseHullMod {
 
     @Override
     public void applyEffectsAfterShipCreation(ShipAPI ship, String id) {
+        AnonymousLogger.INSTANCE.log("--> applyEffectsAfterShipCreation(ship: "+ship+", id: "+id+")\t\tship name: "+ship.getName()+"\t\tship.childModulesCopy: "+ship.getChildModulesCopy(), "ExoticaTechHM");
         FleetMemberAPI member = FleetMemberUtils.findMemberFromShip(ship);
         if (member == null) return;
 

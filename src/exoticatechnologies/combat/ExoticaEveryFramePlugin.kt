@@ -8,6 +8,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.input.InputEventAPI
 import com.fs.starfarer.api.mission.FleetSide
 import exoticatechnologies.combat.particles.ParticleController
+import exoticatechnologies.hullmods.ExoticaTechHM
 import exoticatechnologies.modifications.Modification
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
@@ -17,6 +18,7 @@ import exoticatechnologies.modifications.exotics.ExoticsHandler
 import exoticatechnologies.modifications.upgrades.Upgrade
 import exoticatechnologies.modifications.upgrades.UpgradesHandler
 import exoticatechnologies.util.AnonymousLogger
+import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.getNamesOfShipsInListOfShips
 
 class ExoticaEveryFramePlugin :
@@ -49,6 +51,33 @@ class ExoticaEveryFramePlugin :
             val newShips = ships.filterNotNull().filter { it !in listOfShips }
             for (ship in newShips) {
                 handleNewShip(ship)
+            }
+        }
+
+        for (ship in ships) {
+            ship?.let {
+                if (it.childModulesCopy.isNotEmpty()) {
+                    AnonymousLogger.log("ship: ${ship}\t\tship name: ${ship.name}\t\tship.childModulesCopy: ${ship.childModulesCopy}")
+                    AnonymousLogger.log("ship variant hullmods: ${ship.variant.hullMods}")
+
+                    for (module in it.childModulesCopy) {
+                        AnonymousLogger.log("module: ${module}\t\tmodule name: ${module.name}\t\tmodule.childModulesCopy: ${module.childModulesCopy}\t\tmodule parentStation: ${module.parentStation}")
+                        AnonymousLogger.log("module variant hullmods: ${module.variant.hullMods}")
+
+                        // If the parent station has "exoticatech" hullmod, also install it on this module too.
+                        if (module.variant.hullMods.contains("exoticatech")) {
+                            AnonymousLogger.log("module ${module} has 'exoticatech' hullmod, doing nothing")
+                        } else {
+                            AnonymousLogger.log("module ${module} doesn't nave 'exoticatech' hullmod, adding it\t\tparentStation contains exoticatech ? ${module.parentStation.variant.hullMods.contains("exoticatech")}")
+                            if (module.parentStation.variant.hullMods.contains("exoticatech")) {
+                                // If parent has exoticatech, install it on the submodule too
+                                ExoticaTechHM.addToFleetMember(module.fleetMember)
+
+                            }
+                            AnonymousLogger.log("module ${module} contains 'exoticatech' hullmod ? ${module.variant.hullMods.contains("exoticatech")}")
+                        }
+                    }
+                }
             }
         }
 
