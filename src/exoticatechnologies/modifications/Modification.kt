@@ -7,9 +7,12 @@ import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
+import exoticatechnologies.hullmods.ExoticaTechHM
 import exoticatechnologies.modifications.conditions.Condition
 import exoticatechnologies.modifications.conditions.ConditionDict
 import exoticatechnologies.modifications.conditions.toList
+import exoticatechnologies.modifications.exotics.Exotic
+import exoticatechnologies.modifications.upgrades.Upgrade
 import org.apache.log4j.Logger
 import org.jetbrains.annotations.Nullable
 import org.json.JSONObject
@@ -122,7 +125,17 @@ abstract class Modification(val key: String, val settings: JSONObject) {
      * Whether the modification is installable in non-main modules for multi-module ships,
      * and whether it should apply it's effects to all other modules.
      *
-     * This version is called in [BaseHullMod.applyEffectsBeforeShipCreation]
+     * This version is called in [ExoticaTechHM]'s [BaseHullMod.applyEffectsBeforeShipCreation]
+     *
+     * This call determines whether the following methods will be called on modules:
+     * - [Exotic.advanceInCombatUnpaused]
+     * - [Exotic.applyExoticToStats]
+     * - [Exotic.applyToShip]
+     * - [Exotic.applyToFighters]
+     * - [Upgrade.advanceInCombatUnpaused]
+     * - [Upgrade.applyUpgradeToStats]
+     * - [Upgrade.applyToShip]
+     * - [Upgrade.applyToFighters]
      *
      * **NOTE** A certain false-positive can be observed when playing in 'simulation' mode vs actual combat;
      * namely, while a mod installed on a module (in a multi-module environment) will affect only the module it's
@@ -140,7 +153,9 @@ abstract class Modification(val key: String, val settings: JSONObject) {
      * Whether the modification is installable in non-main modules for multi-module ships,
      * and whether it should apply it's effects to all other modules.
      *
-     * This version is called in [BaseHullMod.applyEffectsAfterShipCreation]
+     * This version is called in [ExoticaTechHM]'s [BaseHullMod.applyEffectsAfterShipCreation],
+     * and is used mainly to determine whether [Exotic.applyExoticToStats] and [Upgrade.applyUpgradeToStats]
+     * are called on modules
      *
      * **NOTE** A certain false-positive can be observed when playing in 'simulation' mode vs actual combat;
      * namely, while a mod installed on a module (in a multi-module environment) will affect only the module it's

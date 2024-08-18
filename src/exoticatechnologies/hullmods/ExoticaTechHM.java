@@ -3,9 +3,13 @@ package exoticatechnologies.hullmods;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.BattleAPI;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
-import com.fs.starfarer.api.combat.*;
+import com.fs.starfarer.api.combat.BaseHullMod;
+import com.fs.starfarer.api.combat.MutableShipStatsAPI;
+import com.fs.starfarer.api.combat.ShipAPI;
+import com.fs.starfarer.api.combat.ShipVariantAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
+import exoticatechnologies.modifications.Modification;
 import exoticatechnologies.modifications.ShipModFactory;
 import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.ShipModifications;
@@ -15,7 +19,6 @@ import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
 import exoticatechnologies.util.ExtensionsKt;
 import exoticatechnologies.util.FleetMemberUtils;
-import lombok.extern.log4j.Log4j;
 import org.apache.log4j.Logger;
 
 import java.awt.*;
@@ -23,6 +26,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * Class representing the "exoticatech" hullmod placed on every ship/module after installing an {@link Modification}
+ * on it. This hullmod is actually in charge of 'installing' exoticas/upgrades and calling their relevant methods
+ */
 public class ExoticaTechHM extends BaseHullMod {
     private static final Color hullmodColor = new Color(94, 206, 226);
     private static final Logger log = Logger.getLogger(ExoticaTechHM.class);
@@ -148,21 +155,24 @@ public class ExoticaTechHM extends BaseHullMod {
             return;
         }
 
-        // Unlike the other two places where we checked whether the modification should share it's effects across other
-        // modules, we don't need to do this here. The other two places decide whether the modification got installed
-        // and had it's applyToShip() method called on every module, and now that everything no longer gets installed
-        // everywhere, we don't need to check that here; this only calls applyToStats
-
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
-            if (stats.getFleetMember() != null && stats.getFleetMember().getShipName() == null && !exotic.shouldAffectModule(stats)) continue;
+            boolean fleetMemberNonNull = stats.getFleetMember() != null;
+            boolean fleetMemberShipNameIsNull = stats.getFleetMember().getShipName() == null;
+            boolean exoticAppliesToModules = exotic.shouldAffectModule(stats);
+            boolean exoticSharesEffectWithAllModules = exotic.shouldShareEffectToOtherModules(null, null);
+            if (fleetMemberNonNull && fleetMemberShipNameIsNull && !exoticAppliesToModules && !exoticSharesEffectWithAllModules) continue;
 
             exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             if (!mods.hasUpgrade(upgrade)) continue;
-            if (stats.getFleetMember() != null && stats.getFleetMember().getShipName() == null && !upgrade.shouldAffectModule(stats)) continue;
+            boolean fleetMemberNonNull = stats.getFleetMember() != null;
+            boolean fleetMemberShipNameIsNull = stats.getFleetMember().getShipName() == null;
+            boolean upgradeAppliesToModules = upgrade.shouldAffectModule(stats);
+            boolean upgradeSharesEffectWithAllModules = upgrade.shouldShareEffectToOtherModules(null, null);
+            if (fleetMemberNonNull && fleetMemberShipNameIsNull && !upgradeAppliesToModules && !upgradeSharesEffectWithAllModules) continue;
 
             upgrade.applyUpgradeToStats(stats, member, mods, mods.getUpgrade(upgrade));
         }
@@ -203,12 +213,16 @@ public class ExoticaTechHM extends BaseHullMod {
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
-            if (cachedCheckIsModule(ship) && !exotic.shouldAffectModule(ship.getParentStation(), ship)) continue;
+            boolean exoticAppliesToModules = exotic.shouldAffectModule(ship.getParentStation(), ship);
+            boolean exoticSharesEffectWithAllModules = exotic.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
+            if (cachedCheckIsModule(ship) && !exoticAppliesToModules && !exoticSharesEffectWithAllModules) continue;
             exotic.applyToFighters(member, ship, fighter, mods);
         }
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             if (!mods.hasUpgrade(upgrade)) continue;
-            if (cachedCheckIsModule(ship) && !upgrade.shouldAffectModule(ship.getParentStation(), ship)) continue;
+            boolean upgradeAppliesToModules = upgrade.shouldAffectModule(ship.getParentStation(), ship);
+            boolean upgradeSharesEffectWithAllModules = upgrade.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
+            if (cachedCheckIsModule(ship) && !upgradeAppliesToModules && !upgradeSharesEffectWithAllModules) continue;
             upgrade.applyToFighters(member, ship, fighter, mods);
         }
     }
@@ -285,6 +299,7 @@ public class ExoticaTechHM extends BaseHullMod {
     }
 
     public static String MODULE_DATA_HINT = "exotica_IsModule";
+
     public static boolean cachedCheckIsModule(ShipAPI ship) {
         Object isModuleData = ship.getCustomData().get(MODULE_DATA_HINT);
         if (isModuleData != null) {
