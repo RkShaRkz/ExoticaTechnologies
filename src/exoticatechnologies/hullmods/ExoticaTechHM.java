@@ -103,15 +103,18 @@ public class ExoticaTechHM extends BaseHullMod {
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
-
-            if (cachedCheckIsModule(ship) && !exotic.shouldAffectModule(ship.getParentStation(), ship)) continue;
+            boolean exoticAppliesToModules = exotic.shouldAffectModule(ship.getParentStation(), ship);
+            boolean exoticSharesEffectWithAllModules = exotic.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
+            if (cachedCheckIsModule(ship) && !exoticAppliesToModules && !exoticSharesEffectWithAllModules) continue;
 
             exotic.advanceInCombatUnpaused(ship, amount, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             if (!mods.hasUpgrade(upgrade)) continue;
-            if (cachedCheckIsModule(ship) && !upgrade.shouldAffectModule(ship.getParentStation(), ship)) continue;
+            boolean upgradeAppliesToModules = upgrade.shouldAffectModule(ship.getParentStation(), ship);
+            boolean upgradeSharesEffectWithAllModules = upgrade.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
+            if (cachedCheckIsModule(ship) && !upgradeAppliesToModules && !upgradeSharesEffectWithAllModules) continue;
 
             upgrade.advanceInCombatUnpaused(ship, amount, member, mods);
         }
@@ -145,6 +148,11 @@ public class ExoticaTechHM extends BaseHullMod {
             return;
         }
 
+        // Unlike the other two places where we checked whether the modification should share it's effects across other
+        // modules, we don't need to do this here. The other two places decide whether the modification got installed
+        // and had it's applyToShip() method called on every module, and now that everything no longer gets installed
+        // everywhere, we don't need to check that here; this only calls applyToStats
+
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
             if (stats.getFleetMember() != null && stats.getFleetMember().getShipName() == null && !exotic.shouldAffectModule(stats)) continue;
@@ -170,13 +178,17 @@ public class ExoticaTechHM extends BaseHullMod {
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
-            if (cachedCheckIsModule(ship) && !exotic.shouldAffectModule(ship.getParentStation(), ship)) continue;
+            boolean exoticAppliesToModules = exotic.shouldAffectModule(ship.getParentStation(), ship);
+            boolean exoticSharesEffectWithAllModules = exotic.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
+            if (cachedCheckIsModule(ship) && !exoticAppliesToModules && !exoticSharesEffectWithAllModules) continue;
             exotic.applyToShip(id, member, ship, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             if (!mods.hasUpgrade(upgrade)) continue;
-            if (cachedCheckIsModule(ship) && !upgrade.shouldAffectModule(ship.getParentStation(), ship)) continue;
+            boolean upgradeAppliesToModules = upgrade.shouldAffectModule(ship.getParentStation(), ship);
+            boolean upgradeSharesEffectWithAllModules = upgrade.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
+            if (cachedCheckIsModule(ship) && !upgradeAppliesToModules && !upgradeSharesEffectWithAllModules) continue;
             upgrade.applyToShip(member, ship, mods);
         }
     }

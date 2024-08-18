@@ -1,6 +1,7 @@
 package exoticatechnologies.modifications
 
 import com.fs.starfarer.api.campaign.econ.MarketAPI
+import com.fs.starfarer.api.combat.BaseHullMod
 import com.fs.starfarer.api.combat.CombatEngineAPI
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
@@ -10,6 +11,7 @@ import exoticatechnologies.modifications.conditions.Condition
 import exoticatechnologies.modifications.conditions.ConditionDict
 import exoticatechnologies.modifications.conditions.toList
 import org.apache.log4j.Logger
+import org.jetbrains.annotations.Nullable
 import org.json.JSONObject
 import org.lazywizard.lazylib.ext.json.optFloat
 import java.awt.Color
@@ -116,13 +118,47 @@ abstract class Modification(val key: String, val settings: JSONObject) {
         return true
     }
 
+    /**
+     * Whether the modification is installable in non-main modules for multi-module ships,
+     * and whether it should apply it's effects to all other modules.
+     *
+     * This version is called in [BaseHullMod.applyEffectsBeforeShipCreation]
+     *
+     * **NOTE** A certain false-positive can be observed when playing in 'simulation' mode vs actual combat;
+     * namely, while a mod installed on a module (in a multi-module environment) will affect only the module it's
+     * installed on during simulation, in actual combat it depends on the return value of [shouldShareEffectToOtherModules]
+     * Suggestion is to use this just to limit whether the modification can be installed on modules.
+     *
+     * @see shouldAffectModule
+     * @see shouldShareEffectToOtherModules
+     */
     open fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?): Boolean {
         return true
     }
 
+    /**
+     * Whether the modification is installable in non-main modules for multi-module ships,
+     * and whether it should apply it's effects to all other modules.
+     *
+     * This version is called in [BaseHullMod.applyEffectsAfterShipCreation]
+     *
+     * **NOTE** A certain false-positive can be observed when playing in 'simulation' mode vs actual combat;
+     * namely, while a mod installed on a module (in a multi-module environment) will affect only the module it's
+     * installed on during simulation, in actual combat it depends on the return value of [shouldShareEffectToOtherModules]
+     * Suggestion is to use this just to limit whether the modification can be installed on modules.
+     *
+     * @see shouldAffectModule
+     * @see shouldShareEffectToOtherModules
+     */
     open fun shouldAffectModule(moduleStats: MutableShipStatsAPI): Boolean {
         return true
     }
+
+    /**
+     * Relevant only for multi-module ships; if [shouldAffectModule] is true, this determines whether the effects
+     * of the modification should affect (or rather, replicate to) all other modules as well
+     */
+    open fun shouldShareEffectToOtherModules(@Nullable ship: ShipAPI?, @Nullable module: ShipAPI?) = false
 
     open fun canApply(member: FleetMemberAPI, mods: ShipModifications?): Boolean {
         return canApply(member, member.variant, mods)
