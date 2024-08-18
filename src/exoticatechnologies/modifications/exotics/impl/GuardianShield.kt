@@ -826,7 +826,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         }
 
         private const val LOGTAG = "GuardianShield"
-        private const val LOGS_ENABLED = true
+        private const val LOGS_ENABLED = false
         private const val LOG_FLUX = false
     }
 }
