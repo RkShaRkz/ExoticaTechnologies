@@ -97,6 +97,8 @@ class HackedMissileForge(key: String, settings: JSONObject) : Exotic(key, settin
                 && weapon.ammoTracker.ammoPerSecond == 0f
     }
 
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
+
     companion object {
         private const val ITEM = "et_hangarforge"
         private const val COST_CREDITS = 150000f

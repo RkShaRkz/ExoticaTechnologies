@@ -213,7 +213,7 @@
 		"needCredits": "You need ${credits} to install this.",
 		"needItem": "You need a ${itemName} to install this.",
 		"statusBarText": "M.FORGE",
-		"longDescription": "Reduces missile damage by =${damageDecrease}%%=. Reloads all of any non-reloading missile's ammunition capacity every *${reloadTime} seconds*. This only affects missiles with more than 1 ammo.",
+		"longDescription": "Reduces missile damage by =${damageDecrease}%%=. Reloads all of any non-reloading missile's ammunition capacity every *${reloadTime} seconds*. This only affects missiles with more than 1 ammo. =Works on whole ship=",
 		"statusReloaded": "Reloaded weapons!"
 	},
 	"PhasefieldEngine": {
