@@ -3,6 +3,7 @@ package exoticatechnologies.modifications.exotics.impl
 import com.fs.starfarer.api.campaign.CampaignFleetAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
+import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
@@ -91,6 +92,8 @@ class AlphaSubcore(key: String, settingsObj: JSONObject) :
     override fun getExtraBandwidth(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData?): Float {
         return BANDWIDTH_INCREASE * getPositiveMult(member, mods, exoticData)
     }
+
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
 
     companion object {
         private const val ITEM = "alpha_core"
