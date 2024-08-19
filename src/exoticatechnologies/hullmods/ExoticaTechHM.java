@@ -100,6 +100,62 @@ public class ExoticaTechHM extends BaseHullMod {
         }
     }
 
+    /**
+     * Method for checking whether a {@link Modification} should be skipped before processing (calling it's callbacks on it)
+     *
+     * @param ship the ship/module on which the modification is installed
+     * @param mod the modification in question
+     * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(ShipAPI, ShipAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
+     */
+    public boolean shouldSkipModification(ShipAPI ship, Modification mod) {
+        boolean modAppliesToModules = mod.shouldAffectModule(ship.getParentStation(), ship);
+        boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
+
+        if (cachedCheckIsModule(ship)) {
+            // if doesn't apply to modules - skip
+            if (!modAppliesToModules) {
+                return true;
+            } else {
+                // If applies to modules - check if effects are shared, if not - skip
+                if (!modSharesEffectsWithAllModules) {
+                    return true;
+                }
+                // If it should share to all modules, we don't skip
+            }
+        }
+        // If the ship that we're checking isn't a module, we don't skip either
+        return false;
+    }
+
+    /**
+     * Method for checking whether a {@link Modification} should be skipped before processing (calling it's callbacks on it)
+     *
+     * @param stats the {@link MutableShipStatsAPI} stats of the ship/module on which the modification is installed
+     * @param mod the modification in question
+     * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(MutableShipStatsAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
+     */
+    public boolean shouldSkipModification(MutableShipStatsAPI stats, Modification mod) {
+        boolean fleetMemberNonNull = stats.getFleetMember() != null;
+        boolean fleetMemberShipNameIsNull = stats.getFleetMember().getShipName() == null;
+        boolean modAppliesToModules = mod.shouldAffectModule(stats);
+        boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
+
+        if (fleetMemberNonNull && fleetMemberShipNameIsNull) {
+            // if doesn't apply to modules - skip
+            if (!modAppliesToModules) {
+                return true;
+            } else {
+                // If applies to modules - check if effects are shared, if not - skip
+                if (!modSharesEffectsWithAllModules) {
+                    return true;
+                }
+                // If it should share to all modules, we don't skip
+            }
+        }
+        // If the ship that we're checking isn't a module, we don't skip either
+        return false;
+    }
+
     @Override
     public void advanceInCombat(ShipAPI ship, float amount) {
         FleetMemberAPI member = FleetMemberUtils.findMemberFromShip(ship);
@@ -110,18 +166,14 @@ public class ExoticaTechHM extends BaseHullMod {
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
-            boolean exoticAppliesToModules = exotic.shouldAffectModule(ship.getParentStation(), ship);
-            boolean exoticSharesEffectWithAllModules = exotic.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
-            if (cachedCheckIsModule(ship) && !exoticAppliesToModules && !exoticSharesEffectWithAllModules) continue;
+            if (shouldSkipModification(ship, exotic)) continue;
 
             exotic.advanceInCombatUnpaused(ship, amount, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             if (!mods.hasUpgrade(upgrade)) continue;
-            boolean upgradeAppliesToModules = upgrade.shouldAffectModule(ship.getParentStation(), ship);
-            boolean upgradeSharesEffectWithAllModules = upgrade.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
-            if (cachedCheckIsModule(ship) && !upgradeAppliesToModules && !upgradeSharesEffectWithAllModules) continue;
+            if (shouldSkipModification(ship, upgrade)) continue;
 
             upgrade.advanceInCombatUnpaused(ship, amount, member, mods);
         }
@@ -157,22 +209,14 @@ public class ExoticaTechHM extends BaseHullMod {
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
-            boolean fleetMemberNonNull = stats.getFleetMember() != null;
-            boolean fleetMemberShipNameIsNull = stats.getFleetMember().getShipName() == null;
-            boolean exoticAppliesToModules = exotic.shouldAffectModule(stats);
-            boolean exoticSharesEffectWithAllModules = exotic.shouldShareEffectToOtherModules(null, null);
-            if (fleetMemberNonNull && fleetMemberShipNameIsNull && !exoticAppliesToModules && !exoticSharesEffectWithAllModules) continue;
+            if (shouldSkipModification(stats, exotic)) continue;
 
             exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             if (!mods.hasUpgrade(upgrade)) continue;
-            boolean fleetMemberNonNull = stats.getFleetMember() != null;
-            boolean fleetMemberShipNameIsNull = stats.getFleetMember().getShipName() == null;
-            boolean upgradeAppliesToModules = upgrade.shouldAffectModule(stats);
-            boolean upgradeSharesEffectWithAllModules = upgrade.shouldShareEffectToOtherModules(null, null);
-            if (fleetMemberNonNull && fleetMemberShipNameIsNull && !upgradeAppliesToModules && !upgradeSharesEffectWithAllModules) continue;
+            if (shouldSkipModification(stats, upgrade)) continue;
 
             upgrade.applyUpgradeToStats(stats, member, mods, mods.getUpgrade(upgrade));
         }
@@ -188,17 +232,13 @@ public class ExoticaTechHM extends BaseHullMod {
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
-            boolean exoticAppliesToModules = exotic.shouldAffectModule(ship.getParentStation(), ship);
-            boolean exoticSharesEffectWithAllModules = exotic.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
-            if (cachedCheckIsModule(ship) && !exoticAppliesToModules && !exoticSharesEffectWithAllModules) continue;
+            if (shouldSkipModification(ship, exotic)) continue;
             exotic.applyToShip(id, member, ship, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             if (!mods.hasUpgrade(upgrade)) continue;
-            boolean upgradeAppliesToModules = upgrade.shouldAffectModule(ship.getParentStation(), ship);
-            boolean upgradeSharesEffectWithAllModules = upgrade.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
-            if (cachedCheckIsModule(ship) && !upgradeAppliesToModules && !upgradeSharesEffectWithAllModules) continue;
+            if (shouldSkipModification(ship, upgrade)) continue;
             upgrade.applyToShip(member, ship, mods);
         }
     }
@@ -213,16 +253,12 @@ public class ExoticaTechHM extends BaseHullMod {
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
-            boolean exoticAppliesToModules = exotic.shouldAffectModule(ship.getParentStation(), ship);
-            boolean exoticSharesEffectWithAllModules = exotic.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
-            if (cachedCheckIsModule(ship) && !exoticAppliesToModules && !exoticSharesEffectWithAllModules) continue;
+            if (shouldSkipModification(ship, exotic)) continue;
             exotic.applyToFighters(member, ship, fighter, mods);
         }
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             if (!mods.hasUpgrade(upgrade)) continue;
-            boolean upgradeAppliesToModules = upgrade.shouldAffectModule(ship.getParentStation(), ship);
-            boolean upgradeSharesEffectWithAllModules = upgrade.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
-            if (cachedCheckIsModule(ship) && !upgradeAppliesToModules && !upgradeSharesEffectWithAllModules) continue;
+            if (shouldSkipModification(ship, upgrade)) continue;
             upgrade.applyToFighters(member, ship, fighter, mods);
         }
     }
