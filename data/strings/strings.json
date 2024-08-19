@@ -204,7 +204,7 @@
 		"description": "Tri-Tachyon markets the technological marvel as a multidimensional web that rips open a hole between the fighter and its launch bay. The fighter is then violently sucked through the vortex, saving the hull from complete destruction. The only caveat is that the device can only work so fast, and is unable to keep the fighter in working condition if it is destroyed outright.",
 		"tooltip": "Fighters at low health are instantly pulled back to the ship's hangar bays. Damaged parts are pulled back as well and are used to repair fighters, increasing replacement rate.",
 		"needItem": "You need a ${itemName} to install this.",
-		"longDescription": "*Half* of the total number of fighters can be *teleported back to the ship* if they are at low health. This effect recharges every minute. Fighter refit time is reduced by *${fighterRefitTimeDecrease}%%*.",
+		"longDescription": "*Half* of the total number of fighters can be *teleported back to the ship* if they are at low health. This effect recharges every minute. Fighter refit time is reduced by *${fighterRefitTimeDecrease}%%*. =Works only on module(s) where it's installed=",
 		"statusBarText": "TETHER"
 	},
 	"HackedMissileForge": {
