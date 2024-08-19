@@ -262,7 +262,7 @@
 		"description": "A grid of sensors mostly found on Daemon-type ships, integrated with an artificial intelligence on board able to harden the ship's armor when detecting a threat severe enough to cause significant damage. The sheer amount of connections required between the intelligence and sensors weakens the armor significantly when not protected by this dampening field.",
 		"tooltip": "If taking damage over a certain amount, dampen the initial hit and all damage for a short period of time. This effect has a cooldown. Increases armor damage taken when the damper field is not active.",
 		"needItem": "You need a ${itemName} to install this.",
-		"longDescription": "Activates a damper field for *${damperDuration} seconds*, reducing all damage taken by *${damperReduction}%%*, when taking damage over *${triggeringDamage}*. It has a =${damperCooldown}= second cooldown. Armor damage taken is increased by =${armorDamageTaken}%%=.",
+		"longDescription": "Activates a damper field for *${damperDuration} seconds*, reducing all damage taken by *${damperReduction}%%*, when taking damage over *${triggeringDamage}*. It has a =${damperCooldown}= second cooldown. Armor damage taken is increased by =${armorDamageTaken}%%=. =Works on whole ship=",
 		"statusBarText": "DAMPER"
 	},
 	"DaemonCore": {
