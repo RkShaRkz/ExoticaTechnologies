@@ -198,7 +198,7 @@
 	"HyperspecLPC": {
 		"description": "A cutting-edge LPC conversion device that consolidates all resources into a single wing LPC. The singular wing is greatly enhanced in speed, armor, and damage as a result, but takes significantly longer to create and repair.",
 		"tooltip": "Reduces the number of bays to 1. Buffs the remaining wing significantly based on how many bays were removed. Increases the replacement time for the fighter wing.",
-		"longDescription": "Reduces the number of bays to 1. Fighter non-missile damage is increased by *${fighterDamageIncrease}%%*, speed is increased by *${fighterSpeedIncrease}%%*, armor is increased by *${fighterArmorIncrease}%%*, flux is increased by *${fighterFluxIncrease}%%* and hull is increased by *${fighterHullIncrease}%%*. Replacement time is increased by =${replacementTimeIncrease}%%=."
+		"longDescription": "Reduces the number of bays to 1. Fighter non-missile damage is increased by *${fighterDamageIncrease}%%*, speed is increased by *${fighterSpeedIncrease}%%*, armor is increased by *${fighterArmorIncrease}%%*, flux is increased by *${fighterFluxIncrease}%%* and hull is increased by *${fighterHullIncrease}%%*. Replacement time is increased by =${replacementTimeIncrease}%%=. =Works only on module(s) where it's installed="
 	},
 	"PhasedFighterTether": {
 		"description": "Tri-Tachyon markets the technological marvel as a multidimensional web that rips open a hole between the fighter and its launch bay. The fighter is then violently sucked through the vortex, saving the hull from complete destruction. The only caveat is that the device can only work so fast, and is unable to keep the fighter in working condition if it is destroyed outright.",
