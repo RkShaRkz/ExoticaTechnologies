@@ -221,7 +221,7 @@
 		"tooltip": "Phase activation cost is reduced, but doubles every time you use it within a short time. The ship becomes very damage resistant for a short time when exiting phase. Ships with negative or zero flux cost will cost flux to phase.",
 		"needPhaseShip": "Only phase ships can install this.",
 		"needItem": "You need an ${itemName} to install this.",
-		"longDescription": "Phase activation cost is reduced by *${phaseCostReduction}x*, but =doubles= every time you use it in a period of *${phaseResetTime} seconds*. The ship receives *66%% reduced damage* which fades over time for *${noDamageTime} seconds* when exiting phase. Ships with a base negative phase flux cost will instead =cost flux=, and ships with a base zero phase flux cost will cost =${zeroFluxCost}%% of base flux capacity=.",
+		"longDescription": "Phase activation cost is reduced by *${phaseCostReduction}x*, but =doubles= every time you use it in a period of *${phaseResetTime} seconds*. The ship receives *66%% reduced damage* which fades over time for *${noDamageTime} seconds* when exiting phase. Ships with a base negative phase flux cost will instead =cost flux=, and ships with a base zero phase flux cost will cost =${zeroFluxCost}%% of base flux capacity=. =Works only on module(s) where it's installed=",
 		"statusBarText": "P.FIELD",
 		"statusTitle": "PHASEFIELD ENGINE",
 		"statusInvulnerable": "DMG RESIST INCREASED (${noDamageDuration})",
