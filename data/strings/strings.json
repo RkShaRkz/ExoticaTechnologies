@@ -249,7 +249,7 @@
 	"PenanceEngine": {
 		"description": "A rare artefact, granting its crew divine might if they are willing to sacrifice everything in the name of Ludd. Its powers shine true when among those who stand against it, granting a boon of strength and endurance to smite all that stand in its way.",
 		"tooltip": "Increases weapon repair rate and disables shields. Grants armor repair and increased speed in lateral directions while near enemy ships. Large amounts of damage will cause a massive EMP burst on the ship.",
-		"longDescription": "Increases weapon repair rate by *${weaponRepairRate}%%*, and =disables shields and phase systems=. When within 1200 units of an enemy ship, *armor repairs itself at a rate of ${armorRegenPerSec}%% per second per enemy ship* (up to *${armorRegenMax}%%*, max *${armorRegenPerSecondMax} per second*) and *${sideSpeedBoost} higher speed* when moving laterally (strafing). If =${damageThreshold} armor/hull damage= is taken within a short window, the ship will release a massive EMP burst onto itself, damaging most weapons and engines.",
+		"longDescription": "Increases weapon repair rate by *${weaponRepairRate}%%*, and =disables shields and phase systems=. When within 1200 units of an enemy ship, *armor repairs itself at a rate of ${armorRegenPerSec}%% per second per enemy ship* (up to *${armorRegenMax}%%*, max *${armorRegenPerSecondMax} per second*) and *${sideSpeedBoost} higher speed* when moving laterally (strafing). If =${damageThreshold} armor/hull damage= is taken within a short window, the ship will release a massive EMP burst onto itself, damaging most weapons and engines. =Works on whole ship=",
 		"statusBarText": "LUDD"
 	},
 	"NanotechArmor": {
