@@ -15,6 +15,7 @@ import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.lazywizard.lazylib.VectorUtils
 import org.lwjgl.util.vector.Vector2f
+import java.awt.Color
 import kotlin.math.absoluteValue
 import kotlin.math.cos
 import kotlin.math.sin
@@ -156,6 +157,72 @@ fun getAllShipWeapons(ship: ShipAPI): List<WeaponAPI> {
 
     return weaponList
 }
+
+data class AfterimageData(
+    val color: Color,
+    val locX: Float,
+    val locY: Float,
+    val velX: Float,
+    val velY: Float,
+    val maxJitter: Float,
+    val inDuration: Float,
+    val duration: Float,
+    val outDuration: Float,
+    val additive: Boolean,
+    val combineWithSpriteColor: Boolean,
+    val aboveShip: Boolean
+)
+
+fun addAfterimageTo(ship: ShipAPI, data: AfterimageData) {
+    ship.addAfterimage(
+            data.color,
+            data.locX,
+            data.locY,
+            data.velX,
+            data.velY,
+            data.maxJitter,
+            data.inDuration,
+            data.duration,
+            data.outDuration,
+            data.additive,
+            data.combineWithSpriteColor,
+            data.aboveShip
+    )
+}
+
+fun addAfterimageToWholeShip(ship: ShipAPI, data: AfterimageData) {
+    // If ship is parent, apply to children
+    if (ship.childModulesCopy.isNotEmpty()) {
+        for (module in ship.childModulesCopy) {
+            addAfterimageTo(module, data)
+        }
+        // also apply to ship since he's parent
+        addAfterimageTo(ship, data)
+
+        // and return because we're done
+        return
+    }
+
+    // If ship is a submodule, get parent, and apply to all his children
+    if (ship.parentStation != null) {
+        val parent = ship.parentStation
+        for (module in ship.childModulesCopy) {
+            addAfterimageTo(module, data)
+        }
+        // but also apply to parent now that all his children (including the original 'ship' which was a child) were painted
+        addAfterimageTo(parent, data)
+
+        // and return because we're done
+        return
+    }
+
+    // The last scenario is - it's single module ship, and it needs to be painted, so just paint it
+    addAfterimageTo(ship, data)
+
+    // and return because we're done
+    return
+}
+
 val <T> T.exhaustive: T
     get() = this
 

@@ -7,7 +7,9 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.upgrades.Upgrade
+import exoticatechnologies.util.AfterimageData
 import exoticatechnologies.util.StringUtils
+import exoticatechnologies.util.addAfterimageToWholeShip
 import exoticatechnologies.util.getAbsoluteAngleToAnotherShip
 import org.apache.log4j.Logger
 import org.json.JSONObject
@@ -112,19 +114,22 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
                 stats.maxTurnRate.modifyPercent(boosterRocketsBuffId, BOOSTER_ROCKETS_TURNING_PENALTY)
 
                 // Give a visual que
-                ship.addAfterimage(
-                        Color(255, 200, 15, (0.65f * 255).roundToInt()),
-                        0f,
-                        0f,
-                        0f,
-                        0f,
-                        6f,
-                        0f,
-                        this.activeDuration,
-                        0.25f,
-                        true,
-                        false,
-                        true
+                addAfterimageToWholeShip(
+                        ship,
+                        AfterimageData(
+                                color = Color(255, 200, 15, (0.65f * 255).roundToInt()),
+                                locX = 0f,
+                                locY = 0f,
+                                velX = 0f,
+                                velY = 0f,
+                                maxJitter = 6f,
+                                inDuration = 0f,
+                                duration = this.activeDuration,
+                                outDuration= 0.25f,
+                                additive = true,
+                                combineWithSpriteColor = false,
+                                aboveShip = true
+                        )
                 )
 
                 // Finally, put the pedal to the metal
