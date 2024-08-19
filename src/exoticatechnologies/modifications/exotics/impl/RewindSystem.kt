@@ -61,6 +61,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 .addToTooltip(tooltip, title)
     }
 
+    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
+
     override fun applyToShip(
             id: String,
             member: FleetMemberAPI,
