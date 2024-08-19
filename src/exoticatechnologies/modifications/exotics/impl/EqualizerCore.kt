@@ -94,6 +94,8 @@ class EqualizerCore(key: String, settings: JSONObject) : Exotic(key, settings) {
         }
     }
 
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = false
+
     // Our range listener
     private inner class ET_EqualizerCoreListener(
         val member: FleetMemberAPI,
