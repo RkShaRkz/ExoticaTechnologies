@@ -48,6 +48,8 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
                 .addToTooltip(tooltip, title)
     }
 
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = false
+
     override fun applyToShip(id: String, member: FleetMemberAPI, ship: ShipAPI, mods: ShipModifications, exoticData: ExoticData) {
         super.applyToShip(id, member, ship, mods, exoticData)
 
