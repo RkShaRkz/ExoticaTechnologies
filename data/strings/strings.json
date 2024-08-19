@@ -236,7 +236,7 @@
 	"TerminatorSubsystems": {
 		"description": "A squadron of terminator drones circles this ship, serving as both an effective point defense system, and as deadly weapons.",
 		"tooltip": "Terminator drones circle the ship, serving as point defense. They can be activated to convert into a seeking missile.",
-		"longDescription": "Spawns ${drones} Terminator drones (scales with hull size) that circle the ship, serving as point defense and passive weaponry. Adds an active ability that converts one of the drones into a seeking missile.",
+		"longDescription": "Spawns ${drones} Terminator drones (scales with hull size) that circle the ship, serving as point defense and passive weaponry. Adds an active ability that converts one of the drones into a seeking missile. =Works only on module(s) where it's installed=",
 		"systemText": "TERMINATORS",
 		"outOfRange": "OUT OF RANGE",
 		"noFlux": "FLUX LEVELS TOO HIGH"
