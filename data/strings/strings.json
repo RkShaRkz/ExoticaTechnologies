@@ -230,7 +230,7 @@
 	"FullMetalSalvo": {
 		"description": "Overcharging weapon systems results in a massive increase to damage and projectile speeds, but the power such a system controller takes along with the potential damage from overcharging the power of weaponry causes a long term effect on the rate of fire of weapons on board the ship.",
 		"tooltip": "Adds an active ability that gives a massive damage and projectile speed boost for a very short period. Rate of fire on the ship is reduced permanently.",
-		"longDescription": "Adds an active ability that increases all weapon projectile speed by *${projSpeedBoost}%%* and non-missile damage by *${damageBoost}%%* for *${boostTime} seconds*. The ability takes *${cooldown} seconds* to recharge. Weapon fire rate is reduced by =${firerateMalus}%%= permanently.",
+		"longDescription": "Adds an active ability that increases all weapon projectile speed by *${projSpeedBoost}%%* and non-missile damage by *${damageBoost}%%* for *${boostTime} seconds*. The ability takes *${cooldown} seconds* to recharge. Weapon fire rate is reduced by =${firerateMalus}%%= permanently. =Works on whole ship=",
 		"systemText": "FULL METAL SALVO"
 	},
 	"TerminatorSubsystems": {

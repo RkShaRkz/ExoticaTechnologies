@@ -76,6 +76,8 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
         }
     }
 
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
+
     inner class SalvoActivator(
             ship: ShipAPI,
             val member: FleetMemberAPI,
