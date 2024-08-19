@@ -180,7 +180,7 @@
 		"description": "A Plasma Flux Catalyst can be used to vastly decrease the amount of equipment needed to provide power to a ship thanks to its ability to extract that energy from any number of capacitors in parallel. The space saved allows for more complicated weaponry to be installed, although the resulting heat from such a system is dreadful if too many capacitors or flux vents are installed.",
 		"tooltip": "Improve flux capacitors and vents. Reduce CR if too many are installed.",
 		"needItem": "You need a ${itemName} to install this.",
-		"longDescription": "The effectiveness of flux capacitors and vents is increased by *${effectLevel}%%*. Installing more than *${capacitorLimit} capacitors or ${ventLimit} vents* will reduce combat readiness by =${crDecrease}%%= for every one installed over that amount. Note that this decrease doesn't appear immediately inside the refit dialog."
+		"longDescription": "The effectiveness of flux capacitors and vents is increased by *${effectLevel}%%*. Installing more than *${capacitorLimit} capacitors or ${ventLimit} vents* will reduce combat readiness by =${crDecrease}%%= for every one installed over that amount. Note that this decrease doesn't appear immediately inside the refit dialog. =Works on whole ship="
 	},
 	"DriveFluxVent": {
 		"description": "An experimental flux vent that can only function under the intense heat that ship thrusters generate. It excels at venting flux, so well in fact that the thrusters around it receive a temporary increase in power, especially in the forward direction. Crew members remark that the purple glow of the engines is one of the prettiest sights to ever see.",
