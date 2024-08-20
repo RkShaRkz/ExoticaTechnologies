@@ -5,7 +5,7 @@ import exoticatechnologies.modifications.upgrades.ETUpgrades
 
 class NotIn: Operator {
     override val key: String
-        get() = "in"
+        get() = "notIn"
 
     override fun matches(actual: Any?, expected: Any, extra: Any?): Boolean {
         if (actual is ETUpgrades) {
