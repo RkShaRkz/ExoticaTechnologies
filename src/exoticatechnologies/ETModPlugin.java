@@ -10,19 +10,20 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import exoticatechnologies.campaign.listeners.CampaignEventListener;
 import exoticatechnologies.campaign.listeners.SalvageListener;
 import exoticatechnologies.campaign.market.MarketManager;
-import exoticatechnologies.cargo.CrateGlobalData;
-import exoticatechnologies.cargo.CrateSpecialData;
 import exoticatechnologies.config.FactionConfigLoader;
 import exoticatechnologies.config.VariantConfigLoader;
 import exoticatechnologies.hullmods.ExoticaTechHM;
 import exoticatechnologies.integration.indevo.IndEvoUtil;
 import exoticatechnologies.modifications.ShipModLoader;
+import exoticatechnologies.modifications.exotics.ExoticSpecialItemPlugin;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
+import exoticatechnologies.modifications.exotics.GenericExoticItemPlugin;
 import exoticatechnologies.modifications.stats.impl.logistics.CrewSalaryEffect;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
 import exoticatechnologies.refit.RefitButtonAdder;
 import exoticatechnologies.ui.impl.shop.ShopManager;
 import exoticatechnologies.ui.impl.shop.overview.OverviewPanelUIPlugin;
+import exoticatechnologies.util.AnonymousLogger;
 import exoticatechnologies.util.FleetMemberUtils;
 import exoticatechnologies.util.Utilities;
 import lombok.extern.log4j.Log4j;
@@ -208,6 +209,8 @@ public class ETModPlugin extends BaseModPlugin {
         public void settingsChanged(@NotNull String modId) {
             if (modId.equalsIgnoreCase(MOD_ID)) {
                 ETModSettings.MAX_EXOTICS = safeUnboxing(LunaSettings.getInt(MOD_ID, "exoticatechnologies_maxExoticas"));
+                boolean shouldOverlayIcons = safeUnboxing(LunaSettings.getBoolean(MOD_ID, "exoticatechnologies_exoticIconOverlay"));
+                ExoticSpecialItemPlugin.setShouldOverlayExoticIconOverExoticItemIcon(shouldOverlayIcons);
             }
         }
 
@@ -215,6 +218,17 @@ public class ETModPlugin extends BaseModPlugin {
             int retVal;
             if (object == null) {
                 retVal = 0;
+            } else {
+                retVal = object;
+            }
+
+            return retVal;
+        }
+
+        private boolean safeUnboxing(Boolean object) {
+            boolean retVal;
+            if (object == null) {
+                retVal = false;
             } else {
                 retVal = object;
             }
