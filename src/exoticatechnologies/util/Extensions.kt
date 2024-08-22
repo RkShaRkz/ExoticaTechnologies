@@ -15,6 +15,7 @@ import exoticatechnologies.util.reflect.ReflectionUtils
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.lazywizard.lazylib.VectorUtils
+import org.lwjgl.util.vector.Vector
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
 import kotlin.math.absoluteValue
@@ -341,7 +342,7 @@ fun getVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Float): Ve
 }
 
 /**
- * Scalar division of this vector by [scalar]
+ * Scalar division of [this] vector by [scalar]
  *
  * @param scalar the scalar to divide this vector with
  * @return vector that has it's X and Y divided by [scalar]
@@ -351,7 +352,7 @@ fun Vector2f.div(scalar: Float): Vector2f {
 }
 
 /**
- * Scalar multiplication of this vector by [scalar]
+ * Scalar multiplication of [this] vector by [scalar]
  *
  * @param scalar the scalar to multiply this vector with
  * @return vector that has it's X and Y multiplied by [scalar]
@@ -361,7 +362,7 @@ fun Vector2f.mul(scalar: Float): Vector2f {
 }
 
 /**
- * Scalar addition of this vector and [scalar]
+ * Scalar addition of [this] vector and [scalar]
  *
  * @param scalar the scalar to add to this vector
  * @return vector that has it's X and Y increased by [scalar]
@@ -371,7 +372,7 @@ fun Vector2f.add(scalar: Float): Vector2f {
 }
 
 /**
- * Scalar substraction of this vector and [scalar]
+ * Scalar subtraction of [this] vector and [scalar]
  *
  * @param scalar the scalar to substract from this vector
  * @return vector that has it's X and Y subtracted by [scalar]
@@ -381,7 +382,7 @@ fun Vector2f.sub(scalar: Float): Vector2f {
 }
 
 /**
- * Vector division of this vector by [vector]
+ * Vector division of [this] vector by [vector]
  *
  * @param vector the vector to divide this vector with
  * @return vector that has it's X and Y divided by [vector]'s X and Y
@@ -391,7 +392,7 @@ fun Vector2f.div(vector: Vector2f): Vector2f {
 }
 
 /**
- * Vector multiplication of this vector by [vector]
+ * Vector multiplication of [this] vector by [vector]
  *
  * @param vector the vector to multiply this vector with
  * @return vector that has it's X and Y multiplied by [vector]'s X and Y
@@ -401,7 +402,7 @@ fun Vector2f.mul(vector: Vector2f): Vector2f {
 }
 
 /**
- * Vector addition of this vector and [vector]
+ * Vector addition of [this] vector and [vector]
  *
  * @param vector the vector to add to this vector
  * @return vector that has it's X and Y increased by [vector]'s X and Y
@@ -411,7 +412,7 @@ fun Vector2f.add(vector: Vector2f): Vector2f {
 }
 
 /**
- * Vector subtraction of this vector and [vector]
+ * Vector subtraction of [this] vector and [vector]
  *
  * @param vector the vector to subtract from this vector
  * @return vector that has it's X and Y subtracted by [vector]'s X and Y
@@ -427,6 +428,27 @@ fun Vector2f.sub(vector: Vector2f): Vector2f {
  */
 fun Vector2f.magnitude(): Float {
     return sqrt(this.x * this.x + this.y * this.y)
+}
+
+/**
+ * Normalize a vector, but unlike [Vector.normalise] this one doesn't throw for zero-length vectors
+ *
+ * @see [Vector.normalise]
+ */
+fun Vector2f.normalized(): Vector2f {
+    val magnitude = this.magnitude()
+    return if(magnitude != 0.0f) {
+        Vector2f(x / magnitude, y / magnitude)
+    } else {
+        this
+    }
+}
+
+/**
+ * Returns a clone of [this] vector as a new instance
+ */
+fun Vector2f.clone(): Vector2f {
+    return Vector2f(this.x, this.y)
 }
 
 /**

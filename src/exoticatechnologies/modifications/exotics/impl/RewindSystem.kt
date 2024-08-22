@@ -3,22 +3,21 @@ package exoticatechnologies.modifications.exotics.impl
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.campaign.CampaignFleetAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
-import com.fs.starfarer.api.combat.CombatEngineAPI
-import com.fs.starfarer.api.combat.DamageType
-import com.fs.starfarer.api.combat.ShipAPI
+import com.fs.starfarer.api.combat.*
 import com.fs.starfarer.api.combat.ShipAPI.HullSize.*
-import com.fs.starfarer.api.combat.ShipwideAIFlags
-import com.fs.starfarer.api.combat.WeaponAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.IntervalUtil
+import com.sun.javafx.beans.annotations.NonNull
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.*
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.datastructures.RingBuffer
+import exoticatechnologies.util.timeutils.getClockTime
+import exoticatechnologies.util.timeutils.getTimeFromSeconds
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.combat.entities.SimpleEntity
@@ -79,7 +78,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             val member: FleetMemberAPI,
             val mods: ShipModifications,
             val exoticData: ExoticData,
-            val stringKey: String
+            private val stringKey: String
     ) : MagicSubsystem(ship) {
         private var engine: CombatEngineAPI = Global.getCombatEngine()
         private val secondsTracker = IntervalUtil(0.95f, 1.05f)
@@ -89,6 +88,9 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         private val systemActivated = AtomicBoolean(false)
         private val justTurnedOff = AtomicBoolean(false)
         private val performedTeleport = AtomicBoolean(false)
+        private val spawnAfterTeleportAfterimages = AtomicBoolean(false)
+        @Volatile
+        private var performedTeleportImagePosition: Vector2f? = null
         /**
         Measures *when* the system was activated and not *how long* it's been active for.
         Calculate how long it's active for by doing *(timeElapsed - activationTime)*
@@ -102,13 +104,14 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 ShipParams::class.java
         )
 
+        @Volatile
         private var rewindCandidate: Optional<ShipParams.ConcreteShipParams> = Optional.empty()
 
         override fun getBaseInDuration(): Float = 1f
 
         override fun getBaseActiveDuration(): Float = PHASE_IN_DURATION
 
-        override fun getBaseOutDuration(): Float = 1f
+        override fun getBaseOutDuration(): Float = 0f
 
         override fun canActivate(): Boolean {
             // If less time has passed than we need to, we can't for sure
@@ -138,6 +141,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             val candidate = findActivationCandidate()
 
             debugLog("--> onActivate()\tshould teleport from ${ship.location} to candidate ${candidate}\ttimeElapsed: ${timeElapsed}")
+            debugLog("[${getClockTime()}] --> onActivate()\tshould teleport from ${ship.location} to candidate ${candidate}\ttimeElapsed: ${timeElapsed}", "Teleport")
 
             if (candidate.isPresent()) {
                 rewindCandidate = candidate
@@ -148,40 +152,14 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                     //part 1 - afterimage on ship
                     //note1: afterimage uses ship-relative coordinates, so anything other than 0,0 will paint it at some distance from the ship
                     //note2: using non-zero velocity will make the image "drift away" from the ship instead of staying on top of it
-                    addAfterimageToWholeShip(
-                            ship,
-                            AfterimageData(
-                                    color = Color.CYAN.brighter(),
-                                    locX = 0f,
-                                    locY = 0f,
-                                    velX = 0f,
-                                    velY = 0f,
-                                    maxJitter = MAX_TIME,
-                                    inDuration = 0f,
-                                    duration = PHASE_IN_DURATION,
-                                    outDuration = MAX_TIME - 1f,
-                                    additive = true,
-                                    combineWithSpriteColor = true,
-                                    aboveShip = true
-                            )
-                    )
-                    addAfterimageToWholeShip(
-                            ship,
-                            AfterimageData(
-                                    color = Color.CYAN.brighter(),
-                                    locX = 0f,
-                                    locY = 0f,
-                                    velX = 0f,
-                                    velY = 0f,
-                                    maxJitter = 5*MAX_TIME,
-                                    inDuration = 0f,
-                                    duration = PHASE_IN_DURATION,
-                                    outDuration = MAX_TIME - 1f,
-                                    additive = true,
-                                    combineWithSpriteColor = false,
-                                    aboveShip = false
-                            )
-                    )
+
+                    generatePreTeleportAfterimages()
+
+                    // And the last one - two afterimages that glide off to the target location 'simulating' the ship going there
+                    // If we use PHASE_IN_DURATION (as we should) here, the afterimage is kinda too slow and gets carried
+                    // over with the teleported ship; so lets speed it up and use 1/PHASE_IN_DURATION or 0.5f
+                    generatePreTeleportGlidingAfterimages(it.location, 1 / PHASE_IN_DURATION)
+
                     // The other parts (part 2 and part 3) will happen over time in advance()
                 }
             } else {
@@ -192,8 +170,10 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         }
 
         override fun onFinished() {
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] --> onFinished()", "Teleport")
             super.onFinished()
             turnOffSystem()
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] <-- onFinished()", "Teleport")
         }
 
         override fun shouldActivateAI(amount: Float): Boolean {
@@ -257,7 +237,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 
                 Optional.of(activationCandidate)
             }
-            debugLog("<-- findActivationCandidate() returning activationCandidate $activationCandidate (retVal = $retVal)")
+            debugLog("<-- findActivationCandidate() returning activationCandidate $activationCandidate (retVal = $retVal)", "ActivationCandidate")
             return retVal
         }
 
@@ -275,17 +255,37 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                     previousStates.put(ShipParams.ConcreteShipParams(ship, timeElapsed))
                 }
 
+                if (spawnAfterTeleportAfterimages.get()) {
+                    // part 4 - after teleport afterimages
+
+                    // Finally, spawn the ghost images from last position before teleporting that will  home in
+                    // on our current position and give a fake idea that the images that glided away have arrived
+                    debugLog("[${getClockTime()}] performedTeleportImagePosition = ${performedTeleportImagePosition}", "Teleport")
+                    performedTeleportImagePosition?.let {
+                        generatePostTeleportGlidingAfterimages(
+                                POST_TELEPORT_MAX_SHADOW_DISTANCE,
+                                POST_TELEPORT_AFTERIMAGE_DURATION,
+                                it
+                        )
+                    }
+                    // And clear out the 'performedTeleportImagePosition'
+                    performedTeleportImagePosition = null
+
+                    spawnAfterTeleportAfterimages.compareAndSet(true, false)
+                }
+
                 // Do time-specific system stuff here
                 // The following piece got somewhat complicated so here's a breakdown:
                 // 1. if system activated, the ship gets an after image (part 1)
                 // 2. then the fattening EMP arc starts showing (part 2)
-                // 3. after the "active skill" aka "phase-in period" (2 seconds) passes, the skill turns off
+                // 3. after the "active skill" aka baseIn + baseActive (1+2=3 seconds) passes, the skill turns off
                 // 4. before the skill turns off, the teleport counter will have filled up and the ship would have teleported
                 // after which it would have set the "teleportPerformed" flag (part 3)
                 // 5. if the system deactivated / turned off but no teleportation happened, a fallback check will happen
                 // in a subsequent frame, this is the "justTurnedOff && !performedTeleport" case which is when we
                 // just teleport (part 3 again)
-                // 6. in a subsequent frame, the "performedTeleport" is cleared (part 4)
+                // 6. immediatelly after performing teleportation, set a 'spawnAfterTeleportAfterimages' flag (part 4)
+                // 7. in a subsequent frame, the "performedTeleport" is cleared (part 5)
                 if (systemActivated.get()) {
                     arcTimer.advance(amount)
                     if (arcTimer.intervalElapsed()) {
@@ -315,30 +315,42 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                     teleportTimer.advance(amount)
                     if (teleportTimer.intervalElapsed()) {
                         // And now, restore the ship!
+
                         if (rewindCandidate.isPresent()) {
+                            performedTeleportImagePosition = ship.location.clone()
                             deploySavedState(rewindCandidate.get())
                             rewindCandidate = Optional.empty()
                             performedTeleport.compareAndSet(false, true)
+                            spawnAfterTeleportAfterimages.compareAndSet(false, true)
                             playSound(SHIP_TELEPORTED_SOUND, ship)
                         } else {
-                            logger.error("rewindCandidate was not present in teleportTimer part for deploying the rewind candidate!!!")
+                            // Log error only if teleport was not performed to avoid confusing myself since teleport
+                            // timer can't be turned off.
+                            if (performedTeleport.get().not()) {
+                                logger.error("rewindCandidate was not present in teleportTimer part for deploying the rewind candidate!!!")
+                            }
                         }
                     }
                 } else if (justTurnedOff.get() && !performedTeleport.get()) {
                     // In case the system got turned off and the teleport timer somehow didn't fire, lets be sure to repeat
                     // the action here, just in case. Probably not necessary, but just to be sure. We will omit loading
                     // up the teleportTimer because [turnOffSystem] will zero it out - so it won't make sense to fill it.
+                    logger.warn("In the fallback part - candidate: ${rewindCandidate}")
+                    debugLog("In the fallback part - candidate: ${rewindCandidate}", "Teleport")
                     if (rewindCandidate.isPresent()) {
                         // part 3 - fallback in case it didn't happen properly
                         // Restore the ship if this is non-empty
+                        logger.warn("Performing fallback teleportation!")
                         deploySavedState(rewindCandidate.get())
                         rewindCandidate = Optional.empty()
                         justTurnedOff.compareAndSet(true, false)
+                        spawnAfterTeleportAfterimages.compareAndSet(false, true)
                         playSound(SHIP_TELEPORTED_SOUND, ship)
                     } else {
                         logger.error("rewindCandidate was not present in fallback part after justTurnedOff and not teleported!!!")
                     }
                 } else if (performedTeleport.get()) {
+                    // part 5 - performedTeleport bit
                     // If we performed teleport, just zero it out - this is the normal behaviour
                     // for one frame after teleporting back to original position
                     performedTeleport.compareAndSet(true, false)
@@ -364,6 +376,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
          * and also zeroes the [arcTimer] and [teleportTimer] [IntervalUtil] timers
          */
         private fun turnOffSystem() {
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] --> turnOffSystem()\t\tactivationTime: ${activationTime}\tactivation duration: ${getActivationDuration()}", "Teleport")
             systemActivated.compareAndSet(true, false)
             activationTime = -1f
             // reset timers as well
@@ -372,11 +385,11 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             // Since I believe this may cause a data race, lets do one more thing to be sure
             justTurnedOff.compareAndSet(false, true)
         }
-        private fun getActivationDuration(): Float = timeElapsed - activationTime
+        private fun getActivationDuration(): Float = if (activationTime > -1f) { timeElapsed - activationTime } else { 0f }
 
 
         private fun deploySavedState(savedState: ShipParams.ConcreteShipParams) {
-            debugLog("--> deploySavedState()\tDeploying stats and location from time ${savedState.timestamp}\t(X, Y): (${savedState.location.x}, ${savedState.location.y})\tcurrent loc: (${ship.location.x}, ${ship.location.y})")
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] --> deploySavedState()\tDeploying stats and location from time ${savedState.timestamp}\t(X, Y): (${savedState.location.x}, ${savedState.location.y})\tcurrent loc: (${ship.location.x}, ${ship.location.y})")
             ship.velocity.set(savedState.velocity)
             ship.angularVelocity = savedState.angularVelocity
             ship.location.set(savedState.location.x, savedState.location.y)
@@ -386,6 +399,141 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             for (index in 0 until savedState.usableWeapons.size) {
                 ship.usableWeapons[index] = savedState.usableWeapons[index]
             }
+        }
+
+        private fun generatePreTeleportAfterimages() {
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] --> generatePreTeleportAfterimages()", "Teleport")
+            // One afterimage above the ship
+            addAfterimageToWholeShip(
+                    ship,
+                    AfterimageData(
+                            color = Color.CYAN.brighter(),
+                            locX = 0f,
+                            locY = 0f,
+                            velX = 0f,
+                            velY = 0f,
+                            maxJitter = MAX_TIME,
+                            inDuration = 0f,
+                            duration = PHASE_IN_DURATION,
+                            outDuration = MAX_TIME - 1f,
+                            additive = true,
+                            combineWithSpriteColor = true,
+                            aboveShip = true
+                    )
+            )
+
+            // Another afterimage below the ship with added jitter
+            addAfterimageToWholeShip(
+                    ship,
+                    AfterimageData(
+                            color = Color.CYAN.brighter(),
+                            locX = 0f,
+                            locY = 0f,
+                            velX = 0f,
+                            velY = 0f,
+                            maxJitter = 5*MAX_TIME,
+                            inDuration = 0f,
+                            duration = PHASE_IN_DURATION,
+                            outDuration = MAX_TIME - 1f,
+                            additive = true,
+                            combineWithSpriteColor = false,
+                            aboveShip = false
+                    )
+            )
+
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] <-- generatePreTeleportAfterimages()\tgenerated AfterImages with inDuration: ${0f}, duration: ${PHASE_IN_DURATION}, outDuration: ${MAX_TIME - 1f}", "Teleport")
+        }
+
+        private fun generatePreTeleportGlidingAfterimages(destinationLocation: Vector2f, timeAfterimagesShouldTakeToReachDestination: Float) {
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] --> generatePreTeleportGlidingAfterimages()\tdestinationLocation=${destinationLocation}\ttimeAfterimagesShouldTakeToReachDestination=${timeAfterimagesShouldTakeToReachDestination}", "Teleport")
+            val velocityVector = calculateVelocityVector(ship.location, destinationLocation, timeAfterimagesShouldTakeToReachDestination)
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] generatePreTeleportGlidingAfterimages()\tvelocityVector=${velocityVector}", "Teleport")
+            addAfterimageToWholeShip(
+                    ship,
+                    AfterimageData(
+                            color = Color.CYAN.brighter(),
+                            locX = 0f,
+                            locY = 0f,
+                            velX = velocityVector.x,
+                            velY = velocityVector.y,
+                            maxJitter = MAX_TIME,
+                            inDuration = 0f,
+                            duration = PHASE_IN_DURATION,
+                            outDuration = MAX_TIME - 1f,
+                            additive = true,
+                            combineWithSpriteColor = true,
+                            aboveShip = true
+                    )
+            )
+            addAfterimageToWholeShip(
+                    ship,
+                    AfterimageData(
+                            color = Color.CYAN.brighter(),
+                            locX = 0f,
+                            locY = 0f,
+                            velX = velocityVector.x,
+                            velY = velocityVector.y,
+                            maxJitter = 5*MAX_TIME,
+                            inDuration = 0f,
+                            duration = PHASE_IN_DURATION,
+                            outDuration = MAX_TIME - 1f,
+                            additive = true,
+                            combineWithSpriteColor = false,
+                            aboveShip = false
+                    )
+            )
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] <-- generatePreTeleportGlidingAfterimages()\tgenerated AfterImages with inDuration: ${0f}, duration: ${PHASE_IN_DURATION}, outDuration: ${MAX_TIME - 1f}", "Teleport")
+        }
+
+        private fun generatePostTeleportGlidingAfterimages(maxDistance: Float, afterimageDuration: Float, oldLocation: Vector2f) {
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] --> generatePostTeleportGlidingAfterimages()\tmaxDistance=${maxDistance}", "Teleport")
+            // Due to the built-in limit on how far an Afterimage can draw away from the ship,
+            // lets try using something much closer to our current position rather than the original one
+            val newLocationVector = ship.location.clone()
+            val fromOldPositionToCurrentPositionDirectionVector = newLocationVector.sub(oldLocation)
+            val normalizedDirection = fromOldPositionToCurrentPositionDirectionVector.normalized()
+            val shadowVector = newLocationVector.sub(normalizedDirection.mul(maxDistance))
+            val newVelocityVector = calculateVelocityVector(shadowVector, newLocationVector, afterimageDuration)
+            val shadowVectorRelativeToNewLocation = shadowVector.sub(newLocationVector)
+
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] generatePostTeleportGlidingAfterimages()\tnewLocationVector = ${newLocationVector}\tfromOldPositionToCurrentPositionDirectionVector = ${fromOldPositionToCurrentPositionDirectionVector}\tnormalizedDirection = ${normalizedDirection}\tshadowVector = ${shadowVector}\tnewVelocityVector = ${newVelocityVector}", "Teleport")
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] generatePostTeleportGlidingAfterimages()\tCreating shadows from ${shadowVector} to ${newLocationVector}\tlast position = ${oldLocation}\tvelocity vector = ${newVelocityVector}", "Teleport")
+
+            addAfterimageToWholeShip(
+                    ship,
+                    AfterimageData(
+                            color = Color.CYAN.brighter(),
+                            locX = shadowVectorRelativeToNewLocation.x,
+                            locY = shadowVectorRelativeToNewLocation.y,
+                            velX = newVelocityVector.x,
+                            velY = newVelocityVector.y,
+                            maxJitter = MAX_TIME,
+                            inDuration = 0f,
+                            duration = afterimageDuration,
+                            outDuration = 0f,
+                            additive = true,
+                            combineWithSpriteColor = true,
+                            aboveShip = true
+                    )
+            )
+            addAfterimageToWholeShip(
+                    ship,
+                    AfterimageData(
+                            color = Color.CYAN.brighter(),
+                            locX = shadowVectorRelativeToNewLocation.x,
+                            locY = shadowVectorRelativeToNewLocation.y,
+                            velX = newVelocityVector.x,
+                            velY = newVelocityVector.y,
+                            maxJitter = MAX_TIME,
+                            inDuration = 0f,
+                            duration = afterimageDuration,
+                            outDuration = 0f,
+                            additive = true,
+                            combineWithSpriteColor = false,
+                            aboveShip = false
+                    )
+            )
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] <-- generatePostTeleportGlidingAfterimages()\t\tgenerated AfterImages with inDuration: ${0f}, duration: ${afterimageDuration}, outDuration: ${0f}", "Teleport")
         }
     }
 
@@ -422,6 +570,10 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         if (DEBUG) logger.info("[RewindSystem] $log")
     }
 
+    private fun debugLog(log: String, @NonNull logTag: String) {
+        if (DEBUG_LOGTAG_LIST.contains(logTag)) logger.info("[RewindSystem:$logTag] $log")
+    }
+
     sealed class ShipParams {
 
         data class ConcreteShipParams(val ship: ShipAPI, val timestamp: Float) : ShipParams() {
@@ -441,7 +593,11 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     }
 
     companion object {
+        // To turn off logtag-based logging, make sure this list is empty
+        // Possible values are "ActivationCandidate", "Teleport"
+        private val DEBUG_LOGTAG_LIST: List<String> = listOf()
         private const val DEBUG = false
+
         private const val ITEM = "et_rewindchip"
         private const val MAX_TIME = 15f
         private const val COOLDOWN = 300
@@ -449,6 +605,9 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 
         private const val SYSTEM_ACTIVATION_SOUND = "gigacannon_charge"
         private const val SHIP_TELEPORTED_SOUND = "tachyon_lance_fire"
+
+        private const val POST_TELEPORT_AFTERIMAGE_DURATION = 1f
+        private const val POST_TELEPORT_MAX_SHADOW_DISTANCE = 2500f
     }
 
 }
