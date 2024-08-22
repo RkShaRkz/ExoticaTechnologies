@@ -16,11 +16,9 @@ import com.fs.starfarer.api.util.IntervalUtil
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
-import exoticatechnologies.util.StringUtils
-import exoticatechnologies.util.Utilities
+import exoticatechnologies.util.*
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.datastructures.RingBuffer
-import exoticatechnologies.util.playSound
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.combat.entities.SimpleEntity
@@ -150,23 +148,39 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                     //part 1 - afterimage on ship
                     //note1: afterimage uses ship-relative coordinates, so anything other than 0,0 will paint it at some distance from the ship
                     //note2: using non-zero velocity will make the image "drift away" from the ship instead of staying on top of it
-                    ship.addAfterimage(
-                            Color.CYAN.brighter(),
-//                            it.location.getX(),
-//                            it.location.getY(),
-                            0f,
-                            0f,
-                            0f,
-                            0f,
-//                            ship.velocity.getX(),
-//                            ship.velocity.getY(),
-                            MAX_TIME,
-                            0f,
-                            PHASE_IN_DURATION,
-                            MAX_TIME - 1f,
-                            true,
-                            false,
-                            true
+                    addAfterimageToWholeShip(
+                            ship,
+                            AfterimageData(
+                                    color = Color.CYAN.brighter(),
+                                    locX = 0f,
+                                    locY = 0f,
+                                    velX = 0f,
+                                    velY = 0f,
+                                    maxJitter = MAX_TIME,
+                                    inDuration = 0f,
+                                    duration = PHASE_IN_DURATION,
+                                    outDuration = MAX_TIME - 1f,
+                                    additive = true,
+                                    combineWithSpriteColor = true,
+                                    aboveShip = true
+                            )
+                    )
+                    addAfterimageToWholeShip(
+                            ship,
+                            AfterimageData(
+                                    color = Color.CYAN.brighter(),
+                                    locX = 0f,
+                                    locY = 0f,
+                                    velX = 0f,
+                                    velY = 0f,
+                                    maxJitter = 5*MAX_TIME,
+                                    inDuration = 0f,
+                                    duration = PHASE_IN_DURATION,
+                                    outDuration = MAX_TIME - 1f,
+                                    additive = true,
+                                    combineWithSpriteColor = false,
+                                    aboveShip = false
+                            )
                     )
                     // The other parts (part 2 and part 3) will happen over time in advance()
                 }
