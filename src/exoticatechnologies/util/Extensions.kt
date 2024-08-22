@@ -8,6 +8,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.loading.VariantSource
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.ui.UIPanelAPI
+import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.util.reflect.ReflectionUtils
@@ -19,6 +20,7 @@ import java.awt.Color
 import kotlin.math.absoluteValue
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 fun FleetMemberAPI.getMods(): ShipModifications = ShipModFactory.generateForFleetMember(this)
 
@@ -133,46 +135,95 @@ fun playSound(soundId: String, ship: ShipAPI, pitch: Float = 1.0f, volume: Float
     )
 }
 
+/**
+ * Returns names of all ships in a list
+ *
+ * @param shipList list of ships whose names to return
+ * @return list of these ships' names
+ */
 fun getNamesOfShipsInListOfShips(shipList: List<ShipAPI>): List<String> {
     return shipList.map { ship -> ship.name }
 }
 
 /**
  * For simple ships, this is exactly the same as [ShipAPI.getAllWeapons] but for multi-segmented ships, it will
- * walk through all segments and return *all* weapons on the ship
+ * walk through all segments and return *all* weapons on the ship regardless of whether [ship] was the main module or not
+ *
+ * @param ship ship which to walk through and gather all weapons to be returned
+ * @return all weapons contained in [ship], all of it's children or all of it's parent's children
  */
 fun getAllShipWeapons(ship: ShipAPI): List<WeaponAPI> {
-//    AnonymousLogger.log("--> getAllShipWeapons()\tship: ${ship}\tship hullspec hullname: ${ship.hullSpec.hullName}\tship childModulesCopy size: ${ship.childModulesCopy.size}\tis ship with modules: ${ship.isShipWithModules}")
     val weaponList: MutableList<WeaponAPI> = mutableListOf()
-    weaponList.addAll(ship.allWeapons)
-//    AnonymousLogger.log("getAllShipWeapons()\tship: ${ship}\tship's all weapons: ${ship.allWeapons.map { weapon -> weapon.id }}")
-//    AnonymousLogger.log("getAllShipWeapons()\tship.variant.stationModules.size: ${ship.variant.stationModules.size}")
-    if (ship.childModulesCopy.isNotEmpty()) {
-        for (module in ship.childModulesCopy) {
-//            AnonymousLogger.log("getAllShipWeapons()\tmodule: ${module}\tmodule name: ${module.name}\tmodule hullspec hullname: ${module.hullSpec.hullName}\tmodule's all weapons: ${module.allWeapons.map { weapon -> weapon.id }}")
-            weaponList.addAll(module.allWeapons)
-        }
+    val allShipSections = getAllShipSections(ship)
+    for (module in allShipSections) {
+        weaponList.addAll(module.allWeapons)
     }
-//    AnonymousLogger.log("<-- getAllShipWeapons()\treturning ${weaponList.map {weapon -> weapon.id} }")
 
     return weaponList
 }
 
+/**
+ * Data class for holding all necessary params to pass to [ShipAPI.addAfterimage]
+ */
 data class AfterimageData(
-    val color: Color,
-    val locX: Float,
-    val locY: Float,
-    val velX: Float,
-    val velY: Float,
-    val maxJitter: Float,
-    val inDuration: Float,
-    val duration: Float,
-    val outDuration: Float,
-    val additive: Boolean,
-    val combineWithSpriteColor: Boolean,
-    val aboveShip: Boolean
+        /**
+         * Color to use
+         */
+        val color: Color,
+        /**
+         * Location X, be aware that afterimages use ship-relative coordinates so anything other than 0 will
+         * displace it from the ship
+         */
+        val locX: Float,
+        /**
+         * Location Y, be aware that afterimages use ship-relative coordinates so anything other than 0 will
+         * displace it from the ship
+         */
+        val locY: Float,
+        /**
+         * Velocity X, velocity to apply to the afterimage
+         */
+        val velX: Float,
+        /**
+         * Velocity Y, velocity to apply to the afterimage
+         */
+        val velY: Float,
+        /**
+         * Maximum jitter to apply
+         */
+        val maxJitter: Float,
+        /**
+         * The "transitioning-in" duration
+         */
+        val inDuration: Float,
+        /**
+         * The afterimage duration
+         */
+        val duration: Float,
+        /**
+         * The "transitioning-out" duration
+         */
+        val outDuration: Float,
+        /**
+         * Whether this afterimage is additive
+         */
+        val additive: Boolean,
+        /**
+         * Whether the afterimage will combine with sprite color
+         */
+        val combineWithSpriteColor: Boolean,
+        /**
+         * Whether this afterimage is above or below the ship
+         */
+        val aboveShip: Boolean
 )
 
+/**
+ * Adds an afterimage to [ship] by using data from [AfterimageData]
+ *
+ * @param ship to add the afterimage to
+ * @param data afterimage arguments
+ */
 fun addAfterimageTo(ship: ShipAPI, data: AfterimageData) {
     ship.addAfterimage(
             data.color,
@@ -190,6 +241,12 @@ fun addAfterimageTo(ship: ShipAPI, data: AfterimageData) {
     )
 }
 
+/**
+ * Applies an afterimage to all modules of [ship], while applying [data] to the [ShipAPI.addAfterimage]
+ *
+ * @param ship the ship to which to apply the afterimage
+ * @param data the [AfterimageData] to apply
+ */
 fun addAfterimageToWholeShip(ship: ShipAPI, data: AfterimageData) {
     // If ship is parent, apply to children
     if (ship.childModulesCopy.isNotEmpty()) {
@@ -206,7 +263,7 @@ fun addAfterimageToWholeShip(ship: ShipAPI, data: AfterimageData) {
     // If ship is a submodule, get parent, and apply to all his children
     if (ship.parentStation != null) {
         val parent = ship.parentStation
-        for (module in ship.childModulesCopy) {
+        for (module in parent.childModulesCopy) {
             addAfterimageTo(module, data)
         }
         // but also apply to parent now that all his children (including the original 'ship' which was a child) were painted
@@ -222,6 +279,178 @@ fun addAfterimageToWholeShip(ship: ShipAPI, data: AfterimageData) {
     // and return because we're done
     return
 }
+
+/**
+ * Returns all modules of the ship the [ship] belongs to. For single-module ships, [ship] is already the whole ship.
+ *
+ * For multi-module ships, the method will gather all modules regardless of whether [ship] is the main module or
+ * child module.
+ *
+ * @param ship the ship for which to collect all modules
+ * @return list of [ship]'s ship modules
+ */
+fun getAllShipSections(ship: ShipAPI): List<ShipAPI> {
+    // If ship is parent, apply to children
+    if (ship.childModulesCopy.isNotEmpty()) {
+        return ship.childModulesCopy
+    }
+
+    // If ship is a submodule, get parent, and apply to all his children
+    if (ship.parentStation != null) {
+        val parent = ship.parentStation
+        return parent.childModulesCopy
+    }
+
+    // The last scenario is - it's single module ship, so just return that
+    return listOf(ship)
+}
+
+/**
+ * Method for calculating a vector pointing from [fromVector] to [toVector]
+ *
+ * @param fromVector the vector from which we want to start pointing
+ * @param toVector the vector to which we want to point to
+ * @return vector pointing from [fromVector] to [toVector]
+ */
+fun getDirectionVector(fromVector: Vector2f, toVector: Vector2f): Vector2f {
+    return toVector.sub(fromVector)
+}
+
+
+/**
+ * Returns vector pointing from this vector to [toVector]
+ *
+ * @param toVector the vector to point to
+ * @return vector pointing from this vector to [toVector]
+ */
+fun Vector2f.getDirectionVectorTo(toVector: Vector2f): Vector2f {
+    return toVector.sub(this)
+}
+
+/**
+ * Calculates velocity vector, a vector which will allow us to get from
+ * [fromVector] to [toVector] in [time] amount of time.
+ *
+ * @param fromVector first vector, from which we're starting to travel
+ * @param toVector second vector, to which we are going to travel
+ * @param time amount of time in which we want to get from [fromVector] to [toVector]
+ * @return the velocity vector
+ */
+fun getVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Float): Vector2f {
+    return toVector.sub(fromVector).div(time)
+}
+
+/**
+ * Scalar division of this vector by [scalar]
+ *
+ * @param scalar the scalar to divide this vector with
+ * @return vector that has it's X and Y divided by [scalar]
+ */
+fun Vector2f.div(scalar: Float): Vector2f {
+    return Vector2f(this.x / scalar, this.y / scalar)
+}
+
+/**
+ * Scalar multiplication of this vector by [scalar]
+ *
+ * @param scalar the scalar to multiply this vector with
+ * @return vector that has it's X and Y multiplied by [scalar]
+ */
+fun Vector2f.mul(scalar: Float): Vector2f {
+    return Vector2f(this.x * scalar, this.y * scalar)
+}
+
+/**
+ * Scalar addition of this vector and [scalar]
+ *
+ * @param scalar the scalar to add to this vector
+ * @return vector that has it's X and Y increased by [scalar]
+ */
+fun Vector2f.add(scalar: Float): Vector2f {
+    return Vector2f(this.x + scalar, this.y + scalar)
+}
+
+/**
+ * Scalar substraction of this vector and [scalar]
+ *
+ * @param scalar the scalar to substract from this vector
+ * @return vector that has it's X and Y subtracted by [scalar]
+ */
+fun Vector2f.sub(scalar: Float): Vector2f {
+    return Vector2f(this.x - scalar, this.y - scalar)
+}
+
+/**
+ * Vector division of this vector by [vector]
+ *
+ * @param vector the vector to divide this vector with
+ * @return vector that has it's X and Y divided by [vector]'s X and Y
+ */
+fun Vector2f.div(vector: Vector2f): Vector2f {
+    return Vector2f(this.x / vector.x, this.y / vector.y)
+}
+
+/**
+ * Vector multiplication of this vector by [vector]
+ *
+ * @param vector the vector to multiply this vector with
+ * @return vector that has it's X and Y multiplied by [vector]'s X and Y
+ */
+fun Vector2f.mul(vector: Vector2f): Vector2f {
+    return Vector2f(this.x * vector.x, this.y * vector.y)
+}
+
+/**
+ * Vector addition of this vector and [vector]
+ *
+ * @param vector the vector to add to this vector
+ * @return vector that has it's X and Y increased by [vector]'s X and Y
+ */
+fun Vector2f.add(vector: Vector2f): Vector2f {
+    return Vector2f(this.x + vector.x, this.y + vector.y)
+}
+
+/**
+ * Vector subtraction of this vector and [vector]
+ *
+ * @param vector the vector to subtract from this vector
+ * @return vector that has it's X and Y subtracted by [vector]'s X and Y
+ */
+fun Vector2f.sub(vector: Vector2f): Vector2f {
+    return Vector2f(this.x - vector.x, this.y - vector.y)
+}
+
+/**
+ * Calculate the magnitude (length) of this vector
+ *
+ * @see [Vector2f.length]
+ */
+fun Vector2f.magnitude(): Float {
+    return sqrt(this.x * this.x + this.y * this.y)
+}
+
+/**
+ * Calculates velocity vector which will take us from [fromVector] to [toVector] in [time] amount of time,
+ * while taking distance into account.
+ *
+ * Unlike [getVelocityVector], this method takes speed into account, which makes the distance between the vectors
+ * matter more
+ *
+ * @param fromVector first vector, from which we're starting to travel
+ * @param toVector second vector, to which we are going to travel
+ * @param time amount of time in which we want to get from [fromVector] to [toVector]
+ * @return the velocity vector
+ *
+ * @see getVelocityVector
+ */
+fun calculateVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Float): Vector2f {
+    val direction = getDirectionVector(fromVector, toVector)
+    val distance = Misc.getDistance(fromVector, toVector)
+    val speed = distance / time
+
+    return direction.mul(speed / distance)
+}
+
 
 val <T> T.exhaustive: T
     get() = this
