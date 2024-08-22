@@ -72,7 +72,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         super.applyToShip(id, member, ship, mods, exoticData)
 
         originalShip = ship
-        val subsystem = RewindSubsystem(ship, member, mods, exoticData)
+        val subsystem = RewindSubsystem(ship, member, mods, exoticData, key)
         MagicSubsystemsManager.addSubsystemToShip(ship, subsystem)
     }
 
@@ -80,7 +80,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             ship: ShipAPI,
             val member: FleetMemberAPI,
             val mods: ShipModifications,
-            val exoticData: ExoticData
+            val exoticData: ExoticData,
+            val stringKey: String
     ) : MagicSubsystem(ship) {
         private var engine: CombatEngineAPI = Global.getCombatEngine()
         private val secondsTracker = IntervalUtil(0.95f, 1.05f)
@@ -119,6 +120,20 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         }
 
         override fun getBaseCooldownDuration() = COOLDOWN * getNegativeMult(member, mods, exoticData)
+
+        override fun getExtraInfoText(): String {
+            val superText = super.getExtraInfoText()
+
+            return if (superText == null) {
+                if (canActivate()) {
+                    superText
+                } else {
+                    StringUtils.getTranslation(stringKey, "cantActivate").toStringNoFormats()
+                }
+            } else {
+                superText
+            }
+        }
 
         override fun onActivate() {
             super.onActivate()
@@ -216,8 +231,8 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         }
 
         private fun findActivationCandidate(): Optional<ShipParams.ConcreteShipParams> {
-            // Due to lack of synchronization, a data race happens here and shipParams can end up being null. yuck.
-            val activationCandidate = previousStates.find { shipParams ->
+            // Due to lack of synchronization, a data race or something happens here and shipParams can end up being null. yuck.
+            val activationCandidate = previousStates.find { shipParams: ShipParams? ->
                 isActivationPossible(ship, shipParams)
             }
 
@@ -326,7 +341,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
          */
         private fun turnOnSystem() {
             systemActivated.compareAndSet(false, true)
-            activationTime = timeElapsed;
+            activationTime = timeElapsed
             playSound(SYSTEM_ACTIVATION_SOUND, ship)
         }
 
@@ -336,7 +351,7 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
          */
         private fun turnOffSystem() {
             systemActivated.compareAndSet(true, false)
-            activationTime = -1f;
+            activationTime = -1f
             // reset timers as well
             arcTimer.elapsed = 0f
             teleportTimer.elapsed = 0f
@@ -416,10 +431,10 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         private const val ITEM = "et_rewindchip"
         private const val MAX_TIME = 15f
         private const val COOLDOWN = 300
-        private const val PHASE_IN_DURATION = 2f;
+        private const val PHASE_IN_DURATION = 2f
 
-        private val SYSTEM_ACTIVATION_SOUND = "gigacannon_charge"
-        private val SHIP_TELEPORTED_SOUND = "tachyon_lance_fire"
+        private const val SYSTEM_ACTIVATION_SOUND = "gigacannon_charge"
+        private const val SHIP_TELEPORTED_SOUND = "tachyon_lance_fire"
     }
 
 }
