@@ -136,7 +136,9 @@ public class ExoticaTechHM extends BaseHullMod {
      */
     public boolean shouldSkipModification(MutableShipStatsAPI stats, Modification mod) {
         boolean fleetMemberNonNull = stats.getFleetMember() != null;
-        boolean fleetMemberShipNameIsNull = stats.getFleetMember().getShipName() == null;
+        // lets just default to 'false' if fleetmember is null - it won't go into the if() anyways
+        // since the first condition is for the fleetmember to be non-null
+        boolean fleetMemberShipNameIsNull = (stats.getFleetMember() != null) ? stats.getFleetMember().getShipName() == null : false;
         boolean modAppliesToModules = mod.shouldAffectModule(stats);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
 
