@@ -100,12 +100,12 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         private var activationTime = -1f
         private val previousStates: RingBuffer<ShipParams> = RingBuffer<ShipParams>(
                 determineRewindLength(ship) + 5,
-                ShipParams.EmptyShipParams,
+                ActualShipParams.EmptyShipParams,
                 ShipParams::class.java
         )
 
         @Volatile
-        private var rewindCandidate: Optional<ShipParams.ConcreteShipParams> = Optional.empty()
+        private var rewindCandidate: Optional<ShipParams> = Optional.empty()
 
         override fun getBaseInDuration(): Float = 1f
 
@@ -219,12 +219,20 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             // calculate the timestamp we're looking for in the past
             val pastTime = timeElapsed - determineRewindLength(ship)
 
-            // We have a ConcreteShipParams (non-invalid data) and we found a timestamp within a 1second of our target past time
-            return shipParams != null && shipParams is ShipParams.ConcreteShipParams
-                    && ((shipParams.timestamp - pastTime >= 0) && (shipParams.timestamp - pastTime <= 1))
+            return if (shipParams is ActualShipParams) {
+                // Check the timestamp for valid ActualShipParams implementations, and return false for EmptyShipParams
+                when(shipParams) {
+                    is ActualShipParams.ConcreteShipParams,
+                    is ActualShipParams.MultiModuleShipParams -> (shipParams.timestamp - pastTime >= 0) && (shipParams.timestamp - pastTime <= 1)
+                    is ActualShipParams.EmptyShipParams -> false
+                }.exhaustive
+            } else {
+                // This one catches nulls
+                false
+            }
         }
 
-        private fun findActivationCandidate(): Optional<ShipParams.ConcreteShipParams> {
+        private fun findActivationCandidate(): Optional<ShipParams> {
             // Due to lack of synchronization, a data race or something happens here and shipParams can end up being null. yuck.
             val activationCandidate = previousStates.find { shipParams: ShipParams? ->
                 isActivationPossible(ship, shipParams)
@@ -233,9 +241,16 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             val retVal = if (activationCandidate == null) {
                 Optional.empty()
             } else {
-                activationCandidate as ShipParams.ConcreteShipParams
+                when(activationCandidate) {
+                    is ActualShipParams.ConcreteShipParams -> {
+                        Optional.of(activationCandidate)
+                    }
+                    is ActualShipParams.MultiModuleShipParams -> {
+                        Optional.of(activationCandidate)
+                    }
 
-                Optional.of(activationCandidate)
+                    else -> throw IllegalStateException("Encountered 'activationCandidate' of type ${activationCandidate.javaClass} in findActivationCandidate()! Add support for this !!!")
+                }.exhaustive
             }
             debugLog("<-- findActivationCandidate() returning activationCandidate $activationCandidate (retVal = $retVal)", "ActivationCandidate")
             return retVal
@@ -252,7 +267,11 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
                 if (secondsTracker.intervalElapsed()) {
                     // Another second passed, record a snapshot
                     debugLog("Saving stats and location at time ${timeElapsed}\t(X, Y): (${ship.location.x}, ${ship.location.y})")
-                    previousStates.put(ShipParams.ConcreteShipParams(ship, timeElapsed))
+                    if (ship.isThisAMultiModuleShipFast().not()) {
+                        previousStates.put(ActualShipParams.ConcreteShipParams(ship, timeElapsed))
+                    } else {
+                        previousStates.put(ActualShipParams.MultiModuleShipParams(ship, timeElapsed))
+                    }
                 }
 
                 if (spawnAfterTeleportAfterimages.get()) {
@@ -388,16 +407,74 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         private fun getActivationDuration(): Float = if (activationTime > -1f) { timeElapsed - activationTime } else { 0f }
 
 
-        private fun deploySavedState(savedState: ShipParams.ConcreteShipParams) {
-            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] --> deploySavedState()\tDeploying stats and location from time ${savedState.timestamp}\t(X, Y): (${savedState.location.x}, ${savedState.location.y})\tcurrent loc: (${ship.location.x}, ${ship.location.y})")
-            ship.velocity.set(savedState.velocity)
-            ship.angularVelocity = savedState.angularVelocity
-            ship.location.set(savedState.location.x, savedState.location.y)
-            ship.facing = savedState.facing
-            ship.maxHitpoints = savedState.maxHitpoints
-            ship.hitpoints = savedState.hitpoints
-            for (index in 0 until savedState.usableWeapons.size) {
-                ship.usableWeapons[index] = savedState.usableWeapons[index]
+        private fun deploySavedState(savedState: ShipParams) {
+            debugLog("[${getClockTime()} - ${getTimeFromSeconds(getActivationDuration())}] --> deploySavedState()\tDeploying stats and location from time ${savedState.timestamp}\t(X, Y): (${savedState.location.x}, ${savedState.location.y})\tcurrent loc: (${ship.location.x}, ${ship.location.y})\tship.isMultiModule ? ${ship.isThisAMultiModuleShipFast()}")
+
+            when (savedState) {
+                is ActualShipParams.ConcreteShipParams -> {
+                    // The ConcreteShipParams version
+                    applySavedStateToModule(ship, savedState)
+                }
+
+                is ActualShipParams.MultiModuleShipParams -> {
+                    // The MultiModuleShipParams version, get all modules of the ship and apply it's saved params to each one of them
+                    for (section in getAllShipSections(ship)) {
+                        // Now, apply stuff to each section accordingly
+                        val state = savedState.moduleParamsMap[section.id]
+                        if (state != null) {
+                            applySavedStateToModule(section, state)
+                        } else {
+                            logger.error("'state' was null in savedState.moduleParamsMap[section.id] for section.id ${section.id}")
+                        }
+                    }
+                }
+
+                else -> throw IllegalStateException("Encountered 'savedState' of type ${savedState.javaClass} in deploySavedState()! Add support for this !!!")
+            }.exhaustive
+        }
+
+        private fun applySavedStateToModule(module: ShipAPI, savedState: ActualShipParams.ConcreteShipParams) {
+            debugLog("--> applySavedStateToModule()\tmodule: ${module}, savedState: ${savedState}")
+            module.velocity.set(savedState.velocity)
+            module.angularVelocity = savedState.angularVelocity
+            module.location.set(savedState.location.x, savedState.location.y)
+            module.facing = savedState.facing
+            module.maxHitpoints = savedState.maxHitpoints
+            module.hitpoints = savedState.hitpoints
+            if (module.system != null) {
+                module.system.cooldownRemaining = savedState.systemCooldownRemaining
+                module.system.ammo = savedState.systemAmmo
+            }
+            if (module.shield != null) {
+                if (savedState.wasShieldOn) { module.shield.toggleOn() } else { module.shield.toggleOff() }
+            }
+            for ((index, savedStateWeaponData) in savedState.weaponsData.withIndex()) {
+                val shipWeapon = module.allWeapons[index]
+                if (shipWeapon == savedStateWeaponData.weapon) {
+                    // If they weren't disabled/permanently disabled and they are now, restore them to good condition
+                    if (shipWeapon.isDisabled && savedStateWeaponData.isDisabled.not()) {
+                        shipWeapon.repair()
+                    }
+                    if (shipWeapon.isPermanentlyDisabled && savedStateWeaponData.isPermanentlyDisabled.not()) {
+                        shipWeapon.repair()
+                    }
+
+                    // If they were disabled/permanently disabled and they aren't now (?!?), disable them
+                    if (shipWeapon.isDisabled.not() && savedStateWeaponData.isDisabled) {
+                        shipWeapon.disable()
+                    }
+                    if (shipWeapon.isPermanentlyDisabled.not() && savedStateWeaponData.isPermanentlyDisabled) {
+                        shipWeapon.disable(true)
+                    }
+
+                    // Restore the rest of the parameters
+                    shipWeapon.currHealth = savedStateWeaponData.currentHealth
+                    shipWeapon.currAngle = savedStateWeaponData.currentAngle
+                    shipWeapon.ammo = savedStateWeaponData.currentAmmo
+                    shipWeapon.setRemainingCooldownTo(savedStateWeaponData.cooldownRemaining)
+                } else {
+                    logger.error("Weapon [${shipWeapon} - [${shipWeapon.displayName}] doesn't match the WeaponData's instance [${savedStateWeaponData.weapon} - ${savedStateWeaponData.weapon.displayName}] !!!")
+                }
             }
         }
 
@@ -574,22 +651,62 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
         if (DEBUG_LOGTAG_LIST.contains(logTag)) logger.info("[RewindSystem:$logTag] $log")
     }
 
-    sealed class ShipParams {
+    /**
+     * Necessary interface workaround to be able to use a sealed class as a generic type
+     */
+    interface ShipParams {
+        val location: Vector2f
+        val timestamp: Float
+    }
 
-        data class ConcreteShipParams(val ship: ShipAPI, val timestamp: Float) : ShipParams() {
+    sealed class ActualShipParams: ShipParams {
+
+        data class ConcreteShipParams(val ship: ShipAPI, override val timestamp: Float) : ActualShipParams() {
             // Make an actual copy of all of the values instead of just reusing their reference
             // Primitives are assigned by-value, so they're automatically copied during assignment
-            val location: Vector2f = Vector2f(ship.location)
+            override val location: Vector2f = Vector2f(ship.location)
             val velocity: Vector2f = Vector2f(ship.velocity)
             val angularVelocity = ship.angularVelocity
             val facing = ship.facing
             val maxHitpoints: Float = ship.maxHitpoints
             val hitpoints: Float = ship.hitpoints
-            val usableWeapons: List<WeaponAPI> = ship.usableWeapons.toList()
+            val weaponsData: List<WeaponData> = ship.allWeapons.toList().map { weapon -> WeaponData(weapon) }
+            val systemAmmo = ship.system?.let {it.ammo} ?: INVALID_INT_VALUE
+            val systemCooldownRemaining = ship.system?.let { it.cooldownRemaining } ?: INVALID_FLOAT_VALUE
+            val wasShieldOn: Boolean = ship.shield?.let { it.isOn } ?: false
         }
 
-        object EmptyShipParams : ShipParams()
+        data class MultiModuleShipParams(val ship: ShipAPI, override val timestamp: Float) : ActualShipParams() {
+            override val location: Vector2f = Vector2f(ship.location)
+            // now, since we have multiple modules, we will need to keep a track of all of them
+            val moduleParamsMap = HashMap<String, ConcreteShipParams>()
 
+            init {
+                val shipSections = getAllShipSections(ship)
+                shipSections.forEach { section ->
+                    moduleParamsMap[section.id] = ConcreteShipParams(section, timestamp)
+
+                    moduleParamsMap.toMap()
+                }
+            }
+        }
+
+        object EmptyShipParams : ActualShipParams() {
+            override val location: Vector2f
+                get() = throw IllegalStateException("EmptyShipParams does not have 'location'")
+            override val timestamp: Float
+                get() = throw IllegalStateException("EmptyShipParams does not have 'timestamp'")
+        }
+
+    }
+
+    data class WeaponData(val weapon: WeaponAPI) {
+        val currentHealth: Float = weapon.currHealth
+        val currentAngle: Float = weapon.currAngle
+        val currentAmmo: Int = weapon.ammo
+        val cooldownRemaining: Float = weapon.cooldownRemaining
+        val isDisabled: Boolean = weapon.isDisabled
+        val isPermanentlyDisabled: Boolean = weapon.isPermanentlyDisabled
     }
 
     companion object {
@@ -608,6 +725,9 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
 
         private const val POST_TELEPORT_AFTERIMAGE_DURATION = 1f
         private const val POST_TELEPORT_MAX_SHADOW_DISTANCE = 2500f
+
+        private const val INVALID_INT_VALUE = -5
+        private const val INVALID_FLOAT_VALUE = INVALID_INT_VALUE.toFloat()
     }
 
 }

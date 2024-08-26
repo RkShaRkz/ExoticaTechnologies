@@ -154,13 +154,8 @@ fun getNamesOfShipsInListOfShips(shipList: List<ShipAPI>): List<String> {
  * @return all weapons contained in [ship], all of it's children or all of it's parent's children
  */
 fun getAllShipWeapons(ship: ShipAPI): List<WeaponAPI> {
-    val weaponList: MutableList<WeaponAPI> = mutableListOf()
-    val allShipSections = getAllShipSections(ship)
-    for (module in allShipSections) {
-        weaponList.addAll(module.allWeapons)
-    }
-
-    return weaponList
+    return getAllShipSections(ship)
+            .flatMap { shipModule -> shipModule.allWeapons }
 }
 
 /**
@@ -293,17 +288,66 @@ fun addAfterimageToWholeShip(ship: ShipAPI, data: AfterimageData) {
 fun getAllShipSections(ship: ShipAPI): List<ShipAPI> {
     // If ship is parent, apply to children
     if (ship.childModulesCopy.isNotEmpty()) {
-        return ship.childModulesCopy
+        return combineIntoList(ship.childModulesCopy, ship)
     }
 
     // If ship is a submodule, get parent, and apply to all his children
     if (ship.parentStation != null) {
         val parent = ship.parentStation
-        return parent.childModulesCopy
+        return combineIntoList(parent.childModulesCopy, parent)
     }
 
     // The last scenario is - it's single module ship, so just return that
     return listOf(ship)
+}
+
+/**
+ * Returns whether the [ship] is a multi-module (or belongs to a multi-module) ship.
+ * Internally calls [getAllShipSections] so you might not want to call this in every frame
+ *
+ * @param ship the ship to check
+ * @return [false] if it's a single-module or [true] if it's a multi-module ship
+ * @see getAllShipSections
+ * @see isMultiModuleShipFast
+ */
+fun isMultiModuleShip(ship: ShipAPI): Boolean {
+    return getAllShipSections(ship).size > 1
+}
+
+/**
+ * Faster version to check whether the [ship] is a multi-module (or belongs to a multi-module) ship.
+ * Internally checks whether [ShipAPI.getParentStation] is non-null or [ShipAPI.getChildModulesCopy] is non-empty
+ *
+ * @param ship the ship to check
+ * @return [false] if it's a single-module or [true] if it's a multi-module ship
+ * @see isMultiModuleShip
+ */
+fun isMultiModuleShipFast(ship: ShipAPI): Boolean {
+    return ship.parentStation != null || ship.childModulesCopy.isNotEmpty()
+}
+
+/**
+ * Returns whether this ship is a multi-module (or belongs to a multi-module) ship.
+ * Internally calls [getAllShipSections] so you might not want to call this in every frame
+ *
+ * @return whether [false] if it's a single-module or [true] if it's a multi-module ship
+ * @see getAllShipSections
+ * @see isMultiModuleShip
+ * @see isMultiModuleShipFast
+ */
+fun ShipAPI.isThisAMultiModuleShip(): Boolean {
+    return getAllShipSections(this).size > 1
+}
+
+/**
+ * Faster version to check whether this ship is a multi-module (or belongs to a multi-module) ship.
+ * Internally checks whether [ShipAPI.getParentStation] is non-null or [ShipAPI.getChildModulesCopy] is non-empty
+ *
+ * @return whether [false] if it's a single-module or [true] if it's a multi-module ship
+ * @see ShipAPI.isThisAMultiModuleShip
+ */
+fun ShipAPI.isThisAMultiModuleShipFast(): Boolean {
+    return this.parentStation != null || this.childModulesCopy.isNotEmpty()
 }
 
 /**
@@ -471,6 +515,41 @@ fun calculateVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Floa
     val speed = distance / time
 
     return direction.mul(speed / distance)
+}
+
+/**
+ * Method that combines [lists] into a single List
+ * List **have** to be of same type
+ *
+ * @param list the list to combine into the resulting list
+ * @return list containing all listed elements (arguments)
+ */
+fun <T> combineIntoList(vararg lists: List<T>): List<T> {
+    val retVal = mutableListOf<T>()
+    for (list in lists) {
+        retVal.addAll(list)
+    }
+
+    return retVal.toList()
+}
+
+/**
+ * Method that combines a [list] and [elements] into a single List
+ * List and elements **have** to be of same type
+ *
+ * @param list the list to combine into the resulting list
+ * @param elements the elements to add onto that list
+ * @return list containing all listed elements (arguments)
+ */
+fun <T> combineIntoList(list: List<T>, vararg elements: T): List<T> {
+    val retVal = mutableListOf<T>()
+    retVal.addAll(list)
+    // I can't "pass" the vararg modifier to listOf() so calling it on 'elements' will just make a list of one array item
+    for (element in elements) {
+        retVal.add(element)
+    }
+
+    return retVal.toList()
 }
 
 
