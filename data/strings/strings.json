@@ -186,7 +186,7 @@
 		"description": "An experimental flux vent that can only function under the intense heat that ship thrusters generate. It excels at venting flux, so well in fact that the thrusters around it receive a temporary increase in power, especially in the forward direction. Crew members remark that the purple glow of the engines is one of the prettiest sights to ever see.",
 		"tooltip": "Decreases flux dissipation. Adds an active ability that vents a large portion of flux while shifting the ship at a high speed.",
 		"needItem": "You need a ${itemName} to install this.",
-		"longDescription": "Decreases flux dissipation by =${ventBonus}%%=. Adds an active ability that shifts in the chosen direction while venting *${fluxVentPercent}%% flux* (up to *${fluxVentMax} total flux*), and increasing damage taken by =${damageTakenMult}%%= for some time afterwards. The ability has two charges and takes *${cooldown} seconds* to gain a charge. =Works only on module(s) where it's installed=",
+		"longDescription": "Decreases flux dissipation by =${ventBonus}%%=. Adds an active ability that shifts in the chosen direction while venting *${fluxVentPercent}%% flux* (up to *${fluxVentMax} total flux*), and increasing damage taken by =${damageTakenMult}%%= for some time afterwards. The ability has two charges and takes *${cooldown} seconds* to gain a charge. =Works only on module(s) where it's installed=. =Installable only on the main module=.",
 		"systemText": "DRIVE FLUX VENT"
 	},
 	"EqualizerCore": {
@@ -221,7 +221,7 @@
 		"tooltip": "Phase activation cost is reduced, but doubles every time you use it within a short time. The ship becomes very damage resistant for a short time when exiting phase. Ships with negative or zero flux cost will cost flux to phase.",
 		"needPhaseShip": "Only phase ships can install this.",
 		"needItem": "You need an ${itemName} to install this.",
-		"longDescription": "Phase activation cost is reduced by *${phaseCostReduction}x*, but =doubles= every time you use it in a period of *${phaseResetTime} seconds*. The ship receives *66%% reduced damage* which fades over time for *${noDamageTime} seconds* when exiting phase. Ships with a base negative phase flux cost will instead =cost flux=, and ships with a base zero phase flux cost will cost =${zeroFluxCost}%% of base flux capacity=. =Works only on module(s) where it's installed=",
+		"longDescription": "Phase activation cost is reduced by *${phaseCostReduction}x*, but =doubles= every time you use it in a period of *${phaseResetTime} seconds*. The ship receives *66%% reduced damage* which fades over time for *${noDamageTime} seconds* when exiting phase. Ships with a base negative phase flux cost will instead =cost flux=, and ships with a base zero phase flux cost will cost =${zeroFluxCost}%% of base flux capacity=. =Works only on module(s) where it's installed=. =Installable only on the main module=.",
 		"statusBarText": "P.FIELD",
 		"statusTitle": "PHASEFIELD ENGINE",
 		"statusInvulnerable": "DMG RESIST INCREASED (${noDamageDuration})",
