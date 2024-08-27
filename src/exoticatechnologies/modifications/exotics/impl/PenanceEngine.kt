@@ -43,6 +43,8 @@ class PenanceEngine(key: String, settingsObj: JSONObject) :
                 || Utilities.hasExoticChip(Misc.getStorageCargo(market), key))
     }
 
+    override fun getBasePrice() = PRICE
+
     override fun modifyToolTip(
         tooltip: TooltipMakerAPI,
         title: UIComponentAPI,
@@ -314,6 +316,8 @@ class PenanceEngine(key: String, settingsObj: JSONObject) :
     }
 
     companion object {
+        private const val PRICE = 750000
+
         private const val BUFF_RANGE = 1200
         private const val WEAPON_REPAIRRATE_BUFF = 60
         private const val SIDE_SPEED_BOOST = 40
@@ -326,8 +330,19 @@ class PenanceEngine(key: String, settingsObj: JSONObject) :
     }
 }
 
-class PenanceEngineParticleData(x: Float, y: Float, xVel: Float, yVel: Float, angle: Float, aVel: Float, ttl: Float, startingSize: Float, endSize: Float, startingColor: Color, endColor: Color)
-    : ParticleData(
+class PenanceEngineParticleData(
+        x: Float,
+        y: Float,
+        xVel: Float,
+        yVel: Float,
+        angle: Float,
+        aVel: Float,
+        ttl: Float,
+        startingSize: Float,
+        endSize: Float,
+        startingColor: Color,
+        endColor: Color
+) : ParticleData(
     sprite = Global.getSettings().getSprite("graphics/fx/cleaner_clouds00.png"),
     x = x,
     y = y,
@@ -342,4 +357,5 @@ class PenanceEngineParticleData(x: Float, y: Float, xVel: Float, yVel: Float, an
     startingColor = startingColor,
     endColor = endColor,
     spritesInRow = 2,
-    spritesInColumn = 2)
+    spritesInColumn = 2
+)
