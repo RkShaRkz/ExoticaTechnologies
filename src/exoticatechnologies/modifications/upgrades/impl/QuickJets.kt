@@ -18,7 +18,6 @@ class QuickJets(key: String, settings: JSONObject) : Upgrade(key, settings) {
     override var maxLevel: Int = 1
 
     override fun applyToShip(member: FleetMemberAPI, ship: ShipAPI, mods: ShipModifications) {
-//        ActivatorManager.addActivator(ship, QuickTurnJets(ship))
         MagicSubsystemsManager.addSubsystemToShip(ship, QuickTurnJets(ship))
     }
 
@@ -49,7 +48,6 @@ class QuickJets(key: String, settings: JSONObject) : Upgrade(key, settings) {
                 .addToTooltip(tooltip)
     }
 
-    //    inner class QuickTurnJets(ship: ShipAPI) : CombatActivator(ship) {
     inner class QuickTurnJets(ship: ShipAPI) : MagicSubsystem(ship) {
         override fun getBaseActiveDuration(): Float {
             return 1.5f
