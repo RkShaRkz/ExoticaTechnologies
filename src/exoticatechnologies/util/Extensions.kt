@@ -239,41 +239,18 @@ fun addAfterimageTo(ship: ShipAPI, data: AfterimageData) {
 
 /**
  * Applies an afterimage to all modules of [ship], while applying [data] to the [ShipAPI.addAfterimage]
+ * Internally uses [getAllShipSections] and calls [addAfterimageTo] on each one of them
  *
  * @param ship the ship to which to apply the afterimage
  * @param data the [AfterimageData] to apply
+ * @see getAllShipSections
+ * @see addAfterimageTo
  */
 fun addAfterimageToWholeShip(ship: ShipAPI, data: AfterimageData) {
-    // If ship is parent, apply to children
-    if (ship.childModulesCopy.isNotEmpty()) {
-        for (module in ship.childModulesCopy) {
-            addAfterimageTo(module, data)
-        }
-        // also apply to ship since he's parent
+    val sections = getAllShipSections(ship)
+    for (section in sections) {
         addAfterimageTo(ship, data)
-
-        // and return because we're done
-        return
     }
-
-    // If ship is a submodule, get parent, and apply to all his children
-    if (ship.parentStation != null) {
-        val parent = ship.parentStation
-        for (module in parent.childModulesCopy) {
-            addAfterimageTo(module, data)
-        }
-        // but also apply to parent now that all his children (including the original 'ship' which was a child) were painted
-        addAfterimageTo(parent, data)
-
-        // and return because we're done
-        return
-    }
-
-    // The last scenario is - it's single module ship, and it needs to be painted, so just paint it
-    addAfterimageTo(ship, data)
-
-    // and return because we're done
-    return
 }
 
 /**
