@@ -32,8 +32,10 @@ import java.util.*
 import kotlin.math.abs
 import kotlin.math.sin
 
-class NanotechArmor(key: String, settingsObj: JSONObject) :
-    Exotic(key, settingsObj) {
+class NanotechArmor(key: String, settingsObj: JSONObject) : Exotic(key, settingsObj) {
+    private lateinit var originalShip: ShipAPI
+    private lateinit var originalOwnersShield: ShieldAPI
+
     override var color = Color(0x00000)
         get() = Global.getSector().getFaction(Factions.DERELICT).color
 
@@ -84,12 +86,42 @@ class NanotechArmor(key: String, settingsObj: JSONObject) :
         mods: ShipModifications,
         exoticData: ExoticData
     ) {
+        originalShip = ship
+
+        // If ship had a shield, lets save it
+        ship.shield?.let {
+            originalOwnersShield = ship.shield
+        }
+
         if (ship.hullSpec.hullId == KADUR_CALIPH_SHIELD_GEN_ID) {
             ship.hitpoints = 0f
         }
 
         if (ship.hullSpec.hullId != KADUR_CALIPH_SHIELD_PART_ID) {
             ship.setShield(ShieldAPI.ShieldType.NONE, 0f, 0f, 0f)
+        }
+
+        ship.phaseCloak?.let {
+            it.cooldownRemaining = Float.MAX_VALUE
+        }
+    }
+
+    override fun onDestroy(member: FleetMemberAPI) {
+        super.onDestroy(member)
+        if (::originalShip.isInitialized) {
+            originalShip.phaseCloak?.let {
+                it.cooldownRemaining = 0f
+            }
+        }
+
+        // If we had a shield saved, lets restore it
+        if (::originalOwnersShield.isInitialized) {
+            originalShip.setShield(
+                    originalOwnersShield.type,
+                    originalOwnersShield.upkeep,
+                    originalOwnersShield.fluxPerPointOfDamage,
+                    originalOwnersShield.arc
+            )
         }
     }
 
@@ -291,8 +323,19 @@ class NanotechArmor(key: String, settingsObj: JSONObject) :
     }
 }
 
-class NanoTechParticleData(x: Float, y: Float, xVel: Float, yVel: Float, angle: Float, aVel: Float, ttl: Float, startingSize: Float, endSize: Float, startingColor: Color, endColor: Color)
-    : ParticleData(
+class NanoTechParticleData(
+        x: Float,
+        y: Float,
+        xVel: Float,
+        yVel: Float,
+        angle: Float,
+        aVel: Float,
+        ttl: Float,
+        startingSize: Float,
+        endSize: Float,
+        startingColor: Color,
+        endColor: Color
+) : ParticleData(
     sprite = Global.getSettings().getSprite("graphics/fx/cleaner_clouds00.png"),
     x = x,
     y = y,
