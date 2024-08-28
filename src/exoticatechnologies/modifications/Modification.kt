@@ -125,7 +125,7 @@ abstract class Modification(val key: String, val settings: JSONObject) {
      * Whether the modification is installable in non-main modules for multi-module ships,
      * and whether it should apply it's effects to all other modules.
      *
-     * This version is called in [ExoticaTechHM]'s [BaseHullMod.applyEffectsBeforeShipCreation]
+     * This version is called in [ExoticaTechHM]'s [BaseHullMod.applyEffectsAfterShipCreation]
      *
      * This call determines whether the following methods will be called on modules:
      * - [Exotic.advanceInCombatUnpaused]
@@ -140,6 +140,7 @@ abstract class Modification(val key: String, val settings: JSONObject) {
      * **NOTE** A certain false-positive can be observed when playing in 'simulation' mode vs actual combat;
      * namely, while a mod installed on a module (in a multi-module environment) will affect only the module it's
      * installed on during simulation, in actual combat it depends on the return value of [shouldShareEffectToOtherModules]
+     *
      * Suggestion is to use this just to limit whether the modification can be installed on modules.
      *
      * @see shouldAffectModule
@@ -153,13 +154,14 @@ abstract class Modification(val key: String, val settings: JSONObject) {
      * Whether the modification is installable in non-main modules for multi-module ships,
      * and whether it should apply it's effects to all other modules.
      *
-     * This version is called in [ExoticaTechHM]'s [BaseHullMod.applyEffectsAfterShipCreation],
+     * This version is called in [ExoticaTechHM]'s [BaseHullMod.applyEffectsBeforeShipCreation],
      * and is used mainly to determine whether [Exotic.applyExoticToStats] and [Upgrade.applyUpgradeToStats]
      * are called on modules
      *
      * **NOTE** A certain false-positive can be observed when playing in 'simulation' mode vs actual combat;
      * namely, while a mod installed on a module (in a multi-module environment) will affect only the module it's
      * installed on during simulation, in actual combat it depends on the return value of [shouldShareEffectToOtherModules]
+     *
      * Suggestion is to use this just to limit whether the modification can be installed on modules.
      *
      * @see shouldAffectModule
