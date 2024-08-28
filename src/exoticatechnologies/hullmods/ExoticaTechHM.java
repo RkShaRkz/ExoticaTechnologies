@@ -102,6 +102,11 @@ public class ExoticaTechHM extends BaseHullMod {
 
     /**
      * Method for checking whether a {@link Modification} should be skipped before processing (calling it's callbacks on it)
+     * <br>
+     * Called in:<br>
+     * - {@link ExoticaTechHM#advanceInCombat(ShipAPI, float)}<br>
+     * - {@link ExoticaTechHM#applyEffectsAfterShipCreation(ShipAPI, String)}<br>
+     * - {@link ExoticaTechHM#applyEffectsToFighterSpawnedByShip(ShipAPI, ShipAPI, String)}<br>
      *
      * @param ship the ship/module on which the modification is installed
      * @param mod the modification in question
@@ -128,7 +133,10 @@ public class ExoticaTechHM extends BaseHullMod {
     }
 
     /**
-     * Method for checking whether a {@link Modification} should be skipped before processing (calling it's callbacks on it)
+     * Method for checking whether a {@link Modification} should be skipped before processing (calling it's callbacks on it)<br>
+     * <br>
+     * Called in:<br>
+     * - {@link ExoticaTechHM#applyEffectsBeforeShipCreation(ShipAPI.HullSize, MutableShipStatsAPI, String)}<br>
      *
      * @param stats the {@link MutableShipStatsAPI} stats of the ship/module on which the modification is installed
      * @param mod the modification in question
