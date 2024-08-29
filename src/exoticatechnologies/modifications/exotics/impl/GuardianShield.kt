@@ -4,6 +4,7 @@ import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.campaign.CampaignFleetAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.*
+import com.fs.starfarer.api.combat.ShipAPI.HullSize
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.fleet.FleetMemberType
 import com.fs.starfarer.api.mission.FleetSide
@@ -14,9 +15,7 @@ import exoticatechnologies.combat.ExoticaShipRemovalReason
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
-import exoticatechnologies.util.CollisionUtil
-import exoticatechnologies.util.StringUtils
-import exoticatechnologies.util.Utilities
+import exoticatechnologies.util.*
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
@@ -64,8 +63,11 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             expand: Boolean
     ) {
         StringUtils.getTranslation(key, "longDescription")
+                .format("radius", getRadiusAmount(member, mods, exoticData))
+                .format("expansion_speed", getShieldExpansionAmount(member, mods, exoticData))
+                .format("push_out_strength", formatFloatAsString(getShieldPushOutEffectMomentumFactor(member.hullSpec.hullSize, member, mods, exoticData), 2))
                 .format("flux_method", lazyFluxMethodString)
-                .format("flux_effects", lazyFluxEffectString)
+                .format("flux_effects", generateFluxEffectString(member, mods, exoticData))
                 .addToTooltip(tooltip, title)
     }
 
@@ -84,7 +86,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         ship.setShield(ShieldAPI.ShieldType.NONE, 0f, 0f, 0f)
 
         // Secondly, give the ship a new subsystem to summon a drone hosting the Guardian Shield that will follow the ship around
-        subsystem = GuardianShieldDrone(ship)
+        subsystem = GuardianShieldDrone(ship, member, mods, exoticData)
         subsystem.setDronesToSpawn(1)
         MagicSubsystemsManager.addSubsystemToShip(ship, subsystem)
         log("<-- applyToShip()\tsubsystem=${subsystem}")
@@ -123,7 +125,88 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         log("<-- onOwnerShipEnteredCombat()\t\tsystemDeactivatedForGood: ${systemDeactivatedForGood.get()}")
     }
 
-    inner class GuardianShieldDrone(ship: ShipAPI) : MagicDroneSubsystem(ship) {
+    /**
+     * Method for calculating Flux regen debuff amount, or rather how good the flux regeneration will be, after applying
+     * the [getNegativeMult] modifier to it. Coerced (clamped) to a [0,1] range via [Float.coerceIn]
+     *
+     * Defaults to (1 - [FLUX_DEBUFF_AMOUNT])
+     */
+    private fun getFluxDebuffAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return (1f - (FLUX_DEBUFF_AMOUNT * getNegativeMult(member, mods, exoticData))).coerceIn(0f, 1f)
+    }
+
+    /**
+     * Method for calculating Hard Flux regen debuff amount, or rather how good the hard flux regeneration will be, after
+     * applying the [getNegativeMult] modifier to it. Coerced (clamped) to a [0,1] range via [Float.coerceIn]
+     *
+     * Defaults to (1 - [HARDFLUX_DEBUFF_AMOUNT])
+     */
+    private fun getHardFluxDebuffAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return (1f - (HARDFLUX_DEBUFF_AMOUNT * getNegativeMult(member, mods, exoticData))).coerceIn(0f, 1f)
+    }
+
+    /**
+     * Method for calculating the radius, or rather how big the active Guardian Shield radius will be, after
+     * applying the [getPositiveMult] modifier to it.
+     *
+     * Defaults to [ACTIVE_SHIELD_RADIUS]
+     */
+    private fun getRadiusAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return ACTIVE_SHIELD_RADIUS * getPositiveMult(member, mods, exoticData)
+    }
+
+    /**
+     * Method for calculating the shield expansion factor, or rather how good the hard flux regeneration will be, after
+     * applying the [getPositiveMult] modifier to it.
+     *
+     * Defaults to [SHIELD_EXPANDING_FACTOR]
+     */
+    private fun getShieldExpansionAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return SHIELD_EXPANDING_FACTOR * getPositiveMult(member, mods, exoticData)
+    }
+
+    /**
+     * Method for calculating the shield push out effect factor, or rather how strong the shield will push out enemies,
+     * after applying the [getPositiveMult] modifier to it
+     *
+     * Defaults to:
+     * - 0 for null
+     * - 1 for [HullSize.DEFAULT]
+     * - 1 for [HullSize.FIGHTER]
+     * - 2 for [HullSize.FRIGATE]
+     * - 2.5 for [HullSize.DESTROYER]
+     * - 3.5 for [HullSize.CRUISER]
+     * - 5 for [HullSize.CAPITAL_SHIP]
+     */
+    private fun getShieldPushOutEffectMomentumFactor(
+            hullSize: HullSize?,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
+    ): Float {
+        return when (hullSize) {
+            null -> 0f
+            HullSize.DEFAULT -> 1f
+            HullSize.FIGHTER -> 1f
+            HullSize.FRIGATE -> 2f
+            HullSize.DESTROYER -> 2.5f
+            HullSize.CRUISER -> 3.5f
+            HullSize.CAPITAL_SHIP -> 5f
+        }.exhaustive * getPositiveMult(member, mods, exoticData)
+    }
+
+    private fun generateFluxEffectString(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): String {
+        return lazyFluxEffectString
+                .replace(FLUX_DEBUFF_TOKEN, Math.round(getFluxDebuffAmount(member, mods, exoticData) * 100f).toString())
+                .replace(HARDFLUX_DEBUFF_TOKEN, Math.round(getHardFluxDebuffAmount(member, mods, exoticData) * 100f).toString())
+    }
+
+    inner class GuardianShieldDrone(
+            ship: ShipAPI,
+            val member: FleetMemberAPI,
+            val mods: ShipModifications,
+            val exoticData: ExoticData
+    ) : MagicDroneSubsystem(ship) {
 
         var engine: CombatEngineAPI = Global.getCombatEngine()
         @Volatile
@@ -231,11 +314,11 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     log("systemOn()\taborted due to overload/venting", "$LOGTAG:GuardianShieldDrone")
                 }
                 if (APPLY_FLUX_DEBUFF) {
-                    ship.mutableStats.fluxDissipation.modifyMult(GUARDIAN_SHIELD_FLUX_DISSIPATION_DEBUFF_ID, FLUX_DEBUFF_AMOUNT)
+                    ship.mutableStats.fluxDissipation.modifyMult(GUARDIAN_SHIELD_FLUX_DISSIPATION_DEBUFF_ID, getFluxDebuffAmount(member, mods, exoticData))
                 }
 
                 if (APPLY_HARDFLUX_DEBUFF) {
-                    ship.mutableStats.hardFluxDissipationFraction.modifyMult(GUARDIAN_SHIELD_HARDFLUX_DISSIPATION_DEBUFF_ID, HARDFLUX_DEBUFF_AMOUNT)
+                    ship.mutableStats.hardFluxDissipationFraction.modifyMult(GUARDIAN_SHIELD_HARDFLUX_DISSIPATION_DEBUFF_ID, getHardFluxDebuffAmount(member, mods, exoticData))
                 }
             }
         }
@@ -367,7 +450,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     }
 
                     // Check for allies in radius of 1500 and whether they need help or have incoming damage
-                    val allies = AIUtils.getNearbyAllies(ship, ACTIVE_SHIELD_RADIUS.toFloat())
+                    val radius = getRadiusAmount(member, mods, exoticData)
+                    val allies = AIUtils.getNearbyAllies(ship, radius)
                     // add shield to allies if it's non-null
                     if (drone != null) {
                         allies.add(drone)
@@ -384,8 +468,10 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     }
 
                     // Check for nearby enemies within 2000, ignoring those that need help.
+                    // Since the default radius was 1500, this makes it 4/3 of the radius
+                    val checkRange = radius * 4/3
                     // Shield remains up if there are some.
-                    val enemies = AIUtils.getNearbyEnemies(ship, 2000f)
+                    val enemies = AIUtils.getNearbyEnemies(ship, checkRange)
                     for (enemy in enemies) {
                         if ((enemy.aiFlags != null && enemy.aiFlags.hasFlag(ShipwideAIFlags.AIFlags.NEEDS_HELP))
                                 || enemy.isRetreating) {
@@ -400,7 +486,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     val projectiles: List<DamagingProjectileAPI> = engine.projectiles
                     for (proj in projectiles) {
                         if (proj.owner != ship.owner
-                                && (MathUtils.getDistance(ship, proj) > ACTIVE_SHIELD_RADIUS || nullSafeGetDistance(drone, proj) > ACTIVE_SHIELD_RADIUS)) {
+                                && (MathUtils.getDistance(ship, proj) > radius || nullSafeGetDistance(drone, proj) > radius)) {
                             log("calling systemOn()\t\tprojectiles near ship or shield condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
@@ -409,8 +495,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     val beams: List<BeamAPI> = engine.beams
                     for (beam in beams) {
                         if (beam.source.owner != ship.owner
-                                && (MathUtils.isWithinRange(ship, beam.to, ACTIVE_SHIELD_RADIUS.toFloat())
-                                        || nullSafeIsWithinRange(drone, beam.to, ACTIVE_SHIELD_RADIUS.toFloat()))) {
+                                && (MathUtils.isWithinRange(ship, beam.to, radius) || nullSafeIsWithinRange(drone, beam.to, radius))) {
                             log("calling systemOn()\t\tbeam within range of ship or shield condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
@@ -444,12 +529,14 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                         it.collisionClass = CollisionClass.FIGHTER
                         it.collisionRadius = SHIELD_OFF_COLLISION_RADIUS //400f
                     } else if (it.shield.isOn) {
+                        val maxRadius = getRadiusAmount(member, mods, exoticData)
+                        val shieldExpandFactor = getShieldExpansionAmount(member, mods, exoticData)
                         it.shield.activeArc = 360f
                         var radius = it.collisionRadius
-                        if (radius < ACTIVE_SHIELD_RADIUS) {
-                            radius += SHIELD_EXPANDING_FACTOR * amount //300
+                        if (radius < maxRadius) {
+                            radius += shieldExpandFactor * amount //300
                         } else {
-                            radius = ACTIVE_SHIELD_RADIUS.toFloat()
+                            radius = maxRadius
                         }
                         it.shield.radius = radius
                         it.collisionRadius = radius
@@ -462,15 +549,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
 
             fun shieldPushOutEffect(amount: Float) {
                 drone?.let {
-                    val momentumFactor: Float = when (ship.hullSize) {
-                        null -> 0f
-                        ShipAPI.HullSize.DEFAULT -> 1f
-                        ShipAPI.HullSize.FIGHTER -> 1f
-                        ShipAPI.HullSize.FRIGATE -> 2f
-                        ShipAPI.HullSize.DESTROYER -> 2.5f
-                        ShipAPI.HullSize.CRUISER -> 3.5f
-                        ShipAPI.HullSize.CAPITAL_SHIP -> 5f
-                    }
+                    val momentumFactor: Float = getShieldPushOutEffectMomentumFactor(ship.hullSize, member, mods, exoticData)
 
                     for (ship in AIUtils.getNearbyEnemies(it, it.collisionRadius)) {
                         if (MathUtils.getDistance(ship.location, it.location) < ship.collisionRadius + it.getCollisionRadius()) { //hmm, I needs to override the no negative result thing here.
@@ -758,13 +837,33 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         private const val GUARDIAN_SHIELD_FLUX_DISSIPATION_DEBUFF_ID = "guardian_shield_debuff_flux-dissipation"
         private const val GUARDIAN_SHIELD_HARDFLUX_DISSIPATION_DEBUFF_ID = "guardian_shield_debuff_hardflux-dissipation"
 
+        /**
+         * Active Shield Radius. Default value is 1500
+         */
         private const val ACTIVE_SHIELD_RADIUS = 1500
+
+        /**
+         * Shield expanding factor. Default value is 300
+         */
         private const val SHIELD_EXPANDING_FACTOR = 300
+
+        /**
+         * Shield off collision radius, or rather - how big is the collision radius when the shield is off. Default value is 400
+         *
+         * Suggestion is to **not** change this from the default value
+         */
         private const val SHIELD_OFF_COLLISION_RADIUS = 400f
         private const val APPLY_FLUX_DEBUFF = true
         private const val APPLY_HARDFLUX_DEBUFF = true
-        private const val FLUX_DEBUFF_AMOUNT = 0.75f        // smaller is worse for the player
-        private const val HARDFLUX_DEBUFF_AMOUNT = 0.25f    // ditto, smaller is worse
+
+        /**
+         * The penalty applied to flux regeneration. Default value is 0.25 so it ends up being 0.75
+         */
+        private const val FLUX_DEBUFF_AMOUNT = 0.25f        // higher is worse for the player
+        /**
+         * The penalty applied to hard flux regeneration. Default value is 0.75 so it ends up being 0.25
+         */
+        private const val HARDFLUX_DEBUFF_AMOUNT = 0.75f    // ditto, higher is worse
 
         /**
          * Should the shield-hosting drone be an FXDrone or regular Drone
@@ -787,10 +886,13 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
          */
         private const val USE_TRANSFER = true
 
+        private const val FLUX_DEBUFF_TOKEN = "!FLUXDEBUFF!"
+        private const val HARDFLUX_DEBUFF_TOKEN = "!HARDFLUXDEBUFF!"
+
         // These three need to end with space because the string looks like "... , =${flux_effects}=and ..."
-        private val CASE_BOTH = "but =reduces flux dissipation to ${Math.round(FLUX_DEBUFF_AMOUNT * 100)}%% and hard flux dissipation to ${Math.round(HARDFLUX_DEBUFF_AMOUNT * 100)}%%= "
-        private val CASE_FLUX = "but =reduces flux dissipation to ${Math.round(FLUX_DEBUFF_AMOUNT * 100)}%%= "
-        private val CASE_HARDFLUX = "but =reduces hard flux dissipation to ${Math.round(HARDFLUX_DEBUFF_AMOUNT * 100)}%%= "
+        private val CASE_BOTH = "but =reduces flux dissipation to ${FLUX_DEBUFF_TOKEN}%% and hard flux dissipation to ${HARDFLUX_DEBUFF_TOKEN}%%= "
+        private val CASE_FLUX = "but =reduces flux dissipation to ${FLUX_DEBUFF_TOKEN}%%= "
+        private val CASE_HARDFLUX = "but =reduces hard flux dissipation to ${HARDFLUX_DEBUFF_TOKEN}%%= "
         private val lazyFluxEffectString: String by lazy {
             "${
                 if (APPLY_FLUX_DEBUFF && APPLY_HARDFLUX_DEBUFF) {

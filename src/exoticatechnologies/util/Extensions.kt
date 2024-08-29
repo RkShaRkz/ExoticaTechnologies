@@ -18,10 +18,8 @@ import org.lazywizard.lazylib.VectorUtils
 import org.lwjgl.util.vector.Vector
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
-import kotlin.math.absoluteValue
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
+import java.text.DecimalFormat
+import kotlin.math.*
 
 fun FleetMemberAPI.getMods(): ShipModifications = ShipModFactory.generateForFleetMember(this)
 
@@ -527,6 +525,48 @@ fun <T> combineIntoList(list: List<T>, vararg elements: T): List<T> {
     }
 
     return retVal.toList()
+}
+
+/**
+ * "Formats" the float [value] to [numDigits] significant decimals
+ * Formatting is done by taking [10] to the *numDigits* power, multiplying the *value*, rounding it, then dividing
+ * by the same power of 10, thus producing a float that's rounded to the wanted number of significant decimals
+ *
+ *      val float = 1.2345f
+ *      println(float, 2)           // Output: 1.23
+ *
+ * @param value the float value to format
+ * @param numDigits number of significant decimals to keep
+ * @return a float that has **numDigits** significant decimals and rest set to 0
+ * @see formatFloatAsString
+ */
+fun formatFloat(value: Float, numDigits: Int): Float {
+    val powForFormatting = 10f.pow(numDigits)
+    return Math.round(value * powForFormatting) / powForFormatting
+}
+
+/**
+ * Formats the [float] [value] to [numDigits] significant decimals and returns the result as a [String]
+ *
+ *      val float = 1.501234
+ *      println(formatFloatAsString(float, 2))         // Output: 12.50
+ *
+ * Unlike [formatFloat] this one uses a [DecimalFormat] internally
+ *
+ * @param value the float value to format
+ * @param numDigits the wanted number of significant decimals to print
+ * @return [value] formatted to [numDigits] number of decimals, as String
+ * @see formatFloat
+ */
+fun formatFloatAsString(value: Float, numDigits: Int): String {
+    val sb = StringBuilder()
+    sb.append("#.")
+    for (index in 0 until numDigits) {
+        sb.append("0")
+    }
+
+    val formatter = DecimalFormat(sb.toString())
+    return formatter.format(value)
 }
 
 
