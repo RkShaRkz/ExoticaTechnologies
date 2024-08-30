@@ -62,11 +62,35 @@ abstract class ExoticType(val nameKey: String, val colorOverlay: Color = Color(2
         }
 
         fun valueOf(key: String): ExoticType {
-            return types[key.uppercase()]!!
+            return if (types[key.uppercase()] != null) {
+                types[key.uppercase()]!!
+            } else {
+                throw IllegalArgumentException("ExoticType with key ${key} is not registered. Please add it to ExoticType's 'types' list")
+            }
         }
 
         private fun putType(type: ExoticType) {
             types[type.nameKey] = type
+        }
+
+        /**
+         * Grabs keys of all [ExoticType]s and returns them as lowercased string
+         */
+        @JvmStatic
+        fun stringifyTypes() : String {
+            val sb = StringBuilder()
+            for (key in types.keys) {
+                sb.append(key).append(", ")
+            }
+            // remove last two characters
+            sb.setLength(sb.length-2)
+
+            return sb.toString().lowercase()
+        }
+
+        @JvmStatic
+        fun getTypesKeys() : List<String> {
+            return types.keys.toList()
         }
     }
 }

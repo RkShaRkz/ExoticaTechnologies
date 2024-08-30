@@ -38,6 +38,28 @@ public class StringUtils {
         }
     }
 
+    /**
+     * Method that iterates through the <i>list</i> and searches for <i>string</i> while ignoring case
+     * If such an element is found, it returns <b>true</b>, otherwise returns <b>false</b>. Also returns <b>false</b> if <i>string</i> is null
+     *
+     * @param list the list to search for
+     * @param string the string to look for
+     * @return whether the string was found in the list or not while ignoring case
+     */
+    public static boolean containsIgnoreCase(List<String> list, String string) {
+        if (string == null) {
+            return false;
+        }
+
+        for (String str : list) {
+            if (str != null && str.equalsIgnoreCase(string)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static Translation getTranslation(String parent, String key) {
         return new Translation(parent, key);
     }

@@ -569,6 +569,24 @@ fun formatFloatAsString(value: Float, numDigits: Int): String {
     return formatter.format(value)
 }
 
+/**
+ * Method that iterates through the [list][this] and searches for [string] while ignoring case.
+ * If such an element is found, it returns **true**, otherwise returns **false**. Also returns **false** if [string] is null
+ *
+ * @param list the list to search for
+ * @param string the string to look for
+ * @return whether the **string** was found in this list or not while ignoring case
+ */
+fun List<String>.containsIgnoreCase(string: String?): Boolean {
+    if (string == null) return false
+
+    for (item in this) {
+        if (item.contentEquals(string, true)) return true
+    }
+
+    return false
+}
+
 
 val <T> T.exhaustive: T
     get() = this
