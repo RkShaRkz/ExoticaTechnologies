@@ -697,7 +697,6 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             override val timestamp: Float
                 get() = throw IllegalStateException("EmptyShipParams does not have 'timestamp'")
         }
-
     }
 
     data class WeaponData(val weapon: WeaponAPI) {
