@@ -141,7 +141,7 @@ object ExoticsHandler {
             sb.setLength(sb.length - 2)
         }
 
-        return sb.toString().lowercase()
+        return sb.toString()
     }
 
     @JvmStatic
