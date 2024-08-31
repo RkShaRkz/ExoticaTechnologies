@@ -26,6 +26,8 @@ abstract class Modification(val key: String, val settings: JSONObject) {
     companion object {
         @JvmStatic
         private val log = Logger.getLogger(Modification::class.java)
+
+        const val DISJUNCT_LABEL_TEXT = "OR"
     }
 
     var name: String = settings.getString("name")
@@ -121,7 +123,7 @@ abstract class Modification(val key: String, val settings: JSONObject) {
             for (condition in subconditions) {
                 if (condition.cannotApplyReason != null) {
                     reasonList.add(condition.cannotApplyReason!!)   // safe
-                    reasonList.add("OR")
+                    reasonList.add(DISJUNCT_LABEL_TEXT)
                 }
             }
 

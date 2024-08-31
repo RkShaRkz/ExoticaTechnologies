@@ -5,11 +5,10 @@ import com.fs.starfarer.api.campaign.CargoStackAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
-import com.fs.starfarer.api.ui.ButtonAPI
-import com.fs.starfarer.api.ui.CustomPanelAPI
-import com.fs.starfarer.api.ui.TooltipMakerAPI
-import com.fs.starfarer.api.ui.UIComponentAPI
+import com.fs.starfarer.api.ui.*
+import com.sun.istack.internal.logging.Logger
 import exoticatechnologies.cargo.CrateItemPlugin
+import exoticatechnologies.modifications.Modification
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticSpecialItemPlugin
@@ -32,6 +31,7 @@ class ExoticMethodsUIPlugin(
     private var mainPanel: CustomPanelAPI? = null
     private var methodsTooltip: TooltipMakerAPI? = null
     private var listeners: MutableList<Listener> = mutableListOf()
+    private var cannotApplyLabelList: MutableList<LabelAPI> = mutableListOf()
 
     fun layoutPanels(): CustomPanelAPI {
         val panel = parentPanel.createCustomPanel(panelWidth, panelHeight, this)
@@ -73,10 +73,18 @@ class ExoticMethodsUIPlugin(
 
     fun showCannotApply(mods: ShipModifications, tooltip: TooltipMakerAPI) {
         val reasons: List<String> = exotic.getCannotApplyReasons(member, mods)
+        var lastLabel: LabelAPI
 
         if (reasons.isNotEmpty()) {
-            reasons.forEach {
-                tooltip.addPara(it, 1f)
+            reasons.forEach {reason ->
+                if (reason != Modification.DISJUNCT_LABEL_TEXT) {
+                    lastLabel = tooltip.addPara(reason, 1f)
+                    cannotApplyLabelList.add(lastLabel)
+                } else {
+                    val orLabel = tooltip.addPara(reason, 1f)
+                    orLabel.setAlignment(Alignment.MID)
+                    cannotApplyLabelList.add(orLabel)
+                }
             }
         } else if (!exotic.checkTags(member, mods, exotic.tags)) {
             val names: List<String> = mods.getModsThatConflict(exotic.tags).map { it.name }
@@ -92,7 +100,25 @@ class ExoticMethodsUIPlugin(
         //this list automatically places buttons on new rows if the previous row had too many
         var lastButton: UIComponentAPI? = null
         var nextButtonX = 0f
-        var rowYOffset = 25f
+        var rowYOffset: Float = if (cannotApplyLabelList.isNotEmpty()) {
+            // Kind of a hack but works fine...
+            when (cannotApplyLabelList.size) {
+                0,
+                1 -> BUTTONS_Y_OFFSET
+                2,
+                3 -> 2 * BUTTONS_Y_OFFSET
+                4,
+                5 -> 3 * BUTTONS_Y_OFFSET
+                6,
+                7 -> 4 * BUTTONS_Y_OFFSET
+                else -> {
+                    logger.info("Fix UI and add support for 'cannotApplyLabelList' of size ${cannotApplyLabelList.size}")
+                    BUTTONS_Y_OFFSET
+                }
+            }
+        } else {
+            BUTTONS_Y_OFFSET
+        }
 
         if (lastComponent != null) {
             rowYOffset += lastComponent.position.height
@@ -209,6 +235,9 @@ class ExoticMethodsUIPlugin(
     }
 
     companion object {
+        private val logger = Logger.getLogger(ExoticMethodsUIPlugin::class.java)
+        private const val BUTTONS_Y_OFFSET = 25f
+
         @JvmStatic
         fun isUnderExoticLimit(member: FleetMemberAPI, mods: ShipModifications): Boolean {
             return mods.getMaxExotics(member) > mods.exotics.getCount(member)
