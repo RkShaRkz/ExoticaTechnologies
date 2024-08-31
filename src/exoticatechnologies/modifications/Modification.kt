@@ -91,16 +91,11 @@ abstract class Modification(val key: String, val settings: JSONObject) {
             val requiredConditions = conditions
                 .filter { !it.weightOnly }
 
-            logIfKey("requiredConditions = ${requiredConditions}", "SpooledFeeders")
-            logIfKey("matching conditions = ${requiredConditions.map { it.compare(member!!, mods, key) }.count { it }}", "SpooledFeeders")
-
             return if (conditionsDisjunct) {
                 val matchedConditions =
                         requiredConditions
                                 .map { condition -> condition.compare(member!!, mods, key) }
                                 .count { it }
-
-                logIfKey("this = ${this}\tmember name: ${member?.shipName}\tmatchedConditions = ${matchedConditions}\tconditionsNecessaryToSatify = ${conditionsNecessaryToSatify}", "SpooledFeeders")
 
                 matchedConditions >= conditionsNecessaryToSatify
             } else {
