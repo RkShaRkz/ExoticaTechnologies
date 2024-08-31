@@ -205,13 +205,17 @@ public class StringUtils {
         textPanel.setHighlightColorsInLastPara(highlightColors);
     }
 
-    @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
     public static class Translation {
         protected final String scope;
         protected final String key;
         protected final List<String> formats = new ArrayList<>();
         protected List<String> values = new ArrayList<>();
         protected Map<Integer, Color> colors = new HashMap<>();
+
+        protected Translation(String parent, String key) {
+            this.scope = parent;
+            this.key = key;
+        }
 
         public Translation format(String flag, Object value) {
             formats.add(flag);
