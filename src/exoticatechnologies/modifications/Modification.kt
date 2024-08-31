@@ -37,6 +37,8 @@ abstract class Modification(val key: String, val settings: JSONObject) {
     open var valueMult: Float = settings.optFloat("valueMult", 1.0f)
     protected abstract var icon: String
     val conditions: MutableList<Condition> = mutableListOf()
+    val conditionsDisjunct: Boolean
+    val conditionsNecessaryToSatify: Int
     open var canDropFromCombat = false
     val variantScales: MutableMap<String, Float> = mutableMapOf()
 
@@ -59,6 +61,14 @@ abstract class Modification(val key: String, val settings: JSONObject) {
             hints = listOf()
         }
 
+        if (settings.has("minConditionsNeeded")) {
+            conditionsNecessaryToSatify = settings.getInt("minConditionsNeeded")
+            conditionsDisjunct = true
+        } else {
+            conditionsDisjunct = false
+            conditionsNecessaryToSatify = -1
+        }
+
         canDropFromCombat = settings.optBoolean("dropsFromCombat")
     }
 
@@ -79,8 +89,22 @@ abstract class Modification(val key: String, val settings: JSONObject) {
             val requiredConditions = conditions
                 .filter { !it.weightOnly }
 
-            return requiredConditions
-                .none { !it.compare(member!!, mods, key) }
+            logIfKey("requiredConditions = ${requiredConditions}", "SpooledFeeders")
+            logIfKey("matching conditions = ${requiredConditions.map { it.compare(member!!, mods, key) }.count { it }}", "SpooledFeeders")
+
+            return if (conditionsDisjunct) {
+                val matchedConditions =
+                        requiredConditions
+                                .map { condition -> condition.compare(member!!, mods, key) }
+                                .count { it }
+
+                logIfKey("this = ${this}\tmember name: ${member?.shipName}\tmatchedConditions = ${matchedConditions}\tconditionsNecessaryToSatify = ${conditionsNecessaryToSatify}", "SpooledFeeders")
+
+                matchedConditions >= conditionsNecessaryToSatify
+            } else {
+                requiredConditions
+                        .none { !it.compare(member!!, mods, key) }
+            }
         } catch (ex: Exception) {
             log.error("$name threw exception while checking conditions", ex)
             throw ex
@@ -89,10 +113,30 @@ abstract class Modification(val key: String, val settings: JSONObject) {
     }
 
     open fun getCannotApplyReasons(member: FleetMemberAPI, mods: ShipModifications?): List<String> {
-        return conditions
-            .filter { !it.weightOnly }
-            .filter { !it.compare(member, mods, key) }
-            .mapNotNull { it.cannotApplyReason }
+        return if (conditionsDisjunct) {
+            val subconditions = conditions
+                    .filter { condition -> condition.weightOnly.not() }                      // filter out 'weightOnly' conditions
+
+            val reasonList = mutableListOf<String>()
+            for (condition in subconditions) {
+                if (condition.cannotApplyReason != null) {
+                    reasonList.add(condition.cannotApplyReason!!)   // safe
+                    reasonList.add("OR")
+                }
+            }
+
+            // delete the last item which is the extra 'OR'
+            if (reasonList.isNotEmpty()) {
+                reasonList.removeLast()
+            }
+            // Return the reason list
+            reasonList
+        } else {
+            conditions
+                    .filter { !it.weightOnly }
+                    .filter { !it.compare(member, mods, key) }
+                    .mapNotNull { it.cannotApplyReason }
+        }
     }
 
     open fun getCalculatedWeight(member: FleetMemberAPI, mods: ShipModifications?): Float {
@@ -199,5 +243,9 @@ abstract class Modification(val key: String, val settings: JSONObject) {
     @Deprecated("Replaced by canDropFromCombat variable. Unused.", ReplaceWith("canDropFromCombat"))
     open fun canDropFromFleets(): Boolean {
         return canDropFromCombat
+    }
+
+    private fun logIfKey(string: String, logIfKey: String) {
+        if (key == logIfKey) log.info(string)
     }
 }
