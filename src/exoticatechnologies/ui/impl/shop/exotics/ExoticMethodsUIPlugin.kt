@@ -51,7 +51,16 @@ class ExoticMethodsUIPlugin(
         if (mods.hasExotic(exotic)) {
             tooltip.addTitle(StringUtils.getString("ExoticsDialog", "InstalledTitle"))
         } else if (!exotic.canApply(member, mods)) {
-            tooltip.addTitle(StringUtils.getString("Conditions", "CannotApplyTitle"), Color(200, 100, 100))
+            if (exotic.conditionsDisjunct) {
+                val titleString = StringUtils
+                        .getTranslation("Conditions", "CannotApplyTitleDisjunct")
+                        .format("minConditions", exotic.conditionsNecessaryToSatify.toString())
+                        .format("maxConditions", exotic.conditions.size.toString())
+                        .toString()
+                tooltip.addTitle(titleString, Color(200, 100, 100))
+            } else {
+                tooltip.addTitle(StringUtils.getString("Conditions", "CannotApplyTitle"), Color(200, 100, 100))
+            }
             showCannotApply(mods, tooltip)
 
             prev = tooltip.prev

@@ -460,6 +460,7 @@
 	},
 	"Conditions": {
 		"CannotApplyTitle": "CANNOT INSTALL",
+		"CannotApplyTitleDisjunct": "CANNOT INSTALL - NEED TO MEET AT LEAST ${minConditions} OUT OF ${maxConditions}",
 		"CannotApplyBecauseTags": "Conflicts with ${conflictMods}.",
 		"CannotApplyBecauseBandwidth": "The ship does not have enough bandwidth.",
 		"CannotApplyBecauseLevel": "The ship has the max level for this upgrade.",
