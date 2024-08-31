@@ -31,8 +31,6 @@ class PlasmaFluxCatalyst(key: String, settings: JSONObject) : Exotic(key, settin
         return true
     }
 
-    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
-
     override fun modifyToolTip(
         tooltip: TooltipMakerAPI,
         title: UIComponentAPI,

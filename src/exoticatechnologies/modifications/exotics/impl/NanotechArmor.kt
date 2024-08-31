@@ -64,8 +64,6 @@ class NanotechArmor(key: String, settingsObj: JSONObject) : Exotic(key, settings
         }
     }
 
-    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
-
     override fun applyExoticToStats(
         id: String,
         stats: MutableShipStatsAPI,
