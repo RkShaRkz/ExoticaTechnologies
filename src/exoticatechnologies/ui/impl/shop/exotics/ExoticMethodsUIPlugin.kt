@@ -6,7 +6,6 @@ import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.*
-import com.sun.istack.internal.logging.Logger
 import exoticatechnologies.cargo.CrateItemPlugin
 import exoticatechnologies.modifications.Modification
 import exoticatechnologies.modifications.ShipModifications
@@ -18,6 +17,7 @@ import exoticatechnologies.ui.InteractiveUIPanelPlugin
 import exoticatechnologies.ui.StringTooltip
 import exoticatechnologies.ui.impl.shop.exotics.methods.ExoticMethod
 import exoticatechnologies.util.StringUtils
+import org.apache.log4j.Logger
 import java.awt.Color
 
 class ExoticMethodsUIPlugin(
