@@ -62,13 +62,15 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             exoticData: ExoticData,
             expand: Boolean
     ) {
-        StringUtils.getTranslation(key, "longDescription")
-                .format("radius", getRadiusAmount(member, mods, exoticData))
-                .format("expansion_speed", getShieldExpansionAmount(member, mods, exoticData))
-                .format("push_out_strength", formatFloatAsString(getShieldPushOutEffectMomentumFactor(member.hullSpec.hullSize, member, mods, exoticData), 2))
-                .format("flux_method", lazyFluxMethodString)
-                .format("flux_effects", generateFluxEffectString(member, mods, exoticData))
-                .addToTooltip(tooltip, title)
+        if (expand) {
+            StringUtils.getTranslation(key, "longDescription")
+                    .format("radius", getRadiusAmount(member, mods, exoticData))
+                    .format("expansion_speed", getShieldExpansionAmount(member, mods, exoticData))
+                    .format("push_out_strength", formatFloatAsString(getShieldPushOutEffectMomentumFactor(member.hullSpec.hullSize, member, mods, exoticData), 2))
+                    .format("flux_method", lazyFluxMethodString)
+                    .format("flux_effects", generateFluxEffectString(member, mods, exoticData))
+                    .addToTooltip(tooltip, title)
+        }
     }
 
     override fun applyToShip(id: String, member: FleetMemberAPI, ship: ShipAPI, mods: ShipModifications, exoticData: ExoticData) {
@@ -149,25 +151,58 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
      * Method for calculating the radius, or rather how big the active Guardian Shield radius will be, after
      * applying the [getPositiveMult] modifier to it.
      *
+     * If ship has 'extendedshieldemitter' as a S-modded builtin hullmod the coefficient will be 2.0, 1.5 for just installed or 1.0 if absent.
+     *
      * Defaults to [ACTIVE_SHIELD_RADIUS]
      */
     private fun getRadiusAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
-        return ACTIVE_SHIELD_RADIUS * getPositiveMult(member, mods, exoticData)
+        return if (USE_ADDITIONAL_EFFECTS_BASED_ON_HOST_SMODS) {
+            // Assign 2.0 if S-modded built-in, 1.5 if present or built-in, 1.0 if absent
+            val hullModCoef = if (member.hasSModdedBuiltInHullmod(EXTENDED_SHIELDS_ID)) {
+                2.0f
+            } else if (member.hasBuiltInHullmod(EXTENDED_SHIELDS_ID) || member.hasHullmod(EXTENDED_SHIELDS_ID)) {
+                1.5f
+            } else {
+                1.0f
+            }
+
+            ACTIVE_SHIELD_RADIUS * getPositiveMult(member, mods, exoticData) * hullModCoef
+        } else {
+            ACTIVE_SHIELD_RADIUS * getPositiveMult(member, mods, exoticData)
+        }
     }
 
     /**
      * Method for calculating the shield expansion factor, or rather how good the hard flux regeneration will be, after
      * applying the [getPositiveMult] modifier to it.
      *
+     * If ship has 'advancedshieldemitter' as a S-modded builtin hullmod the coefficient will be 2.5, 1.75 for just installed or 1.0 if absent.
+     *
      * Defaults to [SHIELD_EXPANDING_FACTOR]
      */
     private fun getShieldExpansionAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
-        return SHIELD_EXPANDING_FACTOR * getPositiveMult(member, mods, exoticData)
+        return if (USE_ADDITIONAL_EFFECTS_BASED_ON_HOST_SMODS) {
+            // Assign 2.5 if S-modded built-in, 1.75 if present or built-in, 1.0 if absent
+            val hullModCoef = if (member.hasSModdedBuiltInHullmod(ACCELERATED_SHIELDS_ID)) {
+                2.5f
+            } else if (member.hasBuiltInHullmod(ACCELERATED_SHIELDS_ID) || member.hasHullmod(ACCELERATED_SHIELDS_ID)) {
+                1.75f
+            } else {
+                1.0f
+            }
+
+            SHIELD_EXPANDING_FACTOR * getPositiveMult(member, mods, exoticData) * hullModCoef
+        } else {
+            SHIELD_EXPANDING_FACTOR * getPositiveMult(member, mods, exoticData)
+        }
     }
 
     /**
      * Method for calculating the shield push out effect factor, or rather how strong the shield will push out enemies,
      * after applying the [getPositiveMult] modifier to it
+     *
+     * If ship has both 'hardenedshieldemitter' and 'stabilizedshieldemitter' as S-modded builtin hullmods the coefficient
+     * will be 3.0, 2.0 for just one of them or 1.0 if both are absent.
      *
      * Defaults to:
      * - 0 for null
@@ -184,15 +219,31 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             mods: ShipModifications,
             exoticData: ExoticData
     ): Float {
-        return when (hullSize) {
-            null -> 0f
-            HullSize.DEFAULT -> 1f
-            HullSize.FIGHTER -> 1f
-            HullSize.FRIGATE -> 2f
-            HullSize.DESTROYER -> 2.5f
-            HullSize.CRUISER -> 3.5f
-            HullSize.CAPITAL_SHIP -> 5f
-        }.exhaustive * getPositiveMult(member, mods, exoticData)
+        return if (USE_ADDITIONAL_EFFECTS_BASED_ON_HOST_SMODS) {
+            val hardenedShieldCoef = if (member.hasSModdedBuiltInHullmod(HARDENED_SHIELDS_ID)) { 1.0f } else { 0f }
+            val stabilizedShieldCoef = if (member.hasSModdedBuiltInHullmod(STABILIZED_SHIELDS_ID)) { 1.0f } else { 0f }
+            val hullModCoef = 1.0f + hardenedShieldCoef + stabilizedShieldCoef
+
+            when (hullSize) {
+                null -> 0f
+                HullSize.DEFAULT -> 1f
+                HullSize.FIGHTER -> 1f
+                HullSize.FRIGATE -> 2f
+                HullSize.DESTROYER -> 2.5f
+                HullSize.CRUISER -> 3.5f
+                HullSize.CAPITAL_SHIP -> 5f
+            }.exhaustive * getPositiveMult(member, mods, exoticData) * hullModCoef
+        } else {
+            when (hullSize) {
+                null -> 0f
+                HullSize.DEFAULT -> 1f
+                HullSize.FIGHTER -> 1f
+                HullSize.FRIGATE -> 2f
+                HullSize.DESTROYER -> 2.5f
+                HullSize.CRUISER -> 3.5f
+                HullSize.CAPITAL_SHIP -> 5f
+            }.exhaustive * getPositiveMult(member, mods, exoticData)
+        }
     }
 
     private fun generateFluxEffectString(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): String {
@@ -352,17 +403,27 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         @Synchronized
         override fun spawnDrone(): ShipAPI {
             log("--> spawnDrone()\tdrone = ${drone}\tdrone is null ? ${drone == null}\townerShip = ${ship}")
-            // Since I have noticed multiple GuardianShields appear on just one multimodule ship,
-            // which had only one instance of GuardianShield in it's main module and nowhere else,
-            // this leads me to suspect that there is either a race-condition (or multiple threads) executing this somehow
-            // so lets go with the doubly-locked 'singleton' pattern to ensure only and exactly one drone is spawned
-            // when this method is called multiple times
+            val hasSmoddedAcceleratedShields = ship.hasSModdedBuiltInHullmod(ACCELERATED_SHIELDS_ID)
+            val hasSmoddedHardenedShields = ship.hasSModdedBuiltInHullmod(HARDENED_SHIELDS_ID)
+            val hasSmoddedStabilizedShields = ship.hasSModdedBuiltInHullmod(STABILIZED_SHIELDS_ID)
+            val hasSmoddedExtendedShields = ship.hasSModdedBuiltInHullmod(EXTENDED_SHIELDS_ID)
+            log("spawnDrone()\thasSmoddedAcceleratedShields: ${hasSmoddedAcceleratedShields}, hasSmoddedHardenedShields: ${hasSmoddedHardenedShields}, hasSmoddedStabilizedShields: ${hasSmoddedStabilizedShields}, hasSmoddedExtendedShields: ${hasSmoddedExtendedShields}")
+
+
             val spawnedDrone: ShipAPI = if (drone == null) {
                 synchronized(this) {
                     return@synchronized if (drone == null) {
                         if (SPAWN_SHIELD_DRONE_USING_FXDRONE) {
                             val spec = Global.getSettings().getHullSpec(getDroneHullId())
                             val v = Global.getSettings().createEmptyVariant(getDroneVariant(), spec)
+                            // Hullmod-specific inheritance part
+                            if (SHIELD_DRONE_INHERITS_HOST_SHIPS_SMODDED_HULLMODS) {
+                                if (hasSmoddedAcceleratedShields) v.addPermaMod(ACCELERATED_SHIELDS_ID, true)
+                                if (hasSmoddedExtendedShields) v.addPermaMod(EXTENDED_SHIELDS_ID, true) //doesn't make sense for 360-degree shield
+                                if (hasSmoddedHardenedShields) v.addPermaMod(HARDENED_SHIELDS_ID, true)
+                                if (hasSmoddedExtendedShields) v.addPermaMod(STABILIZED_SHIELDS_ID, true)
+                            }
+
                             val fxDrone: ShipAPI = Global.getCombatEngine().createFXDrone(v)
                             fxDrone.layer = CombatEngineLayers.ABOVE_SHIPS_AND_MISSILES_LAYER
                             fxDrone.owner = ship.originalOwner
@@ -374,6 +435,9 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                             fxDrone.isForceHideFFOverlay = true
                             fxDrone.setRenderBounds(false)
                             fxDrone.giveCommand(ShipCommand.SELECT_GROUP, null, 0)
+
+                            log("spawnDrone()\tDRONE hasBuildInAcceleratedShields: ${fxDrone.hasSModdedBuiltInHullmod(ACCELERATED_SHIELDS_ID)}, hasBuildInHardenedShields: ${fxDrone.hasSModdedBuiltInHullmod(HARDENED_SHIELDS_ID)}, hasBuildInStabilizedShields: ${fxDrone.hasSModdedBuiltInHullmod(STABILIZED_SHIELDS_ID)}, hasBuildInExtendedShields: ${fxDrone.hasSModdedBuiltInHullmod(EXTENDED_SHIELDS_ID)}")
+
                             Global.getCombatEngine().addEntity(fxDrone)
 
                             fxDrone
@@ -400,6 +464,15 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                             fighter.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f)
                             // Set it's collision channel to fighter - since they can fly over the ship and should still react to most of the things
                             fighter.collisionClass = CollisionClass.FIGHTER
+
+                            // Hullmod-specific inheritance part
+                            if (SHIELD_DRONE_INHERITS_HOST_SHIPS_SMODDED_HULLMODS) {
+                                if (hasSmoddedAcceleratedShields) fighter.variant.addPermaMod(ACCELERATED_SHIELDS_ID, true)
+                                if (hasSmoddedExtendedShields) fighter.variant.addPermaMod(EXTENDED_SHIELDS_ID, true) //doesn't make sense for 360-degree shield
+                                if (hasSmoddedHardenedShields) fighter.variant.addPermaMod(HARDENED_SHIELDS_ID, true)
+                                if (hasSmoddedStabilizedShields) fighter.variant.addPermaMod(STABILIZED_SHIELDS_ID, true)
+                            }
+                            log("spawnDrone()\tFIGHTER hasBuildInAcceleratedShields: ${fighter.hasSModdedBuiltInHullmod(ACCELERATED_SHIELDS_ID)}, hasBuildInHardenedShields: ${fighter.hasSModdedBuiltInHullmod(HARDENED_SHIELDS_ID)}, hasBuildInStabilizedShields: ${fighter.hasSModdedBuiltInHullmod(STABILIZED_SHIELDS_ID)}, hasBuildInExtendedShields: ${fighter.hasSModdedBuiltInHullmod(EXTENDED_SHIELDS_ID)}")
 
                             fighter
                         }
@@ -888,6 +961,13 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
 
         private const val FLUX_DEBUFF_TOKEN = "!FLUXDEBUFF!"
         private const val HARDFLUX_DEBUFF_TOKEN = "!HARDFLUXDEBUFF!"
+
+        private const val ACCELERATED_SHIELDS_ID = "advancedshieldemitter"
+        private const val HARDENED_SHIELDS_ID = "hardenedshieldemitter"
+        private const val STABILIZED_SHIELDS_ID = "stabilizedshieldemitter"
+        private const val EXTENDED_SHIELDS_ID = "extendedshieldemitter"
+        private const val SHIELD_DRONE_INHERITS_HOST_SHIPS_SMODDED_HULLMODS = true
+        private const val USE_ADDITIONAL_EFFECTS_BASED_ON_HOST_SMODS = true
 
         // These three need to end with space because the string looks like "... , =${flux_effects}=and ..."
         private val CASE_BOTH = "but =reduces flux dissipation to ${FLUX_DEBUFF_TOKEN}%% and hard flux dissipation to ${HARDFLUX_DEBUFF_TOKEN}%%= "

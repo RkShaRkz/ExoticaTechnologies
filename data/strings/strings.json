@@ -563,7 +563,7 @@
 		"BandwidthUsed": "*${usedBandwidth}* used"
 	},
 	"GuardianShield": {
-		"description": "A 1.0 efficiency shield capable of covering an entire fleet, absorbing incoming fire for a time. The emitter has a massive flux capacity, but transfers generated flux onto the host ship.",
+		"description": "A 1.0 efficiency shield capable of covering an entire fleet, absorbing incoming fire for a time. The emitter has a massive flux capacity, but transfers generated flux onto the host ship. *Has interaction with the following built-in (S-modded) hullmods:* =Accelerated Shields=, =Hardened Shields=, =Stabilized Shields=, =Extended Shields=",
 		"tooltip": "Replaces the host ship's shield with a gargantuan 360-degree shield with a big radius.",
 		"longDescription": "=Replaces the ship's shield= with a *Guardian Shield*, a *360-degree* shield covering *${radius} radius* with expansion speed of *${expansion_speed}* capable of covering friendly ships. It has it's own activation AI, but naturally can't work while the host ship is venting or overloaded. While active, the shield ${flux_method}, ${flux_effects}and also pushes enemies out of it, with *momentum strength of ${push_out_strength}* depending on the size of the host ship. =Works only on module(s) where it's installed="
 	},

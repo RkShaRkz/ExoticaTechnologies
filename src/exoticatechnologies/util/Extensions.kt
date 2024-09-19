@@ -121,6 +121,66 @@ fun ShipAPI.getAbsoluteAngleToAnotherShip(anotherShip: ShipAPI): Float {
 }
 
 /**
+ * Checks whether the ship has a hullmod installed on it (built-in or not)
+ * @param hullModId the hull mod's ID to check for
+ * @return whether the hullmod is installed
+ */
+fun ShipAPI.hasHullmod(hullModId: String): Boolean {
+    return this.variant.hasHullMod(hullModId)
+}
+
+/**
+ * Checks whether the ship has a hullmod built into it (or rather, whether the hullmod is installed as "built-in")
+ *
+ * NOTE: Should be used for checking hullmods that typically come with the ship from the start, for hullmods that the
+ * player has built-in use [hasSModdedBuiltInHullmod]
+ * @param hullModId the hull mod's ID to check for
+ * @return whether the hullmod is installed
+ */
+fun ShipAPI.hasBuiltInHullmod(hullModId: String): Boolean {
+    return this.variant.hullSpec.builtInMods.contains(hullModId)
+}
+
+/**
+ * Checks whether the ship has a hullmod S-modded / built into it (or rather, whether the hullmod is installed as "built-in" in refit screen)
+ * @param hullModId the hull mod's ID to check for
+ * @return whether the hullmod is installed
+ * @see Misc.getCurrSpecialModsList
+ */
+fun ShipAPI.hasSModdedBuiltInHullmod(hullModId: String): Boolean {
+    return Misc.getCurrSpecialModsList(this.variant).map { hullmods -> hullmods.id }.containsIgnoreCase(hullModId)
+}
+
+
+/**
+ * Checks whether the ship has a hullmod installed on it (built-in or not)
+ * @param hullModId the hull mod's ID to check for
+ * @return whether the hullmod is installed
+ */
+fun FleetMemberAPI.hasHullmod(hullModId: String): Boolean {
+    return this.variant.hasHullMod(hullModId)
+}
+
+/**
+ * Checks whether the ship has a hullmod built into it (or rather, whether the hullmod is installed as "built-in")
+ * @param hullModId the hull mod's ID to check for
+ * @return whether the hullmod is installed
+ */
+fun FleetMemberAPI.hasBuiltInHullmod(hullModId: String): Boolean {
+    return this.variant.hullSpec.builtInMods.contains(hullModId)
+}
+
+/**
+ * Checks whether the ship has a hullmod S-modded / built into it (or rather, whether the hullmod is installed as "built-in" in refit screen)
+ * @param hullModId the hull mod's ID to check for
+ * @return whether the hullmod is installed
+ * @see Misc.getCurrSpecialModsList
+ */
+fun FleetMemberAPI.hasSModdedBuiltInHullmod(hullModId: String): Boolean {
+    return Misc.getCurrSpecialModsList(this.variant).map { hullmods -> hullmods.id }.containsIgnoreCase(hullModId)
+}
+
+/**
  * Method that plays a sound with a [soundId] ID, using the [ship]'s location and velocity,
  * with a [pitch] and [volume] pitch and volume
  */
