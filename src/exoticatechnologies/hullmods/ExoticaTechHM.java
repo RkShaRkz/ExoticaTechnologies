@@ -132,6 +132,40 @@ public class ExoticaTechHM extends BaseHullMod {
         return false;
     }
 
+    /**
+     * Method for checking whether a {@link Modification} should be skipped before processing (calling it's callbacks on it)<br>
+     * <br>
+     * Called in:<br>
+     * - {@link ExoticaTechHM#applyEffectsBeforeShipCreation(ShipAPI.HullSize, MutableShipStatsAPI, String)}<br>
+     *
+     * @param stats the {@link MutableShipStatsAPI} stats of the ship/module on which the modification is installed
+     * @param mod the modification in question
+     * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(MutableShipStatsAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
+     */
+    public boolean shouldSkipModification(MutableShipStatsAPI stats, Modification mod) {
+        boolean fleetMemberNonNull = stats.getFleetMember() != null;
+        // lets just default to 'false' if fleetmember is null - it won't go into the if() anyways
+        // since the first condition is for the fleetmember to be non-null
+        boolean fleetMemberShipNameIsNull = (stats.getFleetMember() != null) ? stats.getFleetMember().getShipName() == null : false;
+        boolean modAppliesToModules = mod.shouldAffectModule(stats);
+        boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
+
+        if (fleetMemberNonNull && fleetMemberShipNameIsNull) {
+            // if doesn't apply to modules - skip
+            if (!modAppliesToModules) {
+                return true;
+            } else {
+                // If applies to modules - check if effects are shared, if not - skip
+                if (!modSharesEffectsWithAllModules) {
+                    return true;
+                }
+                // If it should share to all modules, we don't skip
+            }
+        }
+        // If the ship that we're checking isn't a module, we don't skip either
+        return false;
+    }
+
     @Override
     public void advanceInCombat(ShipAPI ship, float amount) {
         FleetMemberAPI member = FleetMemberUtils.findMemberFromShip(ship);
@@ -157,9 +191,12 @@ public class ExoticaTechHM extends BaseHullMod {
 
     @Override
     public void applyEffectsBeforeShipCreation(ShipAPI.HullSize hullSize, MutableShipStatsAPI stats, String id) {
+        log.debug("--> applyEffectsBeforeShipCreation(hullSize=" + hullSize + ", stats=" + stats + ", id=" + id + ")");
         FleetMemberAPI member = FleetMemberUtils.findMemberForStats(stats);
+        log.debug("applyEffectsBeforeShipCreation()\tmember = " + member);
         if (member == null) {
-            return;
+//            return;
+            log.debug("applyEffectsBeforeShipCreation()\tmember == null, not returning just to see what happens... ");
         }
 
         try {
@@ -185,14 +222,17 @@ public class ExoticaTechHM extends BaseHullMod {
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
-            if (stats.getFleetMember() != null && stats.getFleetMember().getShipName() == null && !exotic.shouldAffectModule(stats)) continue;
+            log.debug("applyEffectsBeforeShipCreation()\tshouldSkipModification(stats="+stats+", exotic="+exotic+") = " + shouldSkipModification(stats, exotic));
+            if (shouldSkipModification(stats, exotic)) continue;
+
+            log.debug("applyEffectsBeforeShipCreation()\t--> exotic.applyExoticToStats()\texotic: "+exotic+", id="+id+", stats="+stats+", member="+member+", mods="+mods+", exoticData="+mods.getExoticData(exotic));
 
             exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             if (!mods.hasUpgrade(upgrade)) continue;
-            if (stats.getFleetMember() != null && stats.getFleetMember().getShipName() == null && !upgrade.shouldAffectModule(stats)) continue;
+            if (shouldSkipModification(stats, upgrade)) continue;
 
             upgrade.applyUpgradeToStats(stats, member, mods, mods.getUpgrade(upgrade));
         }

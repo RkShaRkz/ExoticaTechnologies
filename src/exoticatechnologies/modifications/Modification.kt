@@ -14,7 +14,7 @@ import exoticatechnologies.modifications.conditions.toList
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.upgrades.Upgrade
 import org.apache.log4j.Logger
-import org.jetbrains.annotations.NotNull
+import org.jetbrains.annotations.Nullable
 import org.json.JSONObject
 import org.lazywizard.lazylib.ext.json.optFloat
 import java.awt.Color
@@ -197,10 +197,7 @@ abstract class Modification(val key: String, val settings: JSONObject) {
      *
      * This version is called in [ExoticaTechHM]'s [BaseHullMod.applyEffectsBeforeShipCreation],
      * and is used mainly to determine whether [Exotic.applyExoticToStats] and [Upgrade.applyUpgradeToStats]
-     * are called on modules.
-     *
-     * **Be aware**, that in [BaseHullMod.applyEffectsBeforeShipCreation] time, modules do not exist yet, so
-     * applied effects might only work on just the installable module rather than all of them.
+     * are called on modules
      *
      * **NOTE** A certain false-positive can be observed when playing in 'simulation' mode vs actual combat;
      * namely, while a mod installed on a module (in a multi-module environment) will affect only the module it's
@@ -218,10 +215,8 @@ abstract class Modification(val key: String, val settings: JSONObject) {
     /**
      * Relevant only for multi-module ships; if [shouldAffectModule] is true, this determines whether the effects
      * of the modification should affect (or rather, replicate to) all other modules as well
-     *
-     * Only relevant for callbacks happening **after ship creation**
      */
-    open fun shouldShareEffectToOtherModules(@NotNull ship: ShipAPI?, @NotNull module: ShipAPI?) = false
+    open fun shouldShareEffectToOtherModules(@Nullable ship: ShipAPI?, @Nullable module: ShipAPI?) = false
 
     open fun canApply(member: FleetMemberAPI, mods: ShipModifications?): Boolean {
         return canApply(member, member.variant, mods)

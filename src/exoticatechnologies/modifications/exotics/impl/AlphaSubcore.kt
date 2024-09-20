@@ -93,6 +93,8 @@ class AlphaSubcore(key: String, settingsObj: JSONObject) :
         return BANDWIDTH_INCREASE * getPositiveMult(member, mods, exoticData)
     }
 
+    override fun shouldAffectModule(moduleStats: MutableShipStatsAPI) = true
+
     override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
 
     companion object {

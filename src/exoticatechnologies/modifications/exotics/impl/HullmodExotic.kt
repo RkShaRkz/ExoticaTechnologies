@@ -6,12 +6,13 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
+import exoticatechnologies.hullmods.ExoticaTechHM
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.StringUtils
-import exoticatechnologies.util.getRefitVariant
+import org.apache.log4j.Logger
 import org.json.JSONObject
 import java.awt.Color
 
@@ -23,6 +24,21 @@ open class HullmodExotic(
     override var color: Color
 ) : Exotic(key, settingsObj) {
     override fun onInstall(member: FleetMemberAPI) {
+        logger.debug("--> onInstall()\tmember = ${member}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules(null, null)}")
+        if (shouldShareEffectToOtherModules(null, null)) {
+            logger.debug("onInstall()\tmoduleSlots: ${member.variant.moduleSlots}")
+            if (member.variant.moduleSlots == null || member.variant.moduleSlots.isEmpty()) return
+            val moduleSlotList = member.variant.moduleSlots
+            for (slot in moduleSlotList) {
+                val moduleVariant = member.variant.getModuleVariant(slot)
+                logger.debug("onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}")
+                if (moduleVariant == null) continue
+                logger.debug("onInstall()\t--> applyExoticaHullmodToVariant(moduleVariant)")
+                applyExoticaHullmodToVariant(moduleVariant)
+                logger.debug("onInstall()\t--> installOnVariant(moduleVariant)")
+                installOnVariant(moduleVariant)
+            }
+        }
         installOnVariant(member.variant)
         installOnVariant(member.checkRefitVariant())
     }
@@ -33,7 +49,29 @@ open class HullmodExotic(
         }
     }
 
+    fun applyExoticaHullmodToVariant(variant: ShipVariantAPI?) {
+        variant?.let {
+            if (it.hasHullMod("exoticatech").not()) {
+                variant.addPermaMod("exoticatech")
+            }
+        }
+    }
+
     override fun onDestroy(member: FleetMemberAPI) {
+        if (shouldShareEffectToOtherModules(null, null)) {
+            logger.debug("onInstall()\tmoduleSlots: ${member.variant.moduleSlots}")
+            if (member.variant.moduleSlots == null || member.variant.moduleSlots.isEmpty()) return
+            val moduleSlotList = member.variant.moduleSlots
+            for (slot in moduleSlotList) {
+                val moduleVariant = member.variant.getModuleVariant(slot)
+                logger.debug("onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}")
+                if (moduleVariant == null) continue
+                logger.debug("onInstall()\t--> applyExoticaHullmodToVariant(moduleVariant)")
+                applyExoticaHullmodToVariant(moduleVariant) //TODO remove if empty
+                logger.debug("onInstall()\t--> installOnVariant(moduleVariant)")
+                removeFromVariant(moduleVariant)
+            }
+        }
         removeFromVariant(member.variant)
         removeFromVariant(member.checkRefitVariant())
 
@@ -91,5 +129,9 @@ open class HullmodExotic(
             StringUtils.getTranslation(key, statDescriptionKey)
                 .addToTooltip(tooltip, title)
         }
+    }
+
+    companion object {
+        val logger: Logger = Logger.getLogger(ExoticaTechHM::class.java)
     }
 }
