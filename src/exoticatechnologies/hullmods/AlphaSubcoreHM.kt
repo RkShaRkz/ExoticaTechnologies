@@ -12,15 +12,32 @@ import com.fs.starfarer.api.loading.FighterWingSpecAPI
 import com.fs.starfarer.api.loading.WeaponSpecAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import exoticatechnologies.modifications.exotics.impl.AlphaSubcore
+import exoticatechnologies.modifications.exotics.impl.DaemonCore
+import exoticatechnologies.util.AnonymousLogger
 import exoticatechnologies.util.StringUtils
+import exoticatechnologies.util.exhaustive
 
+/**
+ * Exotic Hullmod used by both [AlphaSubcore] and [DaemonCore]
+ */
 class AlphaSubcoreHM : BaseHullMod() {
+    val listener = OPCostListener()
+    var listenerAddedMap = hashMapOf<MutableShipStatsAPI, Boolean>()
+
     override fun applyEffectsBeforeShipCreation(hullSize: HullSize, stats: MutableShipStatsAPI, id: String) {
+        AnonymousLogger.log("--> applyEffectsBeforeShipCreation()\thullSize: ${hullSize}, stats: ${stats}, id: ${id}", "AlphaSubcoreHM")
         if(stats.variant.hullMods.any { AlphaSubcore.BLOCKED_HULLMODS.contains(it) }) {
             return
         }
 
-        stats.addListener(OPCostListener())
+        val listenerAdded = listenerAddedMap[stats] ?: false // If there is no such key, we surely didn't add it
+        if (listenerAdded.not()) {
+            stats.addListener(listener)
+            listenerAddedMap[stats] = true
+        } else {
+            stats.removeListener(listener)
+            listenerAddedMap[stats] = false
+        }
     }
 
     override fun addPostDescriptionSection(
@@ -31,20 +48,23 @@ class AlphaSubcoreHM : BaseHullMod() {
         isForModSpec: Boolean
     ) {
         if(ship?.variant?.hullMods?.any { AlphaSubcore.BLOCKED_HULLMODS.contains(it) } == true) {
-            StringUtils.getTranslation("AlphaSubcore", "conflictDetected")
-                .addToTooltip(tooltip)
+            StringUtils
+                    .getTranslation("AlphaSubcore", "conflictDetected")
+                    .addToTooltip(tooltip)
         }
 
         super.addPostDescriptionSection(tooltip, hullSize, ship, width, isForModSpec)
     }
 
     override fun getDescriptionParam(index: Int, hullSize: HullSize): String? {
-        var i = 0
-        if (index == i++) return COST_REDUCTION_SM.toString()
-        if (index == i++) return COST_REDUCTION_MED.toString()
-        if (index == i++) return COST_REDUCTION_LG.toString()
-        if (index == i++) return COST_REDUCTION_FIGHTER.toString()
-        return if (index == i++) COST_REDUCTION_BOMBER.toString() else null
+        return when(index) {
+            0 -> COST_REDUCTION_SM.toString()
+            1 -> COST_REDUCTION_MED.toString()
+            2 -> COST_REDUCTION_LG.toString()
+            3 -> COST_REDUCTION_FIGHTER.toString()
+            4 -> COST_REDUCTION_BOMBER.toString()
+            else -> null
+        }.exhaustive
     }
 
     override fun affectsOPCosts(): Boolean {
@@ -64,19 +84,20 @@ class AlphaSubcoreHM : BaseHullMod() {
     }
 
     companion object {
+        @JvmStatic
         val WEAPON_REDUCTIONS = mutableMapOf(
             WeaponSize.SMALL to 1,
             WeaponSize.MEDIUM to 2,
             WeaponSize.LARGE to 4
         )
 
-        const val BOMBER_REDUCTION = 2
+        const val BOMBER_REDUCTION = 4
         const val FIGHTER_REDUCTION = 2
 
         const val COST_REDUCTION_LG = 4
         const val COST_REDUCTION_MED = 2
         const val COST_REDUCTION_SM = 1
         const val COST_REDUCTION_FIGHTER = 2
-        const val COST_REDUCTION_BOMBER = 2
+        const val COST_REDUCTION_BOMBER = 4
     }
 }
