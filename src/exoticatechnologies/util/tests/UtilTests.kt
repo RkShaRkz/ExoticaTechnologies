@@ -38,9 +38,27 @@ class UtilTests {
         exception.printStackTrace()
         System.err.println("Stacktrace:\n"+stringifiedStacktrace)
 
-        // IMPORTANT: This test is flaky, because the exotics are populated from
-        // Global.getSettings().getMergedJSONForMod(...)
-        // and as such, can never really work and show true results outside of the game!!!
+        Assert.assertNotNull(stringifiedStacktrace)
+    }
+
+    @Test
+    fun test_that_StackTraceUtils_unwindStacktraceFromException_works() {
+        val exception = Exception()
+        val stringifiedStacktrace = StacktraceUtils.unwindStacktraceFromException(exception)
+
+        exception.printStackTrace()
+        System.err.println(stringifiedStacktrace)
+
+        Assert.assertNotNull(stringifiedStacktrace)
+    }
+
+    @Test
+    fun test_that_StackTraceUtils_unwindStacktraceFromException_works_for_Throwables_too() {
+        val throwable = Throwable("Hello from my test Throwable")
+        val stringifiedStacktrace = StacktraceUtils.unwindStacktraceFromException(throwable)
+
+        throwable.printStackTrace()
+        System.err.println(stringifiedStacktrace)
 
         Assert.assertNotNull(stringifiedStacktrace)
     }

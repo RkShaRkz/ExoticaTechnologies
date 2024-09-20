@@ -12,7 +12,7 @@ object StacktraceUtils {
      * @param startToEnd whether the place you should start looking from will be located at the top or the bottom of the stacktrace
      * @return printable, formatted stacktrace, as a String
      */
-    fun unwindStacktrace(stacktraceArray: Array<StackTraceElement?>, startToEnd: Boolean = true): String {
+    fun unwindStacktrace(stacktraceArray: Array<StackTraceElement?>, startToEnd: Boolean = true, useAtLikeNormalStacktrace: Boolean = true): String {
         val sb = StringBuilder()
         if (startToEnd) {
             for (i in stacktraceArray.indices) {
@@ -20,7 +20,7 @@ object StacktraceUtils {
 //                        .append("Element [")
 //                        .append(i)
 //                        .append("]:")
-                        .append("\t\t")
+                        .append(if(useAtLikeNormalStacktrace) { "\tat " } else { "\t\t" } )
                         .append(stacktraceArray[i])
                         .append("\n")
             }
@@ -30,11 +30,31 @@ object StacktraceUtils {
 //                        .append("Element [")
 //                        .append(i)
 //                        .append("]:")
-                        .append("\t\t")
+                        .append(if(useAtLikeNormalStacktrace) { "\tat " } else { "\t\t" } )
                         .append(stacktraceArray[i])
                         .append("\n")
             }
         }
+        return sb.toString()
+    }
+
+    fun unwindStacktraceFromException(exception: Exception): String {
+        val sb = StringBuilder()
+        sb
+                .append(exception)
+                .append("\n")
+                .append(unwindStacktrace(exception.stackTrace))
+
+        return sb.toString()
+    }
+
+    fun unwindStacktraceFromException(throwable: Throwable): String {
+        val sb = StringBuilder()
+        sb
+                .append(throwable)
+                .append("\n")
+                .append(unwindStacktrace(throwable.stackTrace))
+
         return sb.toString()
     }
 }

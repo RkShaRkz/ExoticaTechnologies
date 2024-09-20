@@ -66,8 +66,8 @@ public class et_addexotic implements BaseCommand {
 
                     return CommandResult.SUCCESS;
                 } catch (Throwable ex) {
-                    Console.showMessage("Caught exception " + ex + ", see starsector.log\nSTACKTRACE:\n" + StacktraceUtils.INSTANCE.unwindStacktrace(ex.getStackTrace(), true));
-                    System.out.println(ex+"\n"+StacktraceUtils.INSTANCE.unwindStacktrace(ex.getStackTrace(), true));
+                    Console.showMessage("Caught exception " + ex + ", see starsector.log\nSTACKTRACE:\n" + StacktraceUtils.INSTANCE.unwindStacktrace(ex.getStackTrace(), true, true));
+                    System.out.println(StacktraceUtils.INSTANCE.unwindStacktraceFromException(ex));
                     return CommandResult.ERROR;
                 }
             }
