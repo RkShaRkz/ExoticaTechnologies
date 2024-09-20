@@ -15,12 +15,4 @@ class TimeUtilsTest {
 
         assert(clockTime.matches(regex))
     }
-
-
-
-
-
-    companion object {
-        const val FRAMES_PER_SECOND = 60
-    }
 }
