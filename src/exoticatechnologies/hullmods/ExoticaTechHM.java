@@ -111,17 +111,19 @@ public class ExoticaTechHM extends BaseHullMod {
      * @param ship the ship/module on which the modification is installed
      * @param mod the modification in question
      * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(ShipAPI, ShipAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
+     * @see Modification#shouldAffectModulesToShareEffectsToOtherModules()
      */
     public boolean shouldSkipModification(ShipAPI ship, Modification mod) {
         boolean modAppliesToModules = mod.shouldAffectModule(ship.getParentStation(), ship);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
+        boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
 
         if (cachedCheckIsModule(ship)) {
-            // if doesn't apply to modules - skip
-            if (!modAppliesToModules) {
+            // if should affect modules to share effects but doesn't apply to modules - skip
+            if (modShouldAffectModulesToShareEffectsToOtherModules && !modAppliesToModules) {
                 return true;
             } else {
-                // If applies to modules - check if effects are shared, if not - skip
+                // If applies to modules or has special flag set - check if effects are shared, if not - skip
                 if (!modSharesEffectsWithAllModules) {
                     return true;
                 }
@@ -141,6 +143,7 @@ public class ExoticaTechHM extends BaseHullMod {
      * @param stats the {@link MutableShipStatsAPI} stats of the ship/module on which the modification is installed
      * @param mod the modification in question
      * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(MutableShipStatsAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
+     * @see Modification#shouldAffectModulesToShareEffectsToOtherModules()
      */
     public boolean shouldSkipModification(MutableShipStatsAPI stats, Modification mod) {
         boolean fleetMemberNonNull = stats.getFleetMember() != null;
@@ -149,13 +152,14 @@ public class ExoticaTechHM extends BaseHullMod {
         boolean fleetMemberShipNameIsNull = (stats.getFleetMember() != null) ? stats.getFleetMember().getShipName() == null : false;
         boolean modAppliesToModules = mod.shouldAffectModule(stats);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
+        boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
 
         if (fleetMemberNonNull && fleetMemberShipNameIsNull) {
-            // if doesn't apply to modules - skip
-            if (!modAppliesToModules) {
+            // if needs to apply to modules to share effects but doesn't apply to modules - skip
+            if (modShouldAffectModulesToShareEffectsToOtherModules && !modAppliesToModules) {
                 return true;
             } else {
-                // If applies to modules - check if effects are shared, if not - skip
+                // If applies to modules or has special flag set - check if effects are shared, if not - skip
                 if (!modSharesEffectsWithAllModules) {
                     return true;
                 }
@@ -191,12 +195,11 @@ public class ExoticaTechHM extends BaseHullMod {
 
     @Override
     public void applyEffectsBeforeShipCreation(ShipAPI.HullSize hullSize, MutableShipStatsAPI stats, String id) {
-        log.debug("--> applyEffectsBeforeShipCreation(hullSize=" + hullSize + ", stats=" + stats + ", id=" + id + ")");
+        log.info("--> applyEffectsBeforeShipCreation(hullSize=" + hullSize + ", stats=" + stats + ", id=" + id + ")");
         FleetMemberAPI member = FleetMemberUtils.findMemberForStats(stats);
-        log.debug("applyEffectsBeforeShipCreation()\tmember = " + member);
+        log.info("applyEffectsBeforeShipCreation()\tmember = " + member);
         if (member == null) {
-//            return;
-            log.debug("applyEffectsBeforeShipCreation()\tmember == null, not returning just to see what happens... ");
+            return;
         }
 
         try {
@@ -222,10 +225,10 @@ public class ExoticaTechHM extends BaseHullMod {
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
             if (!mods.hasExotic(exotic)) continue;
-            log.debug("applyEffectsBeforeShipCreation()\tshouldSkipModification(stats="+stats+", exotic="+exotic+") = " + shouldSkipModification(stats, exotic));
+            log.info("applyEffectsBeforeShipCreation()\tshouldSkipModification(stats="+stats+", exotic="+exotic+") = " + shouldSkipModification(stats, exotic));
             if (shouldSkipModification(stats, exotic)) continue;
 
-            log.debug("applyEffectsBeforeShipCreation()\t--> exotic.applyExoticToStats()\texotic: "+exotic+", id="+id+", stats="+stats+", member="+member+", mods="+mods+", exoticData="+mods.getExoticData(exotic));
+            log.info("applyEffectsBeforeShipCreation()\t--> exotic.applyExoticToStats()\texotic: "+exotic+", id="+id+", stats="+stats+", member="+member+", mods="+mods+", exoticData="+mods.getExoticData(exotic));
 
             exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
         }
