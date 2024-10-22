@@ -11,6 +11,7 @@ import com.fs.starfarer.api.ui.UIPanelAPI
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModifications
+import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.reflect.ReflectionUtils
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -386,6 +387,17 @@ fun ShipAPI.isThisAMultiModuleShipFast(): Boolean {
 }
 
 /**
+ * Returns whether this ship is a multi-module ship - or rather, whether this [FleetMemberAPI] has children.
+ * Internally calls [getChildModuleVariantList] so you might not want to call this in every frame
+ *
+ * @param ship the ship to check
+ * @return [false] if it's a single-module or [true] if it's a multi-module ship
+ */
+fun FleetMemberAPI.isMultiModuleShip(): Boolean {
+    return getChildModuleVariantList(this).isNotEmpty()
+}
+
+/**
  * Method for calculating a vector pointing from [fromVector] to [toVector]
  *
  * @param fromVector the vector from which we want to start pointing
@@ -554,7 +566,8 @@ fun calculateVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Floa
 
 /**
  * Method that combines [lists] into a single List
- * List **have** to be of same type
+ *
+ * Lists **have** to be of same type
  *
  * @param list the list to combine into the resulting list
  * @return list containing all listed elements (arguments)
@@ -645,6 +658,17 @@ fun List<String>.containsIgnoreCase(string: String?): Boolean {
     }
 
     return false
+}
+
+fun getChildModuleVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantAPI> {
+    val retVal = mutableListOf<ShipVariantAPI>()
+    if (fleetMemberAPI.variant.moduleSlots == null || fleetMemberAPI.variant.moduleSlots.isEmpty()) return emptyList()
+    val moduleSlotList = fleetMemberAPI.variant.moduleSlots
+    for (slot in moduleSlotList) {
+        val moduleVariant = fleetMemberAPI.variant.getModuleVariant(slot)
+        retVal.add(moduleVariant)
+    }
+    return retVal.toList()
 }
 
 
