@@ -27,34 +27,41 @@ open class HullmodExotic(
     override var color: Color
 ) : Exotic(key, settingsObj) {
     override fun onInstall(member: FleetMemberAPI) {
-        logger.info("--> onInstall()\tmember = ${member}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules(null, null)}")
+        logger.info("--> onInstall()\tmember = ${member}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules(null, null)}\texotic: ${this}\texotic.key: ${this.key}")
         if (shouldShareEffectToOtherModules(null, null)) {
-            logger.info("onInstall()\tmoduleSlots: ${member.variant.moduleSlots}")
+            logger.info("[1] onInstall()\tmoduleSlots: ${member.variant.moduleSlots}\tmember.stats: ${member.stats}")
             if (member.variant.moduleSlots == null || member.variant.moduleSlots.isEmpty()) return
             val moduleSlotList = member.variant.moduleSlots
             for (slot in moduleSlotList) {
                 val moduleVariant = member.variant.getModuleVariant(slot)
-                logger.info("onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}")
+                logger.info("[2] onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}\tmoduleVariant.hullVariantId: ${moduleVariant.hullVariantId}")
                 if (moduleVariant == null) continue
                 val mods = get(member, moduleVariant)
-                logger.info("onInstall()\tmods: ${mods}")
+                logger.info("[3] onInstall()\tmods: ${mods}")
                 mods?.let { nonNullMods ->
                     logger.info("onInstall()\t--> installWorkaround()\tmember: ${member}, moduleVariant: ${moduleVariant}, mods: ${mods}, exotic: ${this}")
                     installWorkaround(member, moduleVariant, nonNullMods, this)
-                    logger.info("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}")
+                    logger.info("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}\tmoduleVariant.hullMods: ${moduleVariant.hullMods}")
                     installHullmodOnVariant(moduleVariant)
+                    logger.info("onInstall()\t<-- installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}\tmoduleVariant.hullMods: ${moduleVariant.hullMods}")
                 }
+                logger.info("\n\n")
             }
         }
         installHullmodOnVariant(member.variant)
         installHullmodOnVariant(member.checkRefitVariant())
         // Clear install data
         InstallData.clearStatus()
+        logger.info("<-- onInstall()")
     }
 
     fun installHullmodOnVariant(variant: ShipVariantAPI?) {
         variant?.let {
-            variant.addPermaMod(hullmodId)
+            if (variant.hasHullMod(hullmodId).not()) {
+                variant.addPermaMod(hullmodId)
+            } else {
+                logger.info("installHullmodOnVariant()\tvariant already had hullmod installed!!! variant: ${variant}\thullmodId: ${hullmodId}")
+            }
         }
     }
 
@@ -79,21 +86,23 @@ open class HullmodExotic(
     }
 
     override fun onDestroy(member: FleetMemberAPI) {
+        logger.info("--> onDestroy()\tmember = ${member}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules(null, null)}\texotic: ${this}\texotic.key: ${this.key}")
         if (shouldShareEffectToOtherModules(null, null)) {
             logger.info("onDestroy()\tmoduleSlots: ${member.variant.moduleSlots}")
             if (member.variant.moduleSlots == null || member.variant.moduleSlots.isEmpty()) return
             val moduleSlotList = member.variant.moduleSlots
             for (slot in moduleSlotList) {
                 val moduleVariant = member.variant.getModuleVariant(slot)
-                logger.info("onDestroy()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}")
+                logger.info("onDestroy()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}\tmoduleVariant.hullVariantId: ${moduleVariant.hullVariantId}")
                 if (moduleVariant == null) continue
                 val mods = get(member, moduleVariant)
                 logger.info("onDestroy()\tmods: ${mods}")
                 mods?.let { nonNullMods ->
                     logger.info("onDestroy()\t--> destroyWorkaround()\tmember: ${member}, moduleVariant: ${moduleVariant}, mods: ${mods}, exotic: ${this}")
                     destroyWorkaround(member, moduleVariant, nonNullMods, this)
-                    logger.info("onDestroy()\t--> removeHullmodFromVariant()\tmoduleVariant: ${moduleVariant}")
+                    logger.info("onDestroy()\t--> removeHullmodFromVariant()\tmoduleVariant: ${moduleVariant}\tmoduleVariant.hullMods: ${moduleVariant.hullMods}")
                     removeHullmodFromVariant(moduleVariant)
+                    logger.info("onDestroy()\t<-- removeHullmodFromVariant()\tmoduleVariant: ${moduleVariant}\tmoduleVariant.hullMods: ${moduleVariant.hullMods}")
                 }
             }
         }
