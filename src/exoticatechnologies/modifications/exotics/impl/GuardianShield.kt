@@ -54,6 +54,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         return true
     }
 
+    @Synchronized
     override fun modifyToolTip(
             tooltip: TooltipMakerAPI,
             title: UIComponentAPI,
