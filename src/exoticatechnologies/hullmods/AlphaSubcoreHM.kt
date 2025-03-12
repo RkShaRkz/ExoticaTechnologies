@@ -44,59 +44,27 @@ class AlphaSubcoreHM : ExoticHullmod() {
         AnonymousLogger.log("applyEffectsBeforeShipCreation()\tstats: ${stats}\tlistenerAdded: ${listenerAdded}", "AlphaSubcoreHM")
         if (listenerAdded.not()) {
             stats.addListener(listener)
-        }/* else {
-            stats.removeListener(listener)
         }
-        */
     }
 
     override fun removeEffectsBeforeShipCreation(hullSize: HullSize, stats: MutableShipStatsAPI, id: String) {
         AnonymousLogger.log("--> removeEffectsBeforeShipCreation()\thullSize: ${hullSize}, stats: ${stats}, id: ${id}", "AlphaSubcoreHM")
         val fleetMember = stats.fleetMember
         stats.removeListenerOfClass(OPCostListener::class.java)
-        /*
-        if (stats is ShipAPI) {
-            AnonymousLogger.log("removeEffectsBeforeShipCreation()\tstats is ShipAPI !!!", "AlphaSubcoreHM")
-            val ship = stats as ShipAPI
-            val entity = stats.entity
-            AnonymousLogger.log("removeEffectsBeforeShipCreation()\tis stats.entity a ShipAPI ? ${entity is ShipAPI}", "AlphaSubcoreHM")
-            val modules = ship.childModulesCopy
-            AnonymousLogger.log("removeEffectsBeforeShipCreation()\tchildModules size: ${modules.size}", "AlphaSubcoreHM")
-            for (module in modules) {
-                removeEffectsBeforeShipCreation(module.hullSize, module as MutableShipStatsAPI, id)    //TODO
-            }
-            AnonymousLogger.log("removeEffectsBeforeShipCreation()\tdone with child modules, lets try the ExoticDataHandler ...", "AlphaSubcoreHM")
-            // Since childModulesCopy doesnt quite seem to be working
-//            val allKeys = HullmodExoticHandler.grabAllKeysForParticularFleetMember(fleetMember)
-//            for (key in allKeys) {
-//                val exoticHandlerDataOptional = HullmodExoticHandler.getDataForKey(key)
-//                if (exoticHandlerDataOptional.isPresent()) {
-//                    val exoticHandlerData = exoticHandlerDataOptional.get()
-//                    for (variant in exoticHandlerData.listOfVariantsWeInstalledOn) {
-//                        val variantHullSize = variant.hullSpec.hullSize
-//                        removeEffectsBeforeShipCreation(variantHullSize, variant.statsForOpCosts, id)
-//                    }
-//                }
-//                //TODO keep track of the keys we 'removed' so we can actually remove them from the HullmodExoticHandler's lookupMap
-//            }
-        }
-         */
         // We need to ensure that FleeMember is non-null; it's great we're inferring it as non-nullable but
         // this is Starsector API we're talking about here ...
-        if (stats is ShipAPI) {
-            fleetMember?.let { nonNullFm ->
-                val allKeys = HullmodExoticHandler.grabAllKeysForParticularFleetMember(nonNullFm)
-                for (key in allKeys) {
-                    val exoticHandlerDataOptional = HullmodExoticHandler.getDataForKey(key)
-                    if (exoticHandlerDataOptional.isPresent()) {
-                        val exoticHandlerData = exoticHandlerDataOptional.get()
-                        for (variant in exoticHandlerData.listOfVariantsWeInstalledOn) {
-                            val variantHullSize = variant.hullSpec.hullSize
-                            removeEffectsBeforeShipCreation(variantHullSize, variant.statsForOpCosts, id)
-                        }
+        fleetMember?.let { nonNullFm ->
+            val allKeys = HullmodExoticHandler.grabAllKeysForParticularFleetMember(nonNullFm)
+            for (key in allKeys) {
+                val exoticHandlerDataOptional = HullmodExoticHandler.getDataForKey(key)
+                if (exoticHandlerDataOptional.isPresent()) {
+                    val exoticHandlerData = exoticHandlerDataOptional.get()
+                    for (variant in exoticHandlerData.listOfVariantsWeInstalledOn) {
+                        val variantHullSize = variant.hullSpec.hullSize
+                        removeEffectsBeforeShipCreation(variantHullSize, variant.statsForOpCosts, id)
                     }
-                    //TODO keep track of the keys we 'removed' so we can actually remove them from the HullmodExoticHandler's lookupMap
                 }
+                //TODO keep track of the keys we 'removed' so we can actually remove them from the HullmodExoticHandler's lookupMap
             }
         }
 
