@@ -83,18 +83,20 @@ class AlphaSubcoreHM : ExoticHullmod() {
          */
         // We need to ensure that FleeMember is non-null; it's great we're inferring it as non-nullable but
         // this is Starsector API we're talking about here ...
-        fleetMember?.let { nonNullFm ->
-            val allKeys = HullmodExoticHandler.grabAllKeysForParticularFleetMember(nonNullFm)
-            for (key in allKeys) {
-                val exoticHandlerDataOptional = HullmodExoticHandler.getDataForKey(key)
-                if (exoticHandlerDataOptional.isPresent()) {
-                    val exoticHandlerData = exoticHandlerDataOptional.get()
-                    for (variant in exoticHandlerData.listOfVariantsWeInstalledOn) {
-                        val variantHullSize = variant.hullSpec.hullSize
-                        removeEffectsBeforeShipCreation(variantHullSize, variant.statsForOpCosts, id)
+        if (stats is ShipAPI) {
+            fleetMember?.let { nonNullFm ->
+                val allKeys = HullmodExoticHandler.grabAllKeysForParticularFleetMember(nonNullFm)
+                for (key in allKeys) {
+                    val exoticHandlerDataOptional = HullmodExoticHandler.getDataForKey(key)
+                    if (exoticHandlerDataOptional.isPresent()) {
+                        val exoticHandlerData = exoticHandlerDataOptional.get()
+                        for (variant in exoticHandlerData.listOfVariantsWeInstalledOn) {
+                            val variantHullSize = variant.hullSpec.hullSize
+                            removeEffectsBeforeShipCreation(variantHullSize, variant.statsForOpCosts, id)
+                        }
                     }
+                    //TODO keep track of the keys we 'removed' so we can actually remove them from the HullmodExoticHandler's lookupMap
                 }
-                //TODO keep track of the keys we 'removed' so we can actually remove them from the HullmodExoticHandler's lookupMap
             }
         }
 
