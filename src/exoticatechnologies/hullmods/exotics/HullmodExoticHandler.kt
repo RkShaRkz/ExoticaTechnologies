@@ -143,7 +143,7 @@ object HullmodExoticHandler {
         AnonymousLogger.log("<-- removeHullmodExoticFromFleetMember()\tlookupMap AFTER cleaning: ${lookupMap}", "HullmodExoticHandler")
     }
 
-    /*private*/ fun grabAllKeysForParticularFleetMember(fleetMemberAPI: FleetMemberAPI): List<HullmodExoticKey> {
+    private fun grabAllKeysForParticularFleetMember(fleetMemberAPI: FleetMemberAPI): List<HullmodExoticKey> {
         val retVal = mutableListOf<HullmodExoticKey>()
         for(key in lookupMap.keys) {
             if (key.parentFleetMember == fleetMemberAPI) retVal.add(key)
@@ -152,7 +152,7 @@ object HullmodExoticHandler {
         return retVal.toList()
     }
 
-    /*private*/ fun getDataForKey(hullmodExoticKey: HullmodExoticKey): Optional<HullmodExoticInstallData> {
+    private fun getDataForKey(hullmodExoticKey: HullmodExoticKey): Optional<HullmodExoticInstallData> {
         return Optional.ofNullable(lookupMap[hullmodExoticKey])
     }
 }

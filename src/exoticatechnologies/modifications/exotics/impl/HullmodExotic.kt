@@ -163,33 +163,14 @@ open class HullmodExotic(
             mods: ShipModifications,
             exotic: Exotic
     ) {
-        // Call unapply after obtaining the instance from the ExoticHullmodLookup singleton
+        // Since this can be *any* HullmodExotic referencing their own ExoticHullmods, we should first
+        // check the ExoticHullmodLookup map for any instances of the exotic hullmod.
+        // And if we find one, we'll just pass it over to the HullmodExoticHandler to remove it from this fleetmember
+
         val hullmodOptional = ExoticHullmodLookup.getFromMap(hullmodId = hullmodId)
-        // lets  see if we found it ...
         if (hullmodOptional.isPresent()) {
             val hullmodInstance = hullmodOptional.get()
-            val hullSize = member.hullSpec.hullSize
-            //TODO get proper stats somehow?
-            // maybe from a different lookup map which keeps track of a <exotic hullmod>, <root ship module: ship data> multimap
-            // so that we can look through values of
-            val stats = member.stats
-
-            hullmodInstance.removeEffectsBeforeShipCreation(hullSize, stats, hullmodInstance.hullModId)
-            // And now grab all of the variants to purge it from
-            val allKeys = HullmodExoticHandler.grabAllKeysForParticularFleetMember(member)
-            for (key in allKeys) {
-                val exoticHandlerDataOptional = HullmodExoticHandler.getDataForKey(key)
-                if (exoticHandlerDataOptional.isPresent()) {
-                    val exoticHandlerData = exoticHandlerDataOptional.get()
-                    for (installedVariant in exoticHandlerData.listOfVariantsWeInstalledOn) {
-                        val variantHullSize = installedVariant.hullSpec.hullSize
-                        val installedStats = installedVariant.statsForOpCosts
-                        hullmodInstance.removeEffectsBeforeShipCreation(variantHullSize, installedStats, hullmodInstance.hullModId)
-                        hullmodInstance.removeEffectsBeforeShipCreation(variantHullSize, stats, hullmodInstance.hullModId)
-                    }
-                }
-                //TODO keep track of the keys we 'removed' so we can actually remove them from the HullmodExoticHandler's lookupMap
-            }
+            HullmodExoticHandler.removeHullmodExoticFromFleetMember(hullmodInstance, member)
         }
         mods.removeExotic(exotic)
         if (InstallData.shouldProceed(member, variant, mods, exotic)) {
