@@ -143,6 +143,15 @@ object HullmodExoticHandler {
         AnonymousLogger.log("<-- removeHullmodExoticFromFleetMember()\tlookupMap AFTER cleaning: ${lookupMap}", "HullmodExoticHandler")
     }
 
+    fun doesEntryExist(hullmodExotic: HullmodExotic, fleetMember: FleetMemberAPI): Boolean {
+        val hullmodExoticKey = HullmodExoticKey(
+                hullmodExotic = hullmodExotic,
+                parentFleetMember = fleetMember
+        )
+
+        return lookupMap.contains(hullmodExoticKey)
+    }
+
     private fun grabAllKeysForParticularFleetMember(fleetMemberAPI: FleetMemberAPI): List<HullmodExoticKey> {
         val retVal = mutableListOf<HullmodExoticKey>()
         for(key in lookupMap.keys) {

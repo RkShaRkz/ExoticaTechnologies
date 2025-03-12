@@ -1,6 +1,5 @@
 package exoticatechnologies.modifications.exotics.impl
 
-import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
@@ -74,13 +73,51 @@ open class HullmodExotic(
                 }
             }
         }
-        installHullmodOnVariant(member.variant)
-        HullmodExoticHandler.installHullmodExoticToVariant(
-                hullmodExotic = this,
-                parentFleetMember = member,
-                variant = member.variant
-        )
-        installHullmodOnVariant(member.checkRefitVariant())
+        // This 'variantList' is complicating things alot
+        // because the Optional must be present if we don't already have an entry in HullmodExoticHandler's map
+        // but if we do, we can just send whatever because it won't be used.
+        // Taking non-modular ships into account, we should check if we have an entry in the lookup map
+        // and if we do - we can send Optional.empty() since it won't be used
+        // but if we do not - we need to generate a list of our variants (which is most likely just this variant
+        // because the modules are handled first up there and they'd have already setup the whole entry
+        val variantListOptional = if(HullmodExoticHandler.doesEntryExist(this, member)) {
+            // Entry exists, lets just send an empty optional
+            Optional.empty()
+        } else {
+            // Entry does not exist, lets just create one, even though we're probably not a multimodule ship
+            val moduleSlotList = member.variant.moduleSlots
+            val variants = if(moduleSlotList == null || moduleSlotList.isEmpty()) {
+                // It's just this variant
+                listOf(member.variant)
+            } else {
+                // Otherwise, it's all of them
+                val mutableVariantList = moduleSlotList
+                        .map { slot -> member.variant.getModuleVariant(slot) }
+                        .toMutableList()
+                // Obviously, add the 'member' variant to the list as well
+                mutableVariantList.add(member.variant)
+
+                mutableVariantList.toList()
+            }
+
+            // Return the optional of the list
+            Optional.of(variants)
+        }
+
+        if (HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
+                        hullmodExotic = this,
+                        parentFleetMember = member,
+                        variant = member.variant,
+                        variantList = variantListOptional
+                )) {
+            installHullmodOnVariant(member.variant)
+            HullmodExoticHandler.installHullmodExoticToVariant(
+                    hullmodExotic = this,
+                    parentFleetMember = member,
+                    variant = member.variant
+            )
+            installHullmodOnVariant(member.checkRefitVariant())
+        }
         // Clear install data
         InstallData.clearStatus()
     }
@@ -113,21 +150,14 @@ open class HullmodExotic(
 
     override fun onDestroy(member: FleetMemberAPI) {
         if (shouldShareEffectToOtherModules(null, null)) {
-            logger.info("onDestroy()\tmoduleSlots: ${member.variant.moduleSlots}")
             if (member.variant.moduleSlots == null || member.variant.moduleSlots.isEmpty()) return
             val moduleSlotList = member.variant.moduleSlots
             for (slot in moduleSlotList) {
                 val moduleVariant = member.variant.getModuleVariant(slot)
-                logger.info("onDestroy()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}")
                 if (moduleVariant == null) continue
                 val mods = get(member, moduleVariant)
-                logger.info("onDestroy()\tmods: ${mods}")
                 mods?.let { nonNullMods ->
-                    logger.info("onDestroy()\t--> unapply()\tmember: ${member}, moduleVariant: ${moduleVariant}, mods: ${mods}, exotic: ${this}")
-                    Global.getSettings().allHullModSpecs
-                    logger.info("onDestroy()\t--> destroyWorkaround()\tmember: ${member}, moduleVariant: ${moduleVariant}, mods: ${mods}, exotic: ${this}")
                     destroyWorkaround(member, moduleVariant, nonNullMods, this)
-                    logger.info("onDestroy()\t--> removeHullmodFromVariant()\tmoduleVariant: ${moduleVariant}")
                     removeHullmodFromVariant(moduleVariant)
                 }
             }
@@ -136,9 +166,8 @@ open class HullmodExotic(
         removeHullmodFromVariant(member.checkRefitVariant())
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
-        logger.info("onDestroy()\t$check has mod still")
         InstallData.clearStatus()
-        logger.info("<-- onDestroy()\tStill has mod: ${check}")
+        logger.info("<-- onDestroy()\tStill has hullmod: ${check}")
     }
 
     private fun removeHullmodFromVariant(variant: ShipVariantAPI?) {
