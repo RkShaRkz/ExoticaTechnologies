@@ -75,7 +75,7 @@ object HullmodExoticHandler {
 
 
     fun installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
-        AnonymousLogger.log("--> installHullmodExoticToVariant()", "HullmodExoticHandler")
+        AnonymousLogger.log("--> installHullmodExoticToVariant()\thullmodExotic: ${hullmodExotic}, parentFleetMember: ${parentFleetMember}, variant: ${variant}", "HullmodExoticHandler")
         // Basically, this should be easy:
         // 1. form up the key
         // 2. grab the InstallData. Throw if there is none.
@@ -117,7 +117,33 @@ object HullmodExoticHandler {
         return true
     }
 
-    fun grabAllKeysForParticularFleetMember(fleetMemberAPI: FleetMemberAPI): List<HullmodExoticKey> {
+    fun removeHullmodExoticFromFleetMember(exoticHullmod: ExoticHullmod, fleetMember: FleetMemberAPI) {
+        val keysToRemove = mutableSetOf<HullmodExoticKey>()
+        val allKeys = grabAllKeysForParticularFleetMember(fleetMember)
+        for (key in allKeys) {
+            val exoticHandlerDataOptional = getDataForKey(key)
+            if (exoticHandlerDataOptional.isPresent()) {
+                val exoticHandlerData = exoticHandlerDataOptional.get()
+                for (variant in exoticHandlerData.listOfVariantsWeInstalledOn) {
+                    val variantHullSize = variant.hullSpec.hullSize
+                    exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, variant.statsForOpCosts, exoticHullmod.hullModId)
+                    // Lets keep track of 'removed' keys here because why not
+                    keysToRemove.add(key)
+                }
+            }
+        }
+        // Log before
+        AnonymousLogger.log("removeHullmodExoticFromFleetMember()\tlookupMap before cleaning: ${lookupMap}", "HullmodExoticHandler")
+
+        // Now, cleanup the lookupMap from all the to-remove keys
+        for(key in keysToRemove) {
+            lookupMap.remove(key)
+        }
+        // Log after
+        AnonymousLogger.log("<-- removeHullmodExoticFromFleetMember()\tlookupMap AFTER cleaning: ${lookupMap}", "HullmodExoticHandler")
+    }
+
+    /*private*/ fun grabAllKeysForParticularFleetMember(fleetMemberAPI: FleetMemberAPI): List<HullmodExoticKey> {
         val retVal = mutableListOf<HullmodExoticKey>()
         for(key in lookupMap.keys) {
             if (key.parentFleetMember == fleetMemberAPI) retVal.add(key)
@@ -126,7 +152,7 @@ object HullmodExoticHandler {
         return retVal.toList()
     }
 
-    fun getDataForKey(hullmodExoticKey: HullmodExoticKey): Optional<HullmodExoticInstallData> {
+    /*private*/ fun getDataForKey(hullmodExoticKey: HullmodExoticKey): Optional<HullmodExoticInstallData> {
         return Optional.ofNullable(lookupMap[hullmodExoticKey])
     }
 }
