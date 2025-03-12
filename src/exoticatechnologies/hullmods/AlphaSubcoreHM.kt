@@ -11,10 +11,8 @@ import com.fs.starfarer.api.loading.WeaponSpecAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import exoticatechnologies.hullmods.exotics.ExoticHullmod
 import exoticatechnologies.hullmods.exotics.ExoticHullmodLookup
-import exoticatechnologies.hullmods.exotics.HullmodExoticHandler
 import exoticatechnologies.modifications.exotics.impl.AlphaSubcore
 import exoticatechnologies.modifications.exotics.impl.DaemonCore
-import exoticatechnologies.util.AnonymousLogger
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.exhaustive
 
@@ -35,29 +33,18 @@ class AlphaSubcoreHM : ExoticHullmod() {
     }
 
     override fun applyEffectsBeforeShipCreation(hullSize: HullSize, stats: MutableShipStatsAPI, id: String) {
-        AnonymousLogger.log("--> applyEffectsBeforeShipCreation()\thullSize: ${hullSize}, stats: ${stats}, id: ${id}", "AlphaSubcoreHM")
         if(stats.variant.hullMods.any { AlphaSubcore.BLOCKED_HULLMODS.contains(it) }) {
             return
         }
 
         val listenerAdded = hasOPCostListener(stats)
-        AnonymousLogger.log("applyEffectsBeforeShipCreation()\tstats: ${stats}\tlistenerAdded: ${listenerAdded}", "AlphaSubcoreHM")
         if (listenerAdded.not()) {
             stats.addListener(listener)
         }
     }
 
     override fun removeEffectsBeforeShipCreation(hullSize: HullSize, stats: MutableShipStatsAPI, id: String) {
-        AnonymousLogger.log("--> removeEffectsBeforeShipCreation()\thullSize: ${hullSize}, stats: ${stats}, id: ${id}", "AlphaSubcoreHM")
-        val fleetMember = stats.fleetMember
         stats.removeListenerOfClass(OPCostListener::class.java)
-        // We need to ensure that FleeMember is non-null; it's great we're inferring it as non-nullable but
-        // this is Starsector API we're talking about here ...
-        fleetMember?.let { nonNullFm ->
-            HullmodExoticHandler.removeHullmodExoticFromFleetMember(this, nonNullFm)
-        }
-
-        AnonymousLogger.log("<-- removeEffectsBeforeShipCreation()\thasOPCostListener(stats) = ${hasOPCostListener(stats)}", "AlphaSubcoreHM")
     }
 
     override fun addPostDescriptionSection(
