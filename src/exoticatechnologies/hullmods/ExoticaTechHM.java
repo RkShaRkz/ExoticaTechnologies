@@ -15,6 +15,7 @@ import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.ShipModifications;
 import exoticatechnologies.modifications.exotics.Exotic;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
+import exoticatechnologies.modifications.exotics.impl.HullmodExotic;
 import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
 import exoticatechnologies.util.ExtensionsKt;
@@ -67,6 +68,8 @@ public class ExoticaTechHM extends BaseHullMod {
         if (shipVariant.hasHullMod("exoticatech")) {
             shipVariant.removePermaMod("exoticatech");
         }
+
+        member.updateStats();
     }
 
     @Override
@@ -224,7 +227,12 @@ public class ExoticaTechHM extends BaseHullMod {
         }
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
-            if (!mods.hasExotic(exotic)) continue;
+            if (!mods.hasExotic(exotic)) {
+                if (exotic instanceof HullmodExotic ) {
+                    //TODO maybe get rid of it here?
+                }
+                continue;
+            }
             log.info("applyEffectsBeforeShipCreation()\tshouldSkipModification(stats="+stats+", exotic="+exotic+") = " + shouldSkipModification(stats, exotic));
             if (shouldSkipModification(stats, exotic)) continue;
 
