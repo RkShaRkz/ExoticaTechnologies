@@ -36,7 +36,7 @@ open class HullmodExotic(
     override var color: Color,
 ) : Exotic(key, settingsObj) {
     override fun onInstall(member: FleetMemberAPI) {
-        logger.info("--> onInstall()\tmember = ${member}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules(null, null)}")
+        logger.info("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules(null, null)}")
         if (shouldShareEffectToOtherModules(null, null)) {
             val moduleSlotList = member.variant.moduleSlots
             logger.info("onInstall()\tmoduleSlots: ${moduleSlotList}")
@@ -165,6 +165,15 @@ open class HullmodExotic(
                 if (moduleVariant == null) continue
                 val mods = get(member, moduleVariant)
                 mods?.let { nonNullMods ->
+                    // Since this can be *any* HullmodExotic referencing their own ExoticHullmods, we should first
+                    // check the ExoticHullmodLookup map for any instances of the exotic hullmod.
+                    // And if we find one, we'll just pass it over to the HullmodExoticHandler to remove it from this fleetmember
+
+                    val hullmodOptional = ExoticHullmodLookup.getFromMap(hullmodId = hullmodId)
+                    if (hullmodOptional.isPresent()) {
+                        val hullmodInstance = hullmodOptional.get()
+                        HullmodExoticHandler.removeHullmodExoticFromFleetMember(hullmodInstance, member)
+                    }
                     destroyWorkaround(member, moduleVariant, nonNullMods, this)
                     removeHullmodFromVariant(moduleVariant)
                 }
@@ -200,15 +209,6 @@ open class HullmodExotic(
             mods: ShipModifications,
             exotic: Exotic
     ) {
-        // Since this can be *any* HullmodExotic referencing their own ExoticHullmods, we should first
-        // check the ExoticHullmodLookup map for any instances of the exotic hullmod.
-        // And if we find one, we'll just pass it over to the HullmodExoticHandler to remove it from this fleetmember
-
-        val hullmodOptional = ExoticHullmodLookup.getFromMap(hullmodId = hullmodId)
-        if (hullmodOptional.isPresent()) {
-            val hullmodInstance = hullmodOptional.get()
-            HullmodExoticHandler.removeHullmodExoticFromFleetMember(hullmodInstance, member)
-        }
         mods.removeExotic(exotic)
         if (InstallData.shouldProceed(member, variant, mods, exotic)) {
             // Update the installation data status first, so we can avoid the stackoverflow trap
