@@ -133,7 +133,10 @@ object HullmodExoticHandler {
             }
         }
         // Log before
+        AnonymousLogger.log("removeHullmodExoticFromFleetMember()\tkeysToRemove.size: ${keysToRemove.size}\tkeysToRemove: ${keysToRemove}", "HullmodExoticHandler")
         AnonymousLogger.log("removeHullmodExoticFromFleetMember()\tlookupMap before cleaning: ${lookupMap}", "HullmodExoticHandler")
+        AnonymousLogger.log("removeHullmodExoticFromFleetMember()\tlookupMap.size(): ${lookupMap.size}", "HullmodExoticHandler")
+
 
         // Now, cleanup the lookupMap from all the to-remove keys
         for(key in keysToRemove) {
@@ -141,6 +144,7 @@ object HullmodExoticHandler {
         }
         // Log after
         AnonymousLogger.log("<-- removeHullmodExoticFromFleetMember()\tlookupMap AFTER cleaning: ${lookupMap}", "HullmodExoticHandler")
+        AnonymousLogger.log("removeHullmodExoticFromFleetMember()\tlookupMap.size(): ${lookupMap.size}", "HullmodExoticHandler")
     }
 
     fun doesEntryExist(hullmodExotic: HullmodExotic, fleetMember: FleetMemberAPI): Boolean {
@@ -175,4 +179,22 @@ data class HullmodExoticInstallData(
 data class HullmodExoticKey(
         val hullmodExotic: HullmodExotic,
         val parentFleetMember: FleetMemberAPI
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is HullmodExoticKey) return false
+
+        var retVal = true   //assume true
+        retVal = retVal and hullmodExotic.getHullmodId().contentEquals(other.hullmodExotic.getHullmodId())
+        retVal = retVal and parentFleetMember.id.contentEquals(other.parentFleetMember.id)
+
+        return retVal
+    }
+
+    override fun hashCode(): Int {
+        var result = 11
+        result = 31 * result + hullmodExotic.getHullmodId().hashCode()
+        result = 31 * result + parentFleetMember.id.hashCode()
+        return result
+    }
+}

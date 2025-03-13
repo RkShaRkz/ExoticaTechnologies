@@ -247,6 +247,10 @@ open class HullmodExotic(
         }
     }
 
+    fun getHullmodId(): String {
+        return hullmodId
+    }
+
     object InstallData {
         var _member: Optional<FleetMemberAPI> = Optional.empty()
         var _moduleVariants: Optional<List<ShipVariantAPI>> = Optional.empty()
