@@ -156,7 +156,7 @@ class HullmodExoticHandlerTests {
 
         // Verify installed variants
         val data = handler.testsOnly_getDataForKey(
-                HullmodExoticKey(exotic, fleetMember)
+                HullmodExoticKey(exotic, fleetMember.id)
         ).get()
 
 

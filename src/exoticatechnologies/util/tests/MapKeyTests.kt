@@ -21,21 +21,29 @@ class MapKeyTests {
     @Test
     fun test_that_HullmodExoticKey_equals_works() {
 
-        val key1 = HullmodExoticKey(HullmodExotic(
-                key = "bla",
-                settingsObj = EXOTIC_JSON,
-                hullmodId = "hullmodId",
-                statDescriptionKey = "statDescriptionKey",
-                color = Color.BLACK
-        ), createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID))
+        val key1 = HullmodExoticKey(
+                HullmodExotic(
+                        key = "bla",
+                        settingsObj = EXOTIC_JSON,
+                        hullmodId = "hullmodId",
+                        statDescriptionKey = "statDescriptionKey",
+                        color = Color.BLACK
+                ),
+//                createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID)
+                TEST_FLEETMEMBER_ID
+        )
 
-        val key2 = HullmodExoticKey(HullmodExotic(
-                key = "bla",
-                settingsObj = EXOTIC_JSON,
-                hullmodId = "hullmodId",
-                statDescriptionKey = "statDescriptionKey",
-                color = Color.BLACK
-        ), createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID))
+        val key2 = HullmodExoticKey(
+                HullmodExotic(
+                        key = "bla",
+                        settingsObj = EXOTIC_JSON,
+                        hullmodId = "hullmodId",
+                        statDescriptionKey = "statDescriptionKey",
+                        color = Color.BLACK
+                ),
+//                createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID)
+                TEST_FLEETMEMBER_ID
+        )
 
         println("Key1: "+key1)
         println("Key2: "+key2)
@@ -53,7 +61,8 @@ class MapKeyTests {
                         key = "key",
                         hullmodId = "hullmodId"
                 ),
-                parentFleetMember = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID)
+//                parentFleetMember = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID)
+                parentFleetMemberId = TEST_FLEETMEMBER_ID
         )
 
         val key2 = HullmodExoticKey(
@@ -61,7 +70,8 @@ class MapKeyTests {
                         key = "key2",
                         hullmodId = "hullmodId"
                 ),
-                parentFleetMember = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID)
+//                parentFleetMember = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID)
+                parentFleetMemberId = TEST_FLEETMEMBER_ID
         )
 
         val key3 = HullmodExoticKey(
@@ -69,7 +79,8 @@ class MapKeyTests {
                         key = "key3",
                         hullmodId = "hullmodId"
                 ),
-                parentFleetMember = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID)
+//                parentFleetMember = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID)
+                parentFleetMemberId = TEST_FLEETMEMBER_ID
         )
 
 
@@ -101,7 +112,7 @@ class MapKeyTests {
         assert(testMap2.keys.size == 1)
     }
 
-    //TODO write some HullmodExoticHandler and HullmodExotic tests
+    //TODO write some HullmodExotic tests
 
 
 

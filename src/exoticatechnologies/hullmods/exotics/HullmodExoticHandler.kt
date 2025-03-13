@@ -29,7 +29,7 @@ object HullmodExoticHandler {
             // we will do this by forming up a [HullmodExotica, FleetMemberAPI] pair as a key
             val hullmodExoticKey = HullmodExoticKey(
                     hullmodExotic = hullmodExotic,
-                    parentFleetMember = parentFleetMember
+                    parentFleetMemberId = parentFleetMember.id
             )
             val currentInstallData = lookupMap[hullmodExoticKey]
 
@@ -105,7 +105,7 @@ object HullmodExoticHandler {
             // 8. update the map with new installed data
             val hullmodExoticKey = HullmodExoticKey(
                     hullmodExotic = hullmodExotic,
-                    parentFleetMember = parentFleetMember
+                    parentFleetMemberId = parentFleetMember.id
             )
 
             val currentInstallData = synchronized(lookupMap) { lookupMap[hullmodExoticKey] }
@@ -195,7 +195,7 @@ object HullmodExoticHandler {
         synchronized(lookupMap) {
             val hullmodExoticKey = HullmodExoticKey(
                     hullmodExotic = hullmodExotic,
-                    parentFleetMember = fleetMember
+                    parentFleetMemberId = fleetMember.id
             )
 
             return lookupMap.contains(hullmodExoticKey)
@@ -209,15 +209,16 @@ object HullmodExoticHandler {
             val retVal = mutableSetOf<HullmodExoticKey>()
             for (key in lookupMap.keys) {
 //            if (key.parentFleetMember == fleetMemberAPI) retVal.add(key)    //TODO fix this, just check ids
-                if (areFleetMembersEqual(key.parentFleetMember, fleetMemberAPI)) {
+                if (areFleetMemberIDsEqual(key.parentFleetMemberId, fleetMemberAPI.id)) {
                     retVal.add(key)
                 }
             }
             // TODO get rid of this
-            val lookupMapFleetMemberIDs = lookupMap.keys.map { hullmodExoticKey -> hullmodExoticKey.parentFleetMember.id }
-            val retValIDs = retVal.map { key -> key.parentFleetMember.id }
+            val lookupMapFleetMemberIDs = lookupMap.keys.map { hullmodExoticKey -> hullmodExoticKey.parentFleetMemberId }
+            val retValIDs = retVal.map { key -> key.parentFleetMemberId }
             AnonymousLogger.log("grabAllKeysForParticularFleetMember()\tlookupMap IDs: ${lookupMapFleetMemberIDs}", "HullmodExoticHandler")
             AnonymousLogger.log("grabAllKeysForParticularFleetMember()\tretVal IDs: ${retValIDs}", "HullmodExoticHandler")
+            // And return all keys mentioning this fleetMember
             return retVal.toList()
         }
     }
@@ -228,18 +229,15 @@ object HullmodExoticHandler {
 
     internal fun areHullmodExoticsEqual(hm1: HullmodExotic, hm2: HullmodExotic): Boolean {
         // NOTE: keep this in-sync with the HullmodExoticKey::equals()
-        return areHullmodIDsEqual(hm1.getHullmodId(), hm2.getHullmodId())
+        return hm1.getHullmodId() == hm2.getHullmodId()
     }
 
-    private fun areHullmodIDsEqual(hullmodId1: String, hullmodId2: String): Boolean {
-//        return hullmodId1.contentEquals(hullmodId2)
-        return hullmodId1.toString().contentEquals(hullmodId2.toString())
+    private fun areHullmodIDsEqual(id1: String, id2: String): Boolean {
+        return id1 == id2
     }
 
-    private fun areFleetMembersEqual(member1: FleetMemberAPI, member2: FleetMemberAPI): Boolean {
-        // NOTE: keep this in-sync with the HullmodExoticKey::equals()
-//        return member1.id.contentEquals(member2.id)
-        return member1.id.toString().contentEquals(member2.id.toString())
+    private fun areFleetMemberIDsEqual(id1: String, id2: String): Boolean {
+        return id1 == id2
     }
 
     // test only methods here
@@ -280,44 +278,21 @@ data class HullmodExoticInstallData(
 
 data class HullmodExoticKey(
         val hullmodExotic: HullmodExotic,
-        val parentFleetMember: FleetMemberAPI
+        val parentFleetMemberId: String
 ) {
-    /*
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is HullmodExoticKey) return false
-
-        var retVal = true   //assume true
-//        retVal = retVal and hullmodExotic.getHullmodId().contentEquals(other.hullmodExotic.getHullmodId())
-//        retVal = retVal and parentFleetMember.id.contentEquals(other.parentFleetMember.id)
-        retVal = retVal && HullmodExoticHandler.areHullmodExoticsEqual(hullmodExotic, other.hullmodExotic)
-        retVal = retVal && HullmodExoticHandler.areFleetMembersEqual(parentFleetMember, other.parentFleetMember)
-
-        return retVal
-    }
-
-    override fun hashCode(): Int {
-//        var result = 11
-//        result = 31 * result + hullmodExotic.getHullmodId().hashCode()
-//        result = 31 * result + parentFleetMember.id.hashCode()
-//        return result
-        return Objects.hash(hullmodExotic.getHullmodId(), parentFleetMember.id)
-    }
-     */
-
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is HullmodExoticKey) return false
 
         // Compare IDs as Strings
-        return hullmodExotic.getHullmodId().toString() == other.hullmodExotic.getHullmodId().toString() &&
-                parentFleetMember.id.toString() == other.parentFleetMember.id.toString()
+        return hullmodExotic.getHullmodId().toString() == other.hullmodExotic.getHullmodId().toString()
+                && parentFleetMemberId.toString() == other.parentFleetMemberId.toString()
     }
 
     override fun hashCode(): Int {
         return Objects.hash(
                 hullmodExotic.getHullmodId().toString(),
-                parentFleetMember.id.toString()
+                parentFleetMemberId.toString()
         )
     }
 }
