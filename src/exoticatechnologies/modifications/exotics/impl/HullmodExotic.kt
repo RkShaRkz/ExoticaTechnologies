@@ -7,6 +7,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import exoticatechnologies.hullmods.ExoticaTechHM
+import exoticatechnologies.hullmods.exotics.ExoticHullmod
 import exoticatechnologies.hullmods.exotics.ExoticHullmodLookup
 import exoticatechnologies.hullmods.exotics.HullmodExoticHandler
 import exoticatechnologies.modifications.ShipModLoader
@@ -21,12 +22,18 @@ import org.apache.log4j.Logger
 import org.json.JSONObject
 import java.awt.Color
 
+/**
+ * Base class denoting a type of [Exotic] whose main purpose is to install a [ExoticHullmod] with the ID of [hullmodId]
+ * since that's where all of it's functionality lies.
+ *
+ * It's a bridge between a concrete [Exotic] implementation and it's corresponding [ExoticHullmod]
+ */
 open class HullmodExotic(
     key: String,
     settingsObj: JSONObject,
     private val hullmodId: String,
     private val statDescriptionKey: String,
-    override var color: Color
+    override var color: Color,
 ) : Exotic(key, settingsObj) {
     override fun onInstall(member: FleetMemberAPI) {
         logger.info("--> onInstall()\tmember = ${member}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules(null, null)}")
@@ -53,6 +60,7 @@ open class HullmodExotic(
                 val mods = get(member, moduleVariant)
                 logger.info("onInstall()\tmods: ${mods}")
                 mods?.let { nonNullMods ->
+                    //TODO also need to install "exoticatechnologies" hullmod to submodules since it's not visible currently
                     if (HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
                             hullmodExotic = this,
                             parentFleetMember = member,
