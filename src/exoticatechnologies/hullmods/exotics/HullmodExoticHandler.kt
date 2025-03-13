@@ -5,6 +5,8 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.AnonymousLogger
 import exoticatechnologies.util.datastructures.Optional
+import org.jetbrains.annotations.TestOnly
+import org.jetbrains.annotations.VisibleForTesting
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -221,7 +223,6 @@ object HullmodExoticHandler {
     }
 
     private fun getDataForKey(hullmodExoticKey: HullmodExoticKey): Optional<HullmodExoticInstallData> {
-//        return Optional.ofNullable(lookupMap[hullmodExoticKey])
         return Optional.ofNullable(synchronized(lookupMap) { lookupMap.get(hullmodExoticKey) })
     }
 
@@ -235,10 +236,39 @@ object HullmodExoticHandler {
         return hullmodId1.toString().contentEquals(hullmodId2.toString())
     }
 
-    internal fun areFleetMembersEqual(member1: FleetMemberAPI, member2: FleetMemberAPI): Boolean {
+    private fun areFleetMembersEqual(member1: FleetMemberAPI, member2: FleetMemberAPI): Boolean {
         // NOTE: keep this in-sync with the HullmodExoticKey::equals()
 //        return member1.id.contentEquals(member2.id)
         return member1.id.toString().contentEquals(member2.id.toString())
+    }
+
+    // test only methods here
+
+    /**
+     * Internally calls into [grabAllKeysForParticularFleetMember] - please, do not use this in production code
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_grabAllKeysForParticularFleetMember(fleetMemberAPI: FleetMemberAPI): List<HullmodExoticKey> {
+        return grabAllKeysForParticularFleetMember(fleetMemberAPI)
+    }
+
+    /**
+     * Internally calls into [getDataForKey] - please, do not use this in production code
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_getDataForKey(hullmodExoticKey: HullmodExoticKey): Optional<HullmodExoticInstallData> {
+        return getDataForKey(hullmodExoticKey)
+    }
+
+    /**
+     * Internally clears the [lookupMap] - please, do not use this in production code
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_clearLookupMap() {
+        lookupMap.clear()
     }
 }
 
