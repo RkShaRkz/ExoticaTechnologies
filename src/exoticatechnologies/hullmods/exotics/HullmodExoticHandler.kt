@@ -243,12 +243,23 @@ object HullmodExoticHandler {
         }
     }
 
-    fun removeHullmodExoticFromFleetMember(exoticHullmod: ExoticHullmod, fleetMember: FleetMemberAPI) {
+    fun removeHullmodExoticFromFleetMember(exoticHullmodId: String, fleetMember: FleetMemberAPI) {
         synchronized(lookupMap) {
             // Obviously, using a Set for this was a wrong idea that led to the ever-growing problem in the first place
             // Somehow, the keys were matched fine in the set so the keysToRemove was always of either size 1 or 0
             // However, many such "duplicate" keys show up in the map just fine. Dunno why but - they do.
             val keysToRemove = mutableListOf<HullmodExoticKey>()
+
+            // Grab the ExoticHullmod instance
+            val exoticHullmodOptional = ExoticHullmodLookup.getFromMap(exoticHullmodId)
+            var exoticHullmod: ExoticHullmod
+            if (exoticHullmodOptional.isPresent()) {
+                exoticHullmod = exoticHullmodOptional.get()
+            } else {
+                AnonymousLogger.log("removeHullmodExoticFromFleetMember()\texotic hullmod with ID ${exoticHullmodId} not found !!! bailing out", "HullmodExoticHandler")
+                return
+            }
+
             val allKeys = grabAllKeysForParticularFleetMember(fleetMember)
             for (key in allKeys) {
                 val exoticHandlerDataOptional = getDataForKey(key)

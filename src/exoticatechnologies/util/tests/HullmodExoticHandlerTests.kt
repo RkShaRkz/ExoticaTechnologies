@@ -8,6 +8,7 @@ import com.fs.starfarer.api.combat.*
 import com.fs.starfarer.api.fleet.*
 import com.fs.starfarer.api.loading.*
 import exoticatechnologies.hullmods.exotics.ExoticHullmod
+import exoticatechnologies.hullmods.exotics.ExoticHullmodLookup
 import exoticatechnologies.hullmods.exotics.HullmodExoticHandler
 import exoticatechnologies.hullmods.exotics.HullmodExoticKey
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
@@ -65,6 +66,17 @@ class HullmodExoticHandlerTests {
         val fleetMember = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID, TEST_FLEETMEMBER_SHIPNAME)
 //        val variant = mockk<ShipVariantAPI>(relaxed = true)
         val variant = createAnnonymousShipVariantAPI(TEST_HULL_SPEC_HULL_ID)
+        // Prepare and put the hullmod in the map
+        val exoticHullmod = object : ExoticHullmod() {
+            override val hullModId: String
+                get() = TEST_HULLMOD_ID
+
+            override fun removeEffectsBeforeShipCreation(hullSize: ShipAPI.HullSize, stats: MutableShipStatsAPI, id: String) {
+                TODO("Not yet implemented")
+            }
+        }
+        ExoticHullmodLookup.addToLookupMap(exoticHullmod)
+
 
         // Install and verify
         handler.shouldInstallHullmodExoticToVariant(
@@ -77,14 +89,7 @@ class HullmodExoticHandlerTests {
 
         // Remove and verify
         handler.removeHullmodExoticFromFleetMember(
-                object : ExoticHullmod() {
-                    override val hullModId: String
-                        get() = TEST_HULLMOD_ID
-
-                    override fun removeEffectsBeforeShipCreation(hullSize: ShipAPI.HullSize, stats: MutableShipStatsAPI, id: String) {
-                        TODO("Not yet implemented")
-                    }
-                },
+                TEST_HULLMOD_ID,
                 fleetMember
         )
         Assert.assertEquals(0, handler.testsOnly_grabAllKeysForParticularFleetMember(fleetMember).size)
@@ -177,6 +182,16 @@ class HullmodExoticHandlerTests {
         val fleetMember = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID, TEST_FLEETMEMBER_SHIPNAME)
 //        val variant = mockk<ShipVariantAPI>(relaxed = true)
         val variant = createAnnonymousShipVariantAPI(TEST_HULL_SPEC_HULL_ID)
+        // Prepare and put the hullmod in the map
+        val exoticHullmod = object : ExoticHullmod() {
+            override val hullModId: String
+                get() = Companion.TEST_HULLMOD_ID
+
+            override fun removeEffectsBeforeShipCreation(hullSize: ShipAPI.HullSize, stats: MutableShipStatsAPI, id: String) {
+                TODO("Not yet implemented")
+            }
+        }
+        ExoticHullmodLookup.addToLookupMap(exoticHullmod)
 
         // Initial setup
         handler.shouldInstallHullmodExoticToVariant(
@@ -190,14 +205,7 @@ class HullmodExoticHandlerTests {
         val jobs = (1..100).map {
             async(Dispatchers.Default) {
                 handler.removeHullmodExoticFromFleetMember(
-                        object : ExoticHullmod() {
-                            override val hullModId: String
-                                get() = TEST_HULLMOD_ID
-
-                            override fun removeEffectsBeforeShipCreation(hullSize: ShipAPI.HullSize, stats: MutableShipStatsAPI, id: String) {
-                                TODO("Not yet implemented")
-                            }
-                        },
+                        TEST_HULLMOD_ID,
                         fleetMember
                 )
             }

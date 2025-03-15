@@ -240,7 +240,10 @@ open class HullmodExotic(
             removeHullmodFromVariant(member.variant)
             removeHullmodFromVariant(member.checkRefitVariant())
             //TODO And finally, for good measure
-//            HullmodExoticHandler.removeHullmodExoticFromFleetMember(member)
+            HullmodExoticHandler.removeHullmodExoticFromFleetMember(
+                    exoticHullmodId = getHullmodId(),
+                    fleetMember = member
+            )
         }
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
