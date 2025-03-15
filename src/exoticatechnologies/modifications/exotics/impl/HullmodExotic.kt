@@ -8,7 +8,6 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import exoticatechnologies.hullmods.ExoticaTechHM
 import exoticatechnologies.hullmods.exotics.ExoticHullmod
-import exoticatechnologies.hullmods.exotics.ExoticHullmodLookup
 import exoticatechnologies.hullmods.exotics.HullmodExoticHandler
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModLoader.Companion.get
@@ -35,6 +34,8 @@ open class HullmodExotic(
     private val statDescriptionKey: String,
     override var color: Color,
 ) : Exotic(key, settingsObj) {
+    private val logger: Logger = Logger.getLogger(HullmodExotic::class.java)
+
     override fun onInstall(member: FleetMemberAPI) {
         logger.info("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules(null, null)}")
         if (shouldShareEffectToOtherModules(null, null)) {
@@ -61,22 +62,52 @@ open class HullmodExotic(
                 logger.info("onInstall()\tmods: ${mods}")
                 mods?.let { nonNullMods ->
                     //TODO also need to install "exoticatechnologies" hullmod to submodules since it's not visible currently
+
+                    //TODO both the HullmodExoticHandler and the InstallData offer two different ways of stopping recursion
+                    // obviously, once the system is installed somewhere, the recursion starts from that module and spreads
+                    // on all other modules.
+                    // However, now that they're both in place, not only have I forgotten how the InstallData was supposed
+                    // to be working (and be used) but as it is - it gets rejected every single time, thus not applying
+                    // the exoticatech hullmod properly.
+                    // Both of these most likely need to be unified into just one method.
+                    // As such, the proper idea of handling this, might also involve the HullmodExotic keeping a reference
+                    // to the "installing FleetMember" so that all other HullmodExotics cannot be uninstalled from their
+                    // non-originating FleetMembers to avoid duplicating them ad-infinitum
+                    // I need to look back into how this used to work, and either rewrite this whole piece, or do something
+                    // clever about it, but one thing is for certain:
+                    // 1. HullmodExotics that were "synthetically" installed should not be uninstallable from non-originating modules
+                    // 2. The recursion will be problematic if we call exotic.onInstall() from this onInstall() method
+                    // 3. If we keep getting 'fake' FleetMemberAPIs, maybe generating them once and having them be a part of the
+                    // "expected child fleetMembers" list will make them match.
+                    // 4. installWorkaround most likely needs to go away and it's functionality needs to be moved back here
+                    // 5. this whole thing needs to be extracted into a "installToSubmodule(...)" method
                     if (HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
                             hullmodExotic = this,
                             parentFleetMember = member,
                             variant = moduleVariant,
                             variantList = Optional.of(variantList)
                     )) {
-                        logger.info("onInstall()\t--> installWorkaround()\tmember: ${member}, moduleVariant: ${moduleVariant}, mods: ${mods}, exotic: ${this}")
-                        installWorkaround(member, moduleVariant, nonNullMods, this)
-                        logger.info("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}")
-                        installHullmodOnVariant(moduleVariant)
-                        // And mark it as installed in the HullmodExoticHandler
+                        // Lets try starting from the HullmodExoticHandler installation
                         HullmodExoticHandler.installHullmodExoticToVariant(
                                 hullmodExotic = this,
                                 parentFleetMember = member,     //oh lets hope this one works out ...
                                 variant = moduleVariant
                         )
+
+                        logger.info("onInstall()\t--> installWorkaround()\tmember: ${member}, moduleVariant: ${moduleVariant}, mods: ${mods}, exotic: ${this}")
+//                        installWorkaround(member, moduleVariant, nonNullMods, this)
+                        logger.info("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}")
+                        installHullmodOnVariant(moduleVariant)
+                        // Install the exoticatech hullmod to show the thing we just installed
+//                        ExoticaTechHM.addToFleetMember(member, moduleVariant)
+                        // And mark it as installed in the HullmodExoticHandler
+
+
+                        mods.putExotic(ExoticData(this.key))
+
+                        ShipModLoader.set(member, moduleVariant, mods)
+                        // Install the exoticatech hullmod to show the thing we just installed
+                        ExoticaTechHM.addToFleetMember(member, moduleVariant)
                     }
                 }
             }
@@ -103,7 +134,7 @@ open class HullmodExotic(
                         .map { slot -> member.variant.getModuleVariant(slot) }
                         .toMutableList()
                 // Obviously, add the 'member' variant to the list as well
-                mutableVariantList.add(member.variant)
+                mutableVariantList.add(member.variant)  //TODO get rid of this, we should probably just rename this into childModulesVariantList
 
                 mutableVariantList.toList()
             }
@@ -168,19 +199,40 @@ open class HullmodExotic(
                     // Since this can be *any* HullmodExotic referencing their own ExoticHullmods, we should first
                     // check the ExoticHullmodLookup map for any instances of the exotic hullmod.
                     // And if we find one, we'll just pass it over to the HullmodExoticHandler to remove it from this fleetmember
+                    if (HullmodExoticHandler.shouldRemoveHullmodExoticFromVariant(
+                            hullmodExotic = this,
+                            parentFleetMember = member,
+                            variant = moduleVariant
+                    )) {
+                        HullmodExoticHandler.removeHullmodExoticFromVariant(
+                                hullmodExotic = this,
+                                parentFleetMember = member,
+                                variant = moduleVariant
+                        )
 
-                    val hullmodOptional = ExoticHullmodLookup.getFromMap(hullmodId = hullmodId)
-                    if (hullmodOptional.isPresent()) {
-                        val hullmodInstance = hullmodOptional.get()
-                        HullmodExoticHandler.removeHullmodExoticFromFleetMember(hullmodInstance, member)
+                        mods.removeExotic(this)
+                        ShipModLoader.set(member, moduleVariant, mods)
+                        ExoticaTechHM.addToFleetMember(member, moduleVariant)
+                        removeHullmodFromVariant(moduleVariant)
                     }
-                    destroyWorkaround(member, moduleVariant, nonNullMods, this)
-                    removeHullmodFromVariant(moduleVariant)
                 }
             }
         }
-        removeHullmodFromVariant(member.variant)
-        removeHullmodFromVariant(member.checkRefitVariant())
+
+        if (HullmodExoticHandler.shouldRemoveHullmodExoticFromVariant(
+                        hullmodExotic = this,
+                        parentFleetMember = member,
+                        variant = member.variant)) {
+            HullmodExoticHandler.removeHullmodExoticFromVariant(
+                    hullmodExotic = this,
+                    parentFleetMember = member,
+                    variant = member.variant
+            )
+            removeHullmodFromVariant(member.variant)
+            removeHullmodFromVariant(member.checkRefitVariant())
+            //TODO And finally, for good measure
+//            HullmodExoticHandler.removeHullmodExoticFromFleetMember(member)
+        }
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
         InstallData.clearStatus()
@@ -210,6 +262,7 @@ open class HullmodExotic(
             exotic: Exotic
     ) {
         mods.removeExotic(exotic)
+        //TODO Put in the HullmodExoticHandler here
         if (InstallData.shouldProceed(member, variant, mods, exotic)) {
             // Update the installation data status first, so we can avoid the stackoverflow trap
             InstallData.updateStatus(member, variant, mods, exotic)
@@ -296,9 +349,5 @@ open class HullmodExotic(
             _mods = Optional.empty()
             _exotic = Optional.empty()
         }
-    }
-
-    companion object {
-        val logger: Logger = Logger.getLogger(HullmodExotic::class.java)
     }
 }

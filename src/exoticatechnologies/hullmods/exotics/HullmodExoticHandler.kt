@@ -5,12 +5,15 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.AnonymousLogger
 import exoticatechnologies.util.datastructures.Optional
+import org.apache.log4j.Logger
 import org.jetbrains.annotations.TestOnly
 import org.jetbrains.annotations.VisibleForTesting
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 object HullmodExoticHandler {
+    private val logger: Logger = Logger.getLogger(HullmodExoticHandler::class.java)
+
     private val lookupMap: MutableMap<HullmodExoticKey, HullmodExoticInstallData> = ConcurrentHashMap()//Collections.synchronizedMap(mutableMapOf())//hashMapOf()
 
     /**
@@ -24,7 +27,7 @@ object HullmodExoticHandler {
      */
     fun shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>): Boolean {
         synchronized(lookupMap) {
-            AnonymousLogger.log("--> shouldInstallHullmodExoticToVariant()\thullmodExotic: ${hullmodExotic}, variant: ${variant}", "HullmodExoticHandler")
+
             // First things first, check if we have this in the map
             // we will do this by forming up a [HullmodExotica, FleetMemberAPI] pair as a key
             val hullmodExoticKey = HullmodExoticKey(
@@ -38,7 +41,7 @@ object HullmodExoticHandler {
             // Major difference being in that the duplicates all have "shipName = null", so try discarding those if possible
             // unless those are for the child modules themselves.
             if (parentFleetMember.shipName == null) {
-                AnonymousLogger.log("shouldInstallHullmodExoticToVariant()\tEncountered parentFleetMember with shipName == null !!! Bailing out !!!", "HullmodExoticHandler")
+                logger.warn("shouldInstallHullmodExoticToVariant()\tEncountered parentFleetMember with shipName == null !!! Bailing out !!!")
                 return false
             }
 
@@ -48,7 +51,7 @@ object HullmodExoticHandler {
             // 2. is it already NOT in the installed list?
             // we'll just do nothing if it fails either of these and return false.
             val retVal = if (currentInstallData != null) {
-                AnonymousLogger.log("shouldInstallHullmodExoticToVariant()\talready had install data !!!", "HullmodExoticHandler")
+                logger.info("shouldInstallHullmodExoticToVariant()\talready had install data !!!")
                 // now, check if this variant is in the expected list
                 val expectedVariants = currentInstallData.listOfExpectedVariants
 //            val isExpected: Boolean = expectedVariants.contains(variant)
@@ -56,16 +59,16 @@ object HullmodExoticHandler {
                 val isExpected: Boolean = expectedVariants
                         .map { expectedVariant -> expectedVariant.hullSpec.hullId }
                         .contains(variant.hullSpec.hullId)
-                AnonymousLogger.log("shouldInstallHullmodExoticToVariant()\tisExpected: ${isExpected}", "HullmodExoticHandler")
+                logger.info("shouldInstallHullmodExoticToVariant()\tisExpected: ${isExpected}")
 
                 val variantsWeAlreadyInstalledOn = currentInstallData.listOfVariantsWeInstalledOn
                 val hasNotInstalledOnThisVariantAlready = variantsWeAlreadyInstalledOn.contains(variant).not()
-                AnonymousLogger.log("shouldInstallHullmodExoticToVariant()\thasNotInstalledOnThisAlready: ${hasNotInstalledOnThisVariantAlready}", "HullmodExoticHandler")
+                logger.info("shouldInstallHullmodExoticToVariant()\thasNotInstalledOnThisAlready: ${hasNotInstalledOnThisVariantAlready}")
 
                 // Since I don't know how to check anything with parentFleetMember yet, lets just leave it out of the equation for now
                 isExpected && hasNotInstalledOnThisVariantAlready
             } else {
-                AnonymousLogger.log("shouldInstallHullmodExoticToVariant()\tthere was no install data for this key ${hullmodExoticKey}", "HullmodExoticHandler")
+                logger.warn("shouldInstallHullmodExoticToVariant()\tthere was no install data for this key ${hullmodExoticKey}")
                 // If we don't have any install data in the map, this is going to be simple. The optional variant list must be present
                 // If not present, just... do nothing for now, because we can't start off from a submodule I hope. So for now, throw
                 if (variantList.isPresent().not()) {
@@ -85,12 +88,14 @@ object HullmodExoticHandler {
                 true
             }
 
-            AnonymousLogger.log("<-- shouldInstallHullmodExoticToVariant()\treturning ${retVal}", "HullmodExoticHandler")
+            logger.info("<-- shouldInstallHullmodExoticToVariant()\treturning ${retVal}")
             return retVal
         }
     }
 
-
+    /**
+     * Method that installs a [HullmodExotic] into the [variant]
+     */
     fun installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
         synchronized(lookupMap) {
             AnonymousLogger.log("--> installHullmodExoticToVariant()\thullmodExotic: ${hullmodExotic}, parentFleetMember: ${parentFleetMember}, variant: ${variant}", "HullmodExoticHandler")
@@ -108,12 +113,13 @@ object HullmodExoticHandler {
                     parentFleetMemberId = parentFleetMember.id
             )
 
-            val currentInstallData = synchronized(lookupMap) { lookupMap[hullmodExoticKey] }
+            val currentInstallData = lookupMap[hullmodExoticKey]
             if (currentInstallData == null) {
                 throw IllegalStateException("We should have had this key in the lookup map!!! lookupMap: ${lookupMap}")
             }
 
             val alreadyInstalledList = currentInstallData.listOfVariantsWeInstalledOn
+            val expectedList = currentInstallData.listOfExpectedVariants
             // just check
             val alreadyIn = alreadyInstalledList.contains(variant)
             if (alreadyIn) {
@@ -122,19 +128,113 @@ object HullmodExoticHandler {
                 AnonymousLogger.log("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's already been installed on, returning false!!!!!", "HullmodExoticHandler")
                 return false
             }
-            val mutableInstalledList = alreadyInstalledList.toMutableList()
-            mutableInstalledList.add(variant)
-            val newKeyValue = currentInstallData.copy(
-                    parentFleetMemberAPI = currentInstallData.parentFleetMemberAPI,
-                    listOfExpectedVariants = currentInstallData.listOfExpectedVariants,
-                    listOfVariantsWeInstalledOn = mutableInstalledList.toList()
+
+            val isExpected = expectedList.contains(variant)
+            if (isExpected) {
+                val mutableInstalledList = alreadyInstalledList.toMutableList()
+                mutableInstalledList.add(variant)
+
+                val mutableExpectedList = expectedList.toMutableList()
+                mutableExpectedList.remove(variant)
+                val newKeyValue = currentInstallData.copy(
+                        parentFleetMemberAPI = currentInstallData.parentFleetMemberAPI,
+                        listOfExpectedVariants = mutableExpectedList.toList(),
+                        listOfVariantsWeInstalledOn = mutableInstalledList.toList()
+                )
+                // Doubly-locked because why?
+                synchronized(lookupMap) {
+                    lookupMap[hullmodExoticKey] = newKeyValue
+                }
+
+                AnonymousLogger.log("<-- installHullmodExoticToVariant()\t\treturning true", "HullmodExoticHandler")
+                return true
+            } else {
+                AnonymousLogger.log("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's NOT expected, returning false!!!!!", "HullmodExoticHandler")
+                return false
+            }
+        }
+    }
+
+    /**
+     * Method for checking whether the [HullmodExotic] should be uninstalled from a [ShipVariantAPI] by checking
+     * if we had already installed it
+     *
+     * @param hullmodExotic the HullmodExotic in question
+     * @param parentFleetMember the [FleetMemberAPI] of the root module, or the whole ship's if it's a single-module ship
+     * @param variant the variant to check
+     */
+    fun shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+        // This should just check the entry for the given parentMember, and then look if the variant is in 'installed' list
+        synchronized(lookupMap) {
+            // First things first, check if we have this in the map
+            // we will do this by forming up a [HullmodExotica, FleetMemberAPI] pair as a key
+            val hullmodExoticKey = HullmodExoticKey(
+                    hullmodExotic = hullmodExotic,
+                    parentFleetMemberId = parentFleetMember.id
             )
-            synchronized(lookupMap) {
-                lookupMap[hullmodExoticKey] = newKeyValue
+            val currentInstallData = lookupMap[hullmodExoticKey]
+
+            // If we do not have install data, then obviously we should bail out and return false
+            if (currentInstallData == null) {
+                logger.error("There was no InstallData for this key, bailing out and returnin false")
+                return false
             }
 
-            AnonymousLogger.log("<-- installHullmodExoticToVariant()\t\treturning true", "HullmodExoticHandler")
-            return true
+            // Otherwise, lets look up whether we have the variant in the "installedOn" variant list
+            val isInstalledOn = currentInstallData.listOfVariantsWeInstalledOn.contains(variant)
+            val isExpected = currentInstallData.listOfExpectedVariants.contains(variant)
+            // And just return that, since we should allow uninstalling if we have it installed or prevent uninstalling if we dont
+            return isInstalledOn and isExpected
+        }
+    }
+
+    fun removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI) {
+        synchronized(lookupMap) {
+            // Now, we get the install data, check whether the 'variant' is in 'installed variant' list, if yes, we "uninstall" it
+            // and finally unset that member from the list of installed variants
+            val hullmodExoticKey = HullmodExoticKey(
+                    hullmodExotic = hullmodExotic,
+                    parentFleetMemberId = parentFleetMember.id
+            )
+            val currentInstallData = getDataForKey(hullmodExoticKey)
+
+            if (currentInstallData.isPresent()) {
+                val installData = currentInstallData.get()
+                val installedOnVariants = installData.listOfVariantsWeInstalledOn
+
+                // If we're in the list, remove and unset from the list
+                if (installedOnVariants.contains(variant)) {
+                    // Grab the ExoticHullmod by it's key and uninstall from this variant
+                    val hullmodId = hullmodExotic.getHullmodId()
+                    val hullmodOptional = ExoticHullmodLookup.getFromMap(hullmodId = hullmodId)
+                    if (hullmodOptional.isPresent()) {
+                        val exoticHullmodInstance = hullmodOptional.get()
+
+                        exoticHullmodInstance.removeEffectsBeforeShipCreation(
+                                hullSize = variant.hullSpec.hullSize,
+                                stats = variant.statsForOpCosts,
+                                id = exoticHullmodInstance.hullModId
+                        )
+
+                        // Now that we've uninstalled it, lets unset it from the list of installed variants and
+                        // update the lookup map
+                        val newInstalledOnList = installedOnVariants.toMutableList()
+                        newInstalledOnList.remove(variant)
+                        lookupMap[hullmodExoticKey] = installData.copy(
+                                parentFleetMemberAPI = installData.parentFleetMemberAPI,
+                                listOfExpectedVariants = installData.listOfExpectedVariants,
+                                listOfVariantsWeInstalledOn = newInstalledOnList
+                        )
+                        logger.info("The exoticHullmod ${exoticHullmodInstance.hullModId} has been removed and lookup map has been updated. Old installed list size: ${installedOnVariants.size}, new install list size: ${newInstalledOnList.size}")
+                    } else {
+                        logger.error("No ExoticHullmod with id ${hullmodId} was found !!!")
+                    }
+                } else {
+                    logger.error("The 'variant' was not in the 'installedOnVariants' list")
+                }
+            } else {
+                logger.error("There was no installed data for key: ${hullmodExoticKey}")
+            }
         }
     }
 
