@@ -26,8 +26,15 @@ object HullmodExoticHandler {
      * @param variantList list of module variants belonging to the parent module (optional)
      */
     fun shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>): Boolean {
+        // Fail fast if the variant already has the hullmod
+        val hullmodId = hullmodExotic.getHullmodId()
+        val alreadyHasHullmod = variant.hasHullMod(hullmodId)
+        if (alreadyHasHullmod) {
+            logger.warn("shouldInstallHullmodExoticToVariant()\tVariant ${variant} already had hullmod with the ${hullmodId} ID. Nothing to do here. Bailing out !!!")
+//            return false
+        }
+        // Otherwise, prepare the key in the lookup map
         synchronized(lookupMap) {
-
             // First things first, check if we have this in the map
             // we will do this by forming up a [HullmodExotica, FleetMemberAPI] pair as a key
             val hullmodExoticKey = HullmodExoticKey(
@@ -168,6 +175,14 @@ object HullmodExoticHandler {
      * @param variant the variant to check
      */
     fun shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+        // Fail fast if the variant doesn't have the hullmod
+        val hullmodId = hullmodExotic.getHullmodId()
+        val hasHullmod2 = variant.hullMods.contains(hullmodId)
+        val alreadyHasHullmod = variant.hasHullMod(hullmodId)
+        if (alreadyHasHullmod.not()) {
+            logger.warn("shouldRemoveHullmodExoticFromVariant()\tVariant ${variant} doesn't have with the ${hullmodId} ID. Nothing to do here. Bailing out !!!")
+//            return false
+        }
         // This should just check the entry for the given parentMember, and then look if the variant is in 'installed' list
         synchronized(lookupMap) {
             // First things first, check if we have this in the map
@@ -180,7 +195,7 @@ object HullmodExoticHandler {
 
             // If we do not have install data, then obviously we should bail out and return false
             if (currentInstallData == null) {
-                logger.error("There was no InstallData for this key, bailing out and returning false")
+                logger.error("There was no InstallData for this key ${hullmodExoticKey}, bailing out and returning false")
                 return false
             }
 
