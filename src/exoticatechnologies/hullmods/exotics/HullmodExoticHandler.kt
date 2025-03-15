@@ -79,6 +79,7 @@ object HullmodExoticHandler {
                 synchronized(lookupMap) {
                     lookupMap[hullmodExoticKey] = HullmodExoticInstallData(
                             parentFleetMemberAPI = parentFleetMember,
+                            listOfAllModuleVariants = variantList.get(),
                             listOfExpectedVariants = variantList.get(),
                             listOfVariantsWeInstalledOn = emptyList()
                     )
@@ -130,6 +131,7 @@ object HullmodExoticHandler {
             }
 
             val isExpected = expectedList.contains(variant)
+            // If we're expected, remove from expected list and add to installed list and return true
             if (isExpected) {
                 val mutableInstalledList = alreadyInstalledList.toMutableList()
                 mutableInstalledList.add(variant)
@@ -146,6 +148,8 @@ object HullmodExoticHandler {
                     lookupMap[hullmodExoticKey] = newKeyValue
                 }
 
+                AnonymousLogger.log("installHullmodExoticToVariant()\t\tnew expected list: ${mutableExpectedList}", "HullmodExoticHandler")
+                AnonymousLogger.log("installHullmodExoticToVariant()\t\tnew installed list: ${mutableInstalledList}", "HullmodExoticHandler")
                 AnonymousLogger.log("<-- installHullmodExoticToVariant()\t\treturning true", "HullmodExoticHandler")
                 return true
             } else {
@@ -176,15 +180,16 @@ object HullmodExoticHandler {
 
             // If we do not have install data, then obviously we should bail out and return false
             if (currentInstallData == null) {
-                logger.error("There was no InstallData for this key, bailing out and returnin false")
+                logger.error("There was no InstallData for this key, bailing out and returning false")
                 return false
             }
 
             // Otherwise, lets look up whether we have the variant in the "installedOn" variant list
             val isInstalledOn = currentInstallData.listOfVariantsWeInstalledOn.contains(variant)
-            val isExpected = currentInstallData.listOfExpectedVariants.contains(variant)
+//            val isExpected = currentInstallData.listOfExpectedVariants.contains(variant)
+            val isInVariantsList = currentInstallData.listOfAllModuleVariants.contains(variant)
             // And just return that, since we should allow uninstalling if we have it installed or prevent uninstalling if we dont
-            return isInstalledOn and isExpected
+            return isInstalledOn and isInVariantsList
         }
     }
 
@@ -340,6 +345,15 @@ object HullmodExoticHandler {
         return id1 == id2
     }
 
+    /**
+     * Clears the [lookupMap] - should be called for every "new game" or "laoded game" to clean up the junk
+     * that is probably left by fake modules' FleetMemberAPIs
+     */
+    public fun reinitialize() {
+        lookupMap.clear()
+    }
+
+
     // test only methods here
 
     /**
@@ -372,6 +386,7 @@ object HullmodExoticHandler {
 
 data class HullmodExoticInstallData(
         val parentFleetMemberAPI: FleetMemberAPI,
+        val listOfAllModuleVariants: List<ShipVariantAPI>,
         val listOfExpectedVariants: List<ShipVariantAPI>,
         val listOfVariantsWeInstalledOn: List<ShipVariantAPI>
 )
@@ -394,5 +409,9 @@ data class HullmodExoticKey(
                 hullmodExotic.getHullmodId().toString(),
                 parentFleetMemberId.toString()
         )
+    }
+
+    override fun toString(): String {
+        return "HullmodExoticKey{hullmodExoticId=${hullmodExotic.getHullmodId()}, parentFleetMemberId=${parentFleetMemberId}}"
     }
 }
