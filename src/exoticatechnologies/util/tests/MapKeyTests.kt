@@ -87,6 +87,7 @@ class MapKeyTests {
         val testHullmodExoticData = HullmodExoticInstallData(
                 createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID),
                 emptyList(),
+                emptyList(),
                 emptyList()
         )
 
