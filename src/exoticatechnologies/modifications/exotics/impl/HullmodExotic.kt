@@ -8,6 +8,7 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import exoticatechnologies.hullmods.ExoticaTechHM
 import exoticatechnologies.hullmods.exotics.ExoticHullmod
+import exoticatechnologies.hullmods.exotics.ExoticHullmodLookup
 import exoticatechnologies.hullmods.exotics.HullmodExoticHandler
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModLoader.Companion.get
@@ -35,82 +36,122 @@ open class HullmodExotic(
     override var color: Color,
 ) : Exotic(key, settingsObj) {
     private val logger: Logger = Logger.getLogger(HullmodExotic::class.java)
+    private val exoticHullmod: ExoticHullmod
+        get() {
+            val exoticHullmodOptional = ExoticHullmodLookup.getFromMap(hullmodId)
+            return if (exoticHullmodOptional.isPresent()) {
+                exoticHullmodOptional.get()
+            } else {
+                throw IllegalStateException("No ExoticHullmod with ID ${hullmodId} found in ExoticHullmodLookup !!!")
+            }
+        }
 
     override fun onInstall(member: FleetMemberAPI) {
         val shouldShareEffectToOtherModules = shouldShareEffectToOtherModules(null, null)
         val isChildModule = member.shipName.isNullOrEmpty()
         logger.info("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules}, isChildModule = ${isChildModule}")
         if (shouldShareEffectToOtherModules) {
+            /*
             val moduleSlotList = member.variant.moduleSlots
             logger.info("onInstall()\tmoduleSlots: ${moduleSlotList}")
-            if (moduleSlotList == null || moduleSlotList.isEmpty()) return
+            val moduleSlotsNullOrEmpty = member.variant.moduleSlots == null || member.variant.moduleSlots.isEmpty()
+            if (moduleSlotsNullOrEmpty.not()) {
+                // Print out the module slot list, and generate a small map of
+                // <this exotic>, <parent FleetMember> + <list of expected variants> + <list of variants we installed on>
+                val mutableVariantList = moduleSlotList
+                        .map { slot -> member.variant.getModuleVariant(slot) }
+                        .toMutableList()
+                // Obviously, add the 'member' variant to the list as well
+                mutableVariantList.add(member.variant)
+                // Now forget about the mutable version and use a immutable version
+                val variantList = mutableVariantList.toList()
+                logger.info("onInstall()\tvariantList: ${variantList}")
 
-            // Print out the module slot list, and generate a small map of
-            // <this exotic>, <parent FleetMember> + <list of expected variants> + <list of variants we installed on>
-            val mutableVariantList = moduleSlotList
-                    .map { slot -> member.variant.getModuleVariant(slot) }
-                    .toMutableList()
-            // Obviously, add the 'member' variant to the list as well
-            mutableVariantList.add(member.variant)
-            // Now forget about the mutable version and use a immutable version
-            val variantList = mutableVariantList.toList()
+                // Iterate through each slot, getting their variant and trying to install there
+                for (slot in moduleSlotList) {
+                    val moduleVariant = member.variant.getModuleVariant(slot)
+                    logger.info("onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}")
+                    if (moduleVariant == null) continue
+                    val mods = get(member, moduleVariant)
+                    logger.info("onInstall()\tmods: ${mods}")
+                    mods?.let { nonNullMods ->
 
-            // Iterate through each slot, getting their variant and trying to install there
-            for (slot in moduleSlotList) {
-                val moduleVariant = member.variant.getModuleVariant(slot)
-                logger.info("onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}")
-                if (moduleVariant == null) continue
-                val mods = get(member, moduleVariant)
-                logger.info("onInstall()\tmods: ${mods}")
-                mods?.let { nonNullMods ->
-                    //TODO also need to install "exoticatechnologies" hullmod to submodules since it's not visible currently
+                        //TODO both the HullmodExoticHandler and the InstallData offer two different ways of stopping recursion
+                        // obviously, once the system is installed somewhere, the recursion starts from that module and spreads
+                        // on all other modules.
+                        // However, now that they're both in place, not only have I forgotten how the InstallData was supposed
+                        // to be working (and be used) but as it is - it gets rejected every single time, thus not applying
+                        // the exoticatech hullmod properly.
+                        // Both of these most likely need to be unified into just one method.
+                        // As such, the proper idea of handling this, might also involve the HullmodExotic keeping a reference
+                        // to the "installing FleetMember" so that all other HullmodExotics cannot be uninstalled from their
+                        // non-originating FleetMembers to avoid duplicating them ad-infinitum
+                        // I need to look back into how this used to work, and either rewrite this whole piece, or do something
+                        // clever about it, but one thing is for certain:
+                        // 1. HullmodExotics that were "synthetically" installed should not be uninstallable from non-originating modules
+                        // 2. The recursion will be problematic if we call exotic.onInstall() from this onInstall() method
+                        // 3. If we keep getting 'fake' FleetMemberAPIs, maybe generating them once and having them be a part of the
+                        // "expected child fleetMembers" list will make them match.
+                        // 4. installWorkaround most likely needs to go away and it's functionality needs to be moved back here
+                        // 5. this whole thing needs to be extracted into a "installToSubmodule(...)" method
 
-                    //TODO both the HullmodExoticHandler and the InstallData offer two different ways of stopping recursion
-                    // obviously, once the system is installed somewhere, the recursion starts from that module and spreads
-                    // on all other modules.
-                    // However, now that they're both in place, not only have I forgotten how the InstallData was supposed
-                    // to be working (and be used) but as it is - it gets rejected every single time, thus not applying
-                    // the exoticatech hullmod properly.
-                    // Both of these most likely need to be unified into just one method.
-                    // As such, the proper idea of handling this, might also involve the HullmodExotic keeping a reference
-                    // to the "installing FleetMember" so that all other HullmodExotics cannot be uninstalled from their
-                    // non-originating FleetMembers to avoid duplicating them ad-infinitum
-                    // I need to look back into how this used to work, and either rewrite this whole piece, or do something
-                    // clever about it, but one thing is for certain:
-                    // 1. HullmodExotics that were "synthetically" installed should not be uninstallable from non-originating modules
-                    // 2. The recursion will be problematic if we call exotic.onInstall() from this onInstall() method
-                    // 3. If we keep getting 'fake' FleetMemberAPIs, maybe generating them once and having them be a part of the
-                    // "expected child fleetMembers" list will make them match.
-                    // 4. installWorkaround most likely needs to go away and it's functionality needs to be moved back here
-                    // 5. this whole thing needs to be extracted into a "installToSubmodule(...)" method
-                    val shouldInstallOnModuleVariant = HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
-                            hullmodExotic = this,
-                            parentFleetMember = member,
-                            variant = moduleVariant,
-                            variantList = Optional.of(variantList)
-                    )
-                    logger.info("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, variant: ${moduleVariant}")
-                    if (shouldInstallOnModuleVariant) {
-                        // Lets try starting from the HullmodExoticHandler installation
-                        val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
+                        //TODO refit screen throws a curve in this. so for refit to work as well, we need "lax" versions
+                        // that won't compare specific instances, but just hullSpec.hullIds or some such.
+                        val shouldInstallOnModuleVariant = HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
                                 hullmodExotic = this,
-                                parentFleetMember = member,     //oh lets hope this one works out ...
-                                variant = moduleVariant
+                                parentFleetMember = member,
+                                variant = moduleVariant,
+                                variantList = Optional.of(variantList)
                         )
-                        logger.info("onInstall()\tinstallHullmodExoticToVariant result: ${installResult}")
-                        logger.info("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}")
-                        installHullmodOnVariant(moduleVariant)
+                        logger.info("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, variant: ${moduleVariant}")
+                        if (shouldInstallOnModuleVariant) {
+                            // Lets try starting from the HullmodExoticHandler installation
+                            val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
+                                    hullmodExotic = this,
+                                    parentFleetMember = member,     //oh lets hope this one works out ...
+                                    variant = moduleVariant
+                            )
+                            logger.info("onInstall()\tinstallHullmodExoticToVariant result: ${installResult}")
+                            logger.info("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}")
+                            installHullmodOnVariant(moduleVariant)
 
-                        // This is the installWorkaround code
-                        mods.putExotic(ExoticData(this.key))
+                            // This is the installWorkaround code
+                            mods.putExotic(ExoticData(this.key))
 
-                        ShipModLoader.set(member, moduleVariant, mods)
-                        // Install the exoticatech hullmod to show the thing we just installed
-                        ExoticaTechHM.addToFleetMember(member, moduleVariant)
+                            ShipModLoader.set(member, moduleVariant, mods)
+                            // Install the exoticatech hullmod to show the thing we just installed
+                            ExoticaTechHM.addToFleetMember(member, moduleVariant)
+                        }
                     }
                 }
             }
+             */
+            HullmodExoticHandler.Flows.CheckAndInstallOnAllChildModulesVariants(
+                    fleetMember = member,
+                    fleetMemberVariant = member.variant,
+                    hullmodExotic = this,
+                    onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
+                        override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
+                            logger.info("onInstall()\tshouldInstallOnModuleVariant: ${onShouldResult}, variant: ${moduleVariant}")
+                        }
+                    },
+                    onInstallChildModuleCallback = object : HullmodExoticHandler.Flows.OnInstallChildModuleCallback {
+                        override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
+                            logger.info("onInstall()\tinstallHullmodExoticToVariant result: ${onInstallResult}")
+                            logger.info("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}")
+                            installHullmodOnVariant(moduleVariant)
+
+                            // This is the installWorkaround code
+                            moduleVariantMods.putExotic(ExoticData(this@HullmodExotic.key))
+
+                            ShipModLoader.set(member, moduleVariant, moduleVariantMods)
+                            // Install the exoticatech hullmod to show the thing we just installed
+                            ExoticaTechHM.addToFleetMember(member, moduleVariant)
+                        }
+                    }
+            )
         }
+        /*
         // This 'variantList' is complicating things alot
         // because the Optional must be present if we don't already have an entry in HullmodExoticHandler's map
         // but if we do, we can just send whatever because it won't be used.
@@ -158,6 +199,25 @@ open class HullmodExotic(
             )
             installHullmodOnVariant(member.checkRefitVariant())
         }
+         */
+        HullmodExoticHandler.Flows.CheckAndInstallOnMemberModule(
+                member = member,
+                memberVariant = member.variant,
+                hullmodExotic = this@HullmodExotic,
+                onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
+                    override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
+                        logger.info("onInstall()\tshouldInstallOnMemberVariant: ${onShouldResult}, variant: ${moduleVariant}")
+                    }
+                },
+                onInstallCallback = object: HullmodExoticHandler.Flows.OnInstallMemberCallback {
+                    override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI) {
+                        installHullmodOnVariant(moduleVariant)
+                        //TODO get rid of this one
+                        installHullmodOnVariant(member.checkRefitVariant())
+                    }
+                }
+        )
+
         // Clear install data
         InstallData.clearStatus()
     }
@@ -219,6 +279,12 @@ open class HullmodExotic(
                             ExoticaTechHM.addToFleetMember(member, moduleVariant)
                             removeHullmodFromVariant(moduleVariant)
                         }
+
+                        //TODO this part doesn't work for refit screen - so see what you can do about this with the flows
+                        // and the whole is(runningFromRefitScreen()) / otherwise
+
+                        // Otherwise... just unapply the effect. Maybe that fixes the Refit screen too.
+                        unapplyExoticHullmodFromVariant(moduleVariant)
                     }
                 }
             }
@@ -239,11 +305,35 @@ open class HullmodExotic(
 
             removeHullmodFromVariant(member.variant)
             removeHullmodFromVariant(member.checkRefitVariant())
-            //TODO And finally, for good measure
-            HullmodExoticHandler.removeHullmodExoticFromFleetMember(
-                    exoticHullmodId = getHullmodId(),
-                    fleetMember = member
-            )
+        }
+
+        //TODO this part doesn't work for refit screen - so see what you can do about this with the flows
+        // and the whole is(runningFromRefitScreen()) / otherwise
+
+
+        // Again, just like before, just unapply from both member variants ...
+        unapplyExoticHullmodFromVariant(member.variant)
+        unapplyExoticHullmodFromVariant(member.checkRefitVariant())
+
+        //TODO And finally, for good measure
+        HullmodExoticHandler.removeHullmodExoticFromFleetMember(
+                exoticHullmodId = getHullmodId(),
+                fleetMember = member
+        )
+        val memberMods = get(member, member.variant)
+        memberMods?.let { nonNullMemberMods ->
+            nonNullMemberMods.removeExotic(this)
+            ShipModLoader.set(member, member.variant, nonNullMemberMods)
+            ExoticaTechHM.addToFleetMember(member, member.variant)
+        }
+        // And again for the refit variant
+        member.checkRefitVariant()?.let { memberRefitVariant ->
+            val memberRefitMods = get(member, memberRefitVariant)
+            memberRefitMods?.let { nonNullMemberRefitMods ->
+                nonNullMemberRefitMods.removeExotic(this)
+                ShipModLoader.set(member, memberRefitVariant, nonNullMemberRefitMods)
+                ExoticaTechHM.addToFleetMember(member, memberRefitVariant)
+            }
         }
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
@@ -265,6 +355,11 @@ open class HullmodExotic(
             variant.removeMod(hullmodId)
             variant.removePermaMod(hullmodId)
         }
+    }
+
+    private fun unapplyExoticHullmodFromVariant(variant: ShipVariantAPI) {
+        val variantHullSize = variant.hullSpec.hullSize
+        exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, variant.statsForOpCosts, exoticHullmod.hullModId)
     }
 
     fun destroyWorkaround(

@@ -1,7 +1,11 @@
 package exoticatechnologies.hullmods.exotics
 
+import com.fs.starfarer.api.Global
+import com.fs.starfarer.api.campaign.CoreUITabId
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
+import exoticatechnologies.modifications.ShipModLoader
+import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.AnonymousLogger
 import exoticatechnologies.util.datastructures.Optional
@@ -26,6 +30,7 @@ object HullmodExoticHandler {
      * @param variantList list of module variants belonging to the parent module (optional)
      */
     fun shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>): Boolean {
+        logger.info("--> shouldInstallHullmodExoticToVariant()\tvariant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}")
         // Fail fast if the variant already has the hullmod
         val hullmodId = hullmodExotic.getHullmodId()
         val alreadyHasHullmod = variant.hasHullMod(hullmodId)
@@ -106,7 +111,7 @@ object HullmodExoticHandler {
      */
     fun installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
         synchronized(lookupMap) {
-            AnonymousLogger.log("--> installHullmodExoticToVariant()\thullmodExotic: ${hullmodExotic}, parentFleetMember: ${parentFleetMember}, variant: ${variant}", "HullmodExoticHandler")
+            logger.info("--> installHullmodExoticToVariant()\thullmodExotic: ${hullmodExotic}, parentFleetMember: ${parentFleetMember}, variant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}")
             // Basically, this should be easy:
             // 1. form up the key
             // 2. grab the InstallData. Throw if there is none.
@@ -377,6 +382,159 @@ object HullmodExoticHandler {
      */
     public fun reinitialize() {
         lookupMap.clear()
+    }
+
+    /**
+     * Because there's such a big discrepancy between running from the "Exotica Technologies" colony menu OR the
+     * Refit screen, this needs to exist. So that we can either do tightly and properly checked code, or a more
+     * "lax" version hopefully works ...
+     */
+    private fun runningFromRefitScreen(): Boolean {
+        val runningFromRefitScreen = Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT
+        return runningFromRefitScreen
+    }
+
+    class Flows {
+        /**
+         * For each child module of [fleetMember] or rather, the fleetMember's [ShipVariantAPI] variant,
+         * the method will first call [shouldInstallHullmodExoticToVariant] followed by [installHullmodExoticToVariant],
+         * with their respective callbacks in proper places
+         */
+        companion object {
+            @JvmStatic
+            fun CheckAndInstallOnAllChildModulesVariants(
+                    fleetMember: FleetMemberAPI,
+                    fleetMemberVariant: ShipVariantAPI,
+                    hullmodExotic: HullmodExotic,
+                    onShouldCallback: OnShouldCallback,
+                    onInstallChildModuleCallback: OnInstallChildModuleCallback
+            ) {
+                val moduleSlotList = fleetMemberVariant.moduleSlots
+                logger.info("onInstall()\tmoduleSlots: ${moduleSlotList}")
+                val moduleSlotsNullOrEmpty = fleetMemberVariant.moduleSlots == null || fleetMemberVariant.moduleSlots.isEmpty()
+                if (moduleSlotsNullOrEmpty.not()) {
+                    // Print out the module slot list, and generate a small map of
+                    // <this exotic>, <parent FleetMember> + <list of expected variants> + <list of variants we installed on>
+                    val mutableVariantList = moduleSlotList
+                            .map { slot -> fleetMemberVariant.getModuleVariant(slot) }
+                            .toMutableList()
+                    // Obviously, add the 'member' variant to the list as well
+                    mutableVariantList.add(fleetMemberVariant)
+                    // Now forget about the mutable version and use a immutable version
+                    val variantList = mutableVariantList.toList()
+                    logger.info("onInstall()\tvariantList: ${variantList}")
+
+                    // Iterate through each slot, getting their variant and trying to install there
+                    for (slot in moduleSlotList) {
+                        val moduleVariant = fleetMemberVariant.getModuleVariant(slot)
+                        logger.info("onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}")
+                        if (moduleVariant == null) continue
+                        val mods = ShipModLoader.get(fleetMember, moduleVariant)
+                        logger.info("onInstall()\tmods: ${mods}")
+                        mods?.let { nonNullMods ->
+                            val shouldInstallOnModuleVariant = HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
+                                    hullmodExotic = hullmodExotic,
+                                    parentFleetMember = fleetMember,
+                                    variant = moduleVariant,
+                                    variantList = Optional.of(variantList)
+                            )
+                            onShouldCallback.execute(shouldInstallOnModuleVariant, moduleVariant)
+                            logger.info("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, variant: ${moduleVariant}")
+                            if (shouldInstallOnModuleVariant) {
+                                // Lets try starting from the HullmodExoticHandler installation
+                                val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
+                                        hullmodExotic = hullmodExotic,
+                                        parentFleetMember = fleetMember,     //oh lets hope this one works out ...
+                                        variant = moduleVariant
+                                )
+
+                                onInstallChildModuleCallback.execute(installResult, moduleVariant, nonNullMods)
+                            }
+                        }
+                    }
+                }
+            }
+
+            @JvmStatic
+            fun CheckAndInstallOnMemberModule(
+                    member: FleetMemberAPI,
+                    memberVariant: ShipVariantAPI,
+                    hullmodExotic: HullmodExotic,
+                    onShouldCallback: OnShouldCallback,
+                    onInstallCallback: OnInstallMemberCallback
+            ) {
+                // This 'variantList' is complicating things alot
+                // because the Optional must be present if we don't already have an entry in HullmodExoticHandler's map
+                // but if we do, we can just send whatever because it won't be used.
+                // Taking non-modular ships into account, we should check if we have an entry in the lookup map
+                // and if we do - we can send Optional.empty() since it won't be used
+                // but if we do not - we need to generate a list of our variants (which is most likely just this variant
+                // because the modules are handled first up there and they'd have already setup the whole entry
+                val variantListOptional = if (
+                        HullmodExoticHandler.doesEntryExist(
+                                hullmodExotic = hullmodExotic,
+                                fleetMember = member
+                        )
+                ) {
+                    // Entry exists, lets just send an empty optional
+                    Optional.empty()
+                } else {
+                    // Entry does not exist, lets just create one, even though we're probably not a multimodule ship
+//                    val moduleSlotList = member.variant.moduleSlots
+                    val moduleSlotList = memberVariant.moduleSlots
+                    val variants = if(moduleSlotList == null || moduleSlotList.isEmpty()) {
+                        // It's just this variant
+                        listOf(memberVariant)
+                    } else {
+                        // Otherwise, it's all of them
+                        val mutableVariantList = moduleSlotList
+//                                .map { slot -> member.variant.getModuleVariant(slot) }
+                                .map { slot -> memberVariant.getModuleVariant(slot) }
+                                .toMutableList()
+                        // Obviously, add the 'member' variant to the list as well
+//                        mutableVariantList.add(member.variant)  //TODO get rid of this, we should probably just rename this into childModulesVariantList
+                        mutableVariantList.add(memberVariant)
+
+                        mutableVariantList.toList()
+                    }
+
+                    // Return the optional of the list
+                    Optional.of(variants)
+                }
+
+                val shouldInstallOnMemberVariant = HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
+                        hullmodExotic = hullmodExotic,
+                        parentFleetMember = member,
+                        variant = memberVariant,
+                        variantList = variantListOptional
+                )
+                onShouldCallback.execute(shouldInstallOnMemberVariant, memberVariant)
+                logger.info("onInstall()\tshouldInstallOnMemberVariant: ${shouldInstallOnMemberVariant}, variant: ${memberVariant}")
+                if (shouldInstallOnMemberVariant) {
+                    val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
+                            hullmodExotic = hullmodExotic,
+                            parentFleetMember = member,
+                            variant = memberVariant
+                    )
+                    onInstallCallback.execute(installResult, memberVariant)
+                    // TODO get rid of these two, their place is in hte callback
+//                    installHullmodOnVariant(member.variant)
+//                    installHullmodOnVariant(member.checkRefitVariant())
+                }
+            }
+        }
+
+        interface OnShouldCallback {
+            fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI)
+        }
+
+        interface OnInstallChildModuleCallback {
+            fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications)
+        }
+
+        interface OnInstallMemberCallback {
+            fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI)
+        }
     }
 
 
