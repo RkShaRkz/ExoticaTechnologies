@@ -241,7 +241,7 @@ object HullmodExoticHandler {
                     hullmodExotic = hullmodExotic,
                     parentFleetMemberId = parentFleetMember.id
             )
-            val currentInstallData = lookupMap[hullmodExoticKey]
+            val currentInstallData = synchronized(lookupMap) { lookupMap[hullmodExoticKey] }
 
             // If we do not have install data, then obviously we should bail out and return false
             if (currentInstallData == null) {

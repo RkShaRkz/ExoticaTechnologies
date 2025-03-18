@@ -93,8 +93,6 @@ open class HullmodExotic(
                 onInstallCallback = object: HullmodExoticHandler.Flows.OnInstallToMemberCallback {
                     override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI) {
                         installHullmodOnVariant(moduleVariant)
-                        //TODO get rid of this one
-                        installHullmodOnVariant(member.checkRefitVariant())
                     }
                 }
         )
@@ -120,11 +118,6 @@ open class HullmodExotic(
                     onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
                         override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
                             logger.info("onDestroy()\tshouldRemoveFromModuleVariant: ${onShouldResult}, variant: ${moduleVariant}")
-                            // Well, let's carry over the old thing if "we should not"
-                            //TODO this should probably be removed
-                            if (onShouldResult.not()) {
-                                unapplyExoticHullmodFromVariant(moduleVariant)
-                            }
                         }
                     },
                     onRemoveFromChildModuleCallback = object: HullmodExoticHandler.Flows.OnRemoveFromChildModuleCallback {
@@ -134,8 +127,7 @@ open class HullmodExotic(
                             ShipModLoader.set(member, moduleVariant, moduleVariantMods)
                             ExoticaTechHM.addToFleetMember(member, moduleVariant)
                             removeHullmodFromVariant(moduleVariant)
-                            //TODO try to get rid of this one too
-                            onDestroy(member = member)
+                            unapplyExoticHullmodFromVariant(moduleVariant)
                         }
                     }
             )
@@ -153,16 +145,53 @@ open class HullmodExotic(
                 onRemoveFromMemberModuleCallback = object : HullmodExoticHandler.Flows.OnRemoveFromMemberCallback {
                     override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI) {
                         logger.info("onDestroy()\tremoveFromMemberVariant: ${onRemoveResult}, variant: ${moduleVariant}")
-                        removeHullmodFromVariant(moduleVariant)
-                        //TODO get rid of this one
-                        removeHullmodFromVariant(member.checkRefitVariant())
-                        onDestroy(member = member)
+//                        unapplyExoticHullmodFromVariant(moduleVariant)
+//                        removeHullmodFromVariant(moduleVariant)
+
+//                        onDestroy(member = member)
+
+
+                        val memberMods = get(member, moduleVariant)
+                        memberMods?.let { nonNullMods ->
+                            nonNullMods.removeExotic(this@HullmodExotic)
+                            ShipModLoader.set(member, moduleVariant, memberMods)
+                            ExoticaTechHM.addToFleetMember(member, moduleVariant)
+                            removeHullmodFromVariant(moduleVariant)
+                        }
+                        unapplyExoticHullmodFromVariant(moduleVariant)
                     }
                 }
         )
 
         // Try the refit variant too
-        
+        HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
+                fleetMember = member,
+                fleetMemberVariant = member.checkRefitVariant(),
+                hullmodExotic = this@HullmodExotic,
+                onShouldCallback = object : HullmodExoticHandler.Flows.OnShouldCallback {
+                    override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
+                        logger.info("onDestroy()\tshouldRemoveFromMemberVariant: ${onShouldResult}, variant: ${moduleVariant}")
+                    }
+                },
+                onRemoveFromMemberModuleCallback = object : HullmodExoticHandler.Flows.OnRemoveFromMemberCallback {
+                    override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI) {
+                        logger.info("onDestroy()\tremoveFromMemberVariant: ${onRemoveResult}, variant: ${moduleVariant}")
+//                        unapplyExoticHullmodFromVariant(moduleVariant)
+//                        removeHullmodFromVariant(moduleVariant)
+//                        onDestroy(member = member)
+
+
+                        val memberMods = get(member, moduleVariant)
+                        memberMods?.let { nonNullMods ->
+                            nonNullMods.removeExotic(this@HullmodExotic)
+                            ShipModLoader.set(member, moduleVariant, memberMods)
+                            ExoticaTechHM.addToFleetMember(member, moduleVariant)
+                            removeHullmodFromVariant(moduleVariant)
+                        }
+                        unapplyExoticHullmodFromVariant(moduleVariant)
+                    }
+                }
+        )
 
 
 
@@ -171,29 +200,30 @@ open class HullmodExotic(
 
 
         // Again, just like before, just unapply from both member variants ...
-        unapplyExoticHullmodFromVariant(member.variant)
-        unapplyExoticHullmodFromVariant(member.checkRefitVariant())
+//        unapplyExoticHullmodFromVariant(member.variant)
+//        unapplyExoticHullmodFromVariant(member.checkRefitVariant())
 
         //TODO And finally, for good measure
         HullmodExoticHandler.removeHullmodExoticFromFleetMember(
                 exoticHullmodId = getHullmodId(),
                 fleetMember = member
         )
-        val memberMods = get(member, member.variant)
-        memberMods?.let { nonNullMemberMods ->
-            nonNullMemberMods.removeExotic(this)
-            ShipModLoader.set(member, member.variant, nonNullMemberMods)
-            ExoticaTechHM.addToFleetMember(member, member.variant)
-        }
+//        val memberMods = get(member, member.variant)
+//        memberMods?.let { nonNullMemberMods ->
+//            nonNullMemberMods.removeExotic(this)
+//            ShipModLoader.set(member, member.variant, nonNullMemberMods)
+//            ExoticaTechHM.addToFleetMember(member, member.variant)
+//        }
+
         // And again for the refit variant
-        member.checkRefitVariant()?.let { memberRefitVariant ->
-            val memberRefitMods = get(member, memberRefitVariant)
-            memberRefitMods?.let { nonNullMemberRefitMods ->
-                nonNullMemberRefitMods.removeExotic(this)
-                ShipModLoader.set(member, memberRefitVariant, nonNullMemberRefitMods)
-                ExoticaTechHM.addToFleetMember(member, memberRefitVariant)
-            }
-        }
+//        member.checkRefitVariant()?.let { memberRefitVariant ->
+//            val memberRefitMods = get(member, memberRefitVariant)
+//            memberRefitMods?.let { nonNullMemberRefitMods ->
+//                nonNullMemberRefitMods.removeExotic(this)
+//                ShipModLoader.set(member, memberRefitVariant, nonNullMemberRefitMods)
+//                ExoticaTechHM.addToFleetMember(member, memberRefitVariant)
+//            }
+//        }
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
         logger.info("<-- onDestroy()\tStill has hullmod: ${check}")
