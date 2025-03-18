@@ -66,13 +66,25 @@ object HullmodExoticHandler {
                 logger.info("shouldInstallHullmodExoticToVariant()\talready had install data !!!")
                 // now, check if this variant is in the expected list
                 val expectedVariants = currentInstallData.listOfExpectedVariants
-//            val isExpected: Boolean = expectedVariants.contains(variant)
+
+                // For LENIENT work mode, we will merely check the HullSpec.HullID since we will get many similar
+                // variants coming in from the fake FleetMemberAPIs created by the Refit screen.
+                // For STRICT work mode, we will literally check if the variant is in the list.
+
                 // obviously these don't match
-                //TODO revert back to 'stricter' version for the StrictWorkPerformer
-                val isExpected: Boolean = expectedVariants
-                        .map { expectedVariant -> expectedVariant.hullSpec.hullId }
-                        .contains(variant.hullSpec.hullId)
-                logger.info("shouldInstallHullmodExoticToVariant()\tisExpected: ${isExpected}")
+                val isExpected: Boolean = if (workMode == HullmodExoticHandlerWorkMode.LENIENT) {
+                    // LENIENT work mode - just check hullIDs
+                    expectedVariants
+                            .map { expectedVariant -> expectedVariant.hullSpec.hullId }
+                            .contains(variant.hullSpec.hullId)
+                } else {
+                    // STRICT work mode - check whether they're in the list
+                    //TODO revert back to 'stricter' version for the StrictWorkPerformer
+//                    val isExpected: Boolean = expectedVariants.contains(variant)
+                    expectedVariants.contains(variant)
+                }
+                // Everything else should remain the same ...
+                logger.info("shouldInstallHullmodExoticToVariant()\t${workMode}\tisExpected: ${isExpected}")
 
                 val variantsWeAlreadyInstalledOn = currentInstallData.listOfVariantsWeInstalledOn
                 val hasNotInstalledOnThisVariantAlready = variantsWeAlreadyInstalledOn.contains(variant).not()
@@ -143,19 +155,46 @@ object HullmodExoticHandler {
                 return false
             }
 
-            val isExpected = expectedList.contains(variant)
-            // If we're expected, remove from expected list and add to installed list and return true
-            if (isExpected) {
+            // Now, the difference between LENIENT and STRICT will essentially fall down to the strict version
+            // installing *only* on the expected variants, where the lenient one won't even look at the expected list,
+            // as well as *not* reducing the 'expected' list because we'll get many more than originally expected ...
+
+            if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
+                // STRICT work mode - only install on the 'expected' variants and do nothing for unexpected ones
+                val isExpected = expectedList.contains(variant)
+                // If we're expected, remove from expected list and add to installed list and return true
+                if (isExpected) {
+                    val mutableInstalledList = alreadyInstalledList.toMutableList()
+                    mutableInstalledList.add(variant)
+
+                    val mutableExpectedList = expectedList.toMutableList()
+                    mutableExpectedList.remove(variant)
+                    val newKeyValue = currentInstallData.copy(
+                            parentFleetMemberAPI = currentInstallData.parentFleetMemberAPI,
+                            listOfExpectedVariants = mutableExpectedList.toList(),
+                            listOfVariantsWeInstalledOn = mutableInstalledList.toList()
+                    )
+                    // Doubly-locked because why?
+                    synchronized(lookupMap) {
+                        lookupMap[hullmodExoticKey] = newKeyValue
+                    }
+
+                    AnonymousLogger.log("installHullmodExoticToVariant()\t\tnew expected list: ${mutableExpectedList}", "HullmodExoticHandler")
+                    AnonymousLogger.log("installHullmodExoticToVariant()\t\tnew installed list: ${mutableInstalledList}", "HullmodExoticHandler")
+                    AnonymousLogger.log("<-- installHullmodExoticToVariant()\t\treturning true", "HullmodExoticHandler")
+                    return true
+                } else {
+                    AnonymousLogger.log("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's NOT expected, returning false!!!!!", "HullmodExoticHandler")
+                    return false
+                }
+            } else {
+                // LENIENT work mode - install on whatever comes in and/or we get called with AND do not reduce expected list ... *shrug*
                 val mutableInstalledList = alreadyInstalledList.toMutableList()
                 mutableInstalledList.add(variant)
 
-                //TODO stop removing from "expected" list for the 'laxer'/lenient WorkPerformer
-                // (should be called RefitScreenWorkPerformer to make it obvious)
-                val mutableExpectedList = expectedList.toMutableList()
-                mutableExpectedList.remove(variant)
                 val newKeyValue = currentInstallData.copy(
                         parentFleetMemberAPI = currentInstallData.parentFleetMemberAPI,
-                        listOfExpectedVariants = mutableExpectedList.toList(),
+                        listOfExpectedVariants = expectedList.toList(),
                         listOfVariantsWeInstalledOn = mutableInstalledList.toList()
                 )
                 // Doubly-locked because why?
@@ -163,13 +202,11 @@ object HullmodExoticHandler {
                     lookupMap[hullmodExoticKey] = newKeyValue
                 }
 
-                AnonymousLogger.log("installHullmodExoticToVariant()\t\tnew expected list: ${mutableExpectedList}", "HullmodExoticHandler")
+                AnonymousLogger.log("installHullmodExoticToVariant()\t\tnew expected list: ${expectedList}", "HullmodExoticHandler")
                 AnonymousLogger.log("installHullmodExoticToVariant()\t\tnew installed list: ${mutableInstalledList}", "HullmodExoticHandler")
                 AnonymousLogger.log("<-- installHullmodExoticToVariant()\t\treturning true", "HullmodExoticHandler")
+
                 return true
-            } else {
-                AnonymousLogger.log("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's NOT expected, returning false!!!!!", "HullmodExoticHandler")
-                return false
             }
         }
     }
