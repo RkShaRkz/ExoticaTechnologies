@@ -98,34 +98,11 @@ open class HullmodExotic(
                     }
                 }
         )
-
-        // Clear install data
-        InstallData.clearStatus()
     }
 
     fun installHullmodOnVariant(variant: ShipVariantAPI?) {
         variant?.let {
             variant.addPermaMod(hullmodId)
-        }
-    }
-
-    fun installWorkaround(
-            member: FleetMemberAPI,
-            variant: ShipVariantAPI,
-            mods: ShipModifications,
-            exotic: Exotic
-    ) {
-        mods.putExotic(ExoticData(exotic.key))
-
-        ShipModLoader.set(member, variant, mods)
-        // Now, check if we should continue
-        if (InstallData.shouldProceed(member, variant, mods, exotic)) {
-            // Update the installation data status first, so we can avoid the stackoverflow trap
-            InstallData.updateStatus(member, variant, mods, exotic)
-
-            ExoticaTechHM.addToFleetMember(member, variant)
-            // We will skip this and avoid a StackOverflowError since that's the method that called this one
-            exotic.onInstall(member)
         }
     }
 
@@ -213,7 +190,6 @@ open class HullmodExotic(
         }
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
-        InstallData.clearStatus()
         logger.info("<-- onDestroy()\tStill has hullmod: ${check}")
     }
 
@@ -236,25 +212,6 @@ open class HullmodExotic(
     private fun unapplyExoticHullmodFromVariant(variant: ShipVariantAPI) {
         val variantHullSize = variant.hullSpec.hullSize
         exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, variant.statsForOpCosts, exoticHullmod.hullModId)
-    }
-
-    fun destroyWorkaround(
-            member: FleetMemberAPI,
-            variant: ShipVariantAPI,
-            mods: ShipModifications,
-            exotic: Exotic
-    ) {
-        mods.removeExotic(exotic)
-        //TODO Put in the HullmodExoticHandler here
-        if (InstallData.shouldProceed(member, variant, mods, exotic)) {
-            // Update the installation data status first, so we can avoid the stackoverflow trap
-            InstallData.updateStatus(member, variant, mods, exotic)
-
-            exotic.onDestroy(member)
-
-            ShipModLoader.set(member, variant, mods)
-            ExoticaTechHM.addToFleetMember(member, variant)
-        }
     }
 
     override fun applyExoticToStats(
@@ -293,44 +250,5 @@ open class HullmodExotic(
 
     fun getHullmodId(): String {
         return hullmodId
-    }
-
-    object InstallData {
-        var _member: Optional<FleetMemberAPI> = Optional.empty()
-        var _moduleVariants: Optional<List<ShipVariantAPI>> = Optional.empty()
-        var _mods: Optional<ShipModifications> = Optional.empty()
-        var _exotic: Optional<Exotic> = Optional.empty()
-
-        fun shouldProceed(member: FleetMemberAPI, moduleVariant: ShipVariantAPI, modifications: ShipModifications, exotic: Exotic): Boolean {
-            // The moduleVariants seem to be the biggest hurdle here since we're always restarting for the same variant
-            // but, we want to return false only when we hit the exact same parameters that we already have stored here
-            val storedMember = if(_member.isPresent()) _member.get() else null
-            val storedVariants = if(_moduleVariants.isPresent()) _moduleVariants.get() else listOf()
-            val storedMods = if(_mods.isPresent()) _mods.get() else null
-            val storedExotic = if(_exotic.isPresent()) _exotic.get() else null
-
-            val memberMatches = member == storedMember
-            val variantsMatches = storedVariants.contains(moduleVariant)
-            val modsMatches = modifications == storedMods
-            val exoticMatches = exotic == storedExotic
-
-            return memberMatches && variantsMatches && modsMatches && exoticMatches
-        }
-
-        fun updateStatus(member: FleetMemberAPI, moduleVariant: ShipVariantAPI, modifications: ShipModifications, exotic: Exotic) {
-            _member = Optional.of(member)
-            val storedVariants = if (_moduleVariants.isPresent()) { _moduleVariants.get().toMutableList() } else { mutableListOf() }
-            storedVariants.add(moduleVariant)
-            _moduleVariants = Optional.of(storedVariants.toList())
-            _mods = Optional.of(modifications)
-            _exotic = Optional.of(exotic)
-        }
-
-        fun clearStatus() {
-            _member = Optional.empty()
-            _moduleVariants = Optional.empty()
-            _mods = Optional.empty()
-            _exotic = Optional.empty()
-        }
     }
 }
