@@ -44,7 +44,7 @@ class HullmodExoticHandlerTests {
         // Simulate 100 concurrent installations
         val jobs = (1..100).map {
             async(Dispatchers.Default) {
-                handler.shouldInstallHullmodExoticToVariant(
+                handler.testsOnly_shouldInstallHullmodExoticToVariant(
                         exotic,
                         fleetMember,
                         variant,
@@ -56,7 +56,7 @@ class HullmodExoticHandlerTests {
 
         // Verify only 1 entry exists
         Assert.assertEquals(1, handler.testsOnly_grabAllKeysForParticularFleetMember(fleetMember).size)
-        Assert.assertTrue(handler.doesEntryExist(exotic, fleetMember))
+        Assert.assertTrue(handler.testsOnly_doesEntryExist(exotic, fleetMember))
     }
 
     @Test
@@ -79,7 +79,7 @@ class HullmodExoticHandlerTests {
 
 
         // Install and verify
-        handler.shouldInstallHullmodExoticToVariant(
+        handler.testsOnly_shouldInstallHullmodExoticToVariant(
                 exotic,
                 fleetMember,
                 variant,
@@ -106,13 +106,13 @@ class HullmodExoticHandlerTests {
         val member1 = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID, "shipname1")
         val member2 = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID, "shipname2")
 
-        handler.shouldInstallHullmodExoticToVariant(
+        handler.testsOnly_shouldInstallHullmodExoticToVariant(
                 exotic,
                 member1,
                 createAnnonymousShipVariantAPI(TEST_HULL_SPEC_HULL_ID),
                 Optional.of(emptyList())
         )
-        handler.shouldInstallHullmodExoticToVariant(
+        handler.testsOnly_shouldInstallHullmodExoticToVariant(
                 exotic,
                 member2,
                 createAnnonymousShipVariantAPI(TEST_HULL_SPEC_HULL_ID),
@@ -134,26 +134,26 @@ class HullmodExoticHandlerTests {
         val variant2 = createAnnonymousShipVariantAPI("hull2")
 
         // First installation
-        val shouldInstall1 = handler.shouldInstallHullmodExoticToVariant(
+        val shouldInstall1 = handler.testsOnly_shouldInstallHullmodExoticToVariant(
                 exotic,
                 fleetMember,
                 variant1,
                 Optional.of(listOf(variant1, variant2))
         )
-        val install1success = handler.installHullmodExoticToVariant(
+        val install1success = handler.testsOnly_installHullmodExoticToVariant(
                 exotic,
                 fleetMember,
                 variant1
         )
 
         // Second installation on different variant
-        val shouldInstall2 = handler.shouldInstallHullmodExoticToVariant(
+        val shouldInstall2 = handler.testsOnly_shouldInstallHullmodExoticToVariant(
                 exotic,
                 fleetMember,
                 variant2,
                 Optional.of(listOf(variant1, variant2))
         )
-        val install2success = handler.installHullmodExoticToVariant(
+        val install2success = handler.testsOnly_installHullmodExoticToVariant(
                 exotic,
                 fleetMember,
                 variant2
@@ -194,7 +194,7 @@ class HullmodExoticHandlerTests {
         ExoticHullmodLookup.addToLookupMap(exoticHullmod)
 
         // Initial setup
-        handler.shouldInstallHullmodExoticToVariant(
+        handler.testsOnly_shouldInstallHullmodExoticToVariant(
                 exotic,
                 fleetMember,
                 variant,
@@ -225,7 +225,7 @@ class HullmodExoticHandlerTests {
             override fun getShipName(): String? = null
         }
 
-        val result = handler.shouldInstallHullmodExoticToVariant(
+        val result = handler.testsOnly_shouldInstallHullmodExoticToVariant(
                 exotic,
                 fleetMember,
                 createAnnonymousShipVariantAPI(TEST_HULL_SPEC_HULL_ID),
@@ -246,13 +246,13 @@ class HullmodExoticHandlerTests {
         val member1 = createAnnonymousFleetMemberAPI("fleet123", "name123")
         val member2 = createAnnonymousFleetMemberAPI("fleet456", "name456")
 
-        handler.shouldInstallHullmodExoticToVariant(
+        handler.testsOnly_shouldInstallHullmodExoticToVariant(
                 exotic,
                 member1,
                 createAnnonymousShipVariantAPI("hull1"),
                 Optional.of(emptyList())
         )
-        handler.shouldInstallHullmodExoticToVariant(
+        handler.testsOnly_shouldInstallHullmodExoticToVariant(
                 exotic,
                 member2,
                 createAnnonymousShipVariantAPI("hull2"),

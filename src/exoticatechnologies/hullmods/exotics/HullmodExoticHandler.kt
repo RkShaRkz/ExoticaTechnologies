@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap
 object HullmodExoticHandler {
     private val logger: Logger = Logger.getLogger(HullmodExoticHandler::class.java)
 
-    private val lookupMap: MutableMap<HullmodExoticKey, HullmodExoticInstallData> = ConcurrentHashMap()//Collections.synchronizedMap(mutableMapOf())//hashMapOf()
+    private val lookupMap: MutableMap<HullmodExoticKey, HullmodExoticInstallData> = ConcurrentHashMap()
 
     /**
      * Method for checking whether the [HullmodExotic] should be installed onto a [ShipVariantAPI] by checking
@@ -29,7 +29,7 @@ object HullmodExoticHandler {
      * @param variant the variant to check
      * @param variantList list of module variants belonging to the parent module (optional)
      */
-    fun shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>): Boolean {
+    private fun shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>): Boolean {
         logger.info("--> shouldInstallHullmodExoticToVariant()\tvariant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}")
         // Fail fast if the variant already has the hullmod
         val hullmodId = hullmodExotic.getHullmodId()
@@ -110,7 +110,7 @@ object HullmodExoticHandler {
     /**
      * Method that installs a [HullmodExotic] into the [variant]
      */
-    fun installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+    private fun installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
         synchronized(lookupMap) {
             logger.info("--> installHullmodExoticToVariant()\thullmodExotic: ${hullmodExotic}, parentFleetMember: ${parentFleetMember}, variant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}")
             // Basically, this should be easy:
@@ -182,7 +182,7 @@ object HullmodExoticHandler {
      * @param parentFleetMember the [FleetMemberAPI] of the root module, or the whole ship's if it's a single-module ship
      * @param variant the variant to check
      */
-    fun shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+    private fun shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
         // Fail fast if the variant doesn't have the hullmod
         val hullmodId = hullmodExotic.getHullmodId()
         val hasHullmod2 = variant.hullMods.contains(hullmodId)
@@ -216,7 +216,7 @@ object HullmodExoticHandler {
         }
     }
 
-    fun removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+    private fun removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
         synchronized(lookupMap) {
             // Now, we get the install data, check whether the 'variant' is in 'installed variant' list, if yes, we "uninstall" it
             // and finally unset that member from the list of installed variants
@@ -338,7 +338,7 @@ object HullmodExoticHandler {
         }
     }
 
-    fun doesEntryExist(hullmodExotic: HullmodExotic, fleetMember: FleetMemberAPI): Boolean {
+    private fun doesEntryExist(hullmodExotic: HullmodExotic, fleetMember: FleetMemberAPI): Boolean {
         synchronized(lookupMap) {
             val hullmodExoticKey = HullmodExoticKey(
                     hullmodExotic = hullmodExotic,
@@ -657,6 +657,8 @@ object HullmodExoticHandler {
 
     /**
      * Internally calls into [grabAllKeysForParticularFleetMember] - please, do not use this in production code
+     *
+     * Use the [Flows] methods instead of any of these
      */
     @VisibleForTesting
     @TestOnly
@@ -666,6 +668,8 @@ object HullmodExoticHandler {
 
     /**
      * Internally calls into [getDataForKey] - please, do not use this in production code
+     *
+     * Use the [Flows] methods instead of any of these
      */
     @VisibleForTesting
     @TestOnly
@@ -675,11 +679,68 @@ object HullmodExoticHandler {
 
     /**
      * Internally clears the [lookupMap] - please, do not use this in production code
+     *
+     * Use the [Flows] methods instead of any of these
      */
     @VisibleForTesting
     @TestOnly
     internal fun testsOnly_clearLookupMap() {
         lookupMap.clear()
+    }
+
+    /**
+     * Internally calls into [shouldInstallHullmodExoticToVariant] - please, do not use this in production code
+     *
+     * Use the [Flows] methods instead of any of these
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>): Boolean {
+        return shouldInstallHullmodExoticToVariant(hullmodExotic, parentFleetMember, variant, variantList)
+    }
+
+    /**
+     * Internally calls into [installHullmodExoticToVariant] - please, do not use this in production code
+     *
+     * Use the [Flows] methods instead of any of these
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+        return installHullmodExoticToVariant(hullmodExotic, parentFleetMember, variant)
+    }
+
+    /**
+     * Internally calls into [doesEntryExist] - please, do not use this in production code
+     *
+     * Use the [Flows] methods instead of any of these
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_doesEntryExist(hullmodExotic: HullmodExotic, fleetMember: FleetMemberAPI): Boolean {
+        return doesEntryExist(hullmodExotic, fleetMember)
+    }
+
+    /**
+     * Internally calls into [shouldRemoveHullmodExoticFromVariant] - please, do not use this in production code
+     *
+     * Use the [Flows] methods instead of any of these
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+        return shouldRemoveHullmodExoticFromVariant(hullmodExotic, parentFleetMember, variant)
+    }
+
+    /**
+     * Internally calls into [removeHullmodExoticFromVariant] - please, do not use this in production code
+     *
+     * Use the [Flows] methods instead of any of these
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+        return removeHullmodExoticFromVariant(hullmodExotic, parentFleetMember, variant)
     }
 }
 
@@ -714,3 +775,5 @@ data class HullmodExoticKey(
         return "HullmodExoticKey{hullmodExoticId=${hullmodExotic.getHullmodId()}, parentFleetMemberId=${parentFleetMemberId}}"
     }
 }
+
+enum class HullmodExoticHandlerWorkMode { STRICT, LENIENT }
