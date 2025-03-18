@@ -134,6 +134,8 @@ open class HullmodExotic(
                             ShipModLoader.set(member, moduleVariant, moduleVariantMods)
                             ExoticaTechHM.addToFleetMember(member, moduleVariant)
                             removeHullmodFromVariant(moduleVariant)
+                            //TODO try to get rid of this one too
+                            onDestroy(member = member)
                         }
                     }
             )
@@ -154,9 +156,13 @@ open class HullmodExotic(
                         removeHullmodFromVariant(moduleVariant)
                         //TODO get rid of this one
                         removeHullmodFromVariant(member.checkRefitVariant())
+                        onDestroy(member = member)
                     }
                 }
         )
+
+        // Try the refit variant too
+        
 
 
 

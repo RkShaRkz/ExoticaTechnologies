@@ -220,13 +220,18 @@ object HullmodExoticHandler {
      * @param variant the variant to check
      */
     private fun shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
-        // Fail fast if the variant doesn't have the hullmod
-        val hullmodId = hullmodExotic.getHullmodId()
-        val hasHullmod2 = variant.hullMods.contains(hullmodId)
-        val alreadyHasHullmod = variant.hasHullMod(hullmodId)
-        if (alreadyHasHullmod.not()) {
-            logger.warn("shouldRemoveHullmodExoticFromVariant()\tVariant ${variant} doesn't have with the ${hullmodId} ID. Nothing to do here. Bailing out !!!")
-//            return false
+        // LENIENT vs STRICT - for STRICT, we should fail-fast if we don't have the hullmod; for LENIENT - just do nothing and fall through
+        if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
+            // STRICT work mode - fail fast if we don't have the hullmod
+            // Fail fast if the variant doesn't have the hullmod
+            val hullmodId = hullmodExotic.getHullmodId()
+            val alreadyHasHullmod = variant.hasHullMod(hullmodId)
+            if (alreadyHasHullmod.not()) {
+                logger.warn("shouldRemoveHullmodExoticFromVariant()\tVariant ${variant} doesn't have with the ${hullmodId} ID. Nothing to do here. Bailing out !!!")
+                return false
+            }
+        } else {
+            // LENIENT work mode - just ignore
         }
         // This should just check the entry for the given parentMember, and then look if the variant is in 'installed' list
         synchronized(lookupMap) {
@@ -244,16 +249,36 @@ object HullmodExoticHandler {
                 return false
             }
 
-            // Otherwise, lets look up whether we have the variant in the "installedOn" variant list
-            val isInstalledOn = currentInstallData.listOfVariantsWeInstalledOn.contains(variant)
-//            val isExpected = currentInstallData.listOfExpectedVariants.contains(variant)
-            val isInVariantsList = currentInstallData.listOfAllModuleVariants.contains(variant)
-            // And just return that, since we should allow uninstalling if we have it installed or prevent uninstalling if we dont
-            return isInstalledOn and isInVariantsList
+            // STRICT vs LENIENT - well... this is going to be rough.
+            // When the Refit screen used to work, there was no 'shouldRemove***' method(s) at all.
+            // So for STRICT - it's easy; do what we're doing right now: check if it's installed on and is in the variant list
+            // But for LENIENT - lets just check if it's in the variants list and then improve from there ...
+            // On the other hand/thought - why not try making these two the same?
+            // UPDATE: for some reason, the list of variants we get from the root module *does not* equal any of the variants
+            // in the "all module variants" list, so similar to before with the 'is expected' - lets check via hullspec hullID
+
+            //TODO update documentation so that it refers to both LENIENT and STRICT
+            if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
+                // STRICT work mode - validate if the variant is both in the 'installed on' list and 'module variants' list
+                val isInstalledOn = currentInstallData.listOfVariantsWeInstalledOn.contains(variant)
+                val isInVariantsList = currentInstallData.listOfAllModuleVariants.contains(variant)
+                // And just return that, since we should allow uninstalling if we have it installed or prevent uninstalling if we dont
+                return isInstalledOn and isInVariantsList
+            } else {
+                // LENIENT work mode - similar to strict, except we won't be doing a literal contains() but rather a slightly
+                // more lax check - via the hullSpec.hullID
+                val isInstalledOn = currentInstallData.listOfVariantsWeInstalledOn.contains(variant)
+                val isInVariantsList = currentInstallData.listOfAllModuleVariants
+                        .map { moduleVariant -> moduleVariant.hullSpec.hullId }
+                        .contains(variant.hullSpec.hullId)
+                // And just return whether we're both installed and in the variants list
+                return isInstalledOn and isInVariantsList
+            }
         }
     }
 
     private fun removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
+        // STRICT vs LENIENT - for STRICT we should be reducing the 'installed on' list; for LENIENT - meh, lets try not to.
         synchronized(lookupMap) {
             // Now, we get the install data, check whether the 'variant' is in 'installed variant' list, if yes, we "uninstall" it
             // and finally unset that member from the list of installed variants
@@ -283,14 +308,23 @@ object HullmodExoticHandler {
 
                         // Now that we've uninstalled it, lets unset it from the list of installed variants and
                         // update the lookup map
-                        val newInstalledOnList = installedOnVariants.toMutableList()
-                        newInstalledOnList.remove(variant)
+                        // STRICT vs LENIENT - for STRICT we will reduce the 'installed on' list, for LENIENT we will not
+                        val installListToUse = if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
+                            // STRICT work mode - reduce the 'installed on' list by removing the variant we will remove from
+                            val newInstalledOnList = installedOnVariants.toMutableList()
+                            newInstalledOnList.remove(variant)
+
+                            newInstalledOnList
+                        } else {
+                            // LENIENT work mode - just do nothing
+                            installedOnVariants
+                        }
                         lookupMap[hullmodExoticKey] = installData.copy(
                                 parentFleetMemberAPI = installData.parentFleetMemberAPI,
                                 listOfExpectedVariants = installData.listOfExpectedVariants,
-                                listOfVariantsWeInstalledOn = newInstalledOnList
+                                listOfVariantsWeInstalledOn = installListToUse
                         )
-                        logger.info("The exoticHullmod ${exoticHullmodInstance.hullModId} has been removed and lookup map has been updated. Old installed list size: ${installedOnVariants.size}, new install list size: ${newInstalledOnList.size}")
+                        logger.info("The exoticHullmod ${exoticHullmodInstance.hullModId} has been removed and lookup map has been updated. [${workMode}] Old installed list size: ${installedOnVariants.size}, new install list size: ${installListToUse.size}")
 
                         return true
                     } else {
