@@ -29,7 +29,7 @@ object HullmodExoticHandler {
      * @param variant the variant to check
      * @param variantList list of module variants belonging to the parent module (optional)
      */
-    private fun shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>): Boolean {
+    private fun shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>, workMode: HullmodExoticHandlerWorkMode): Boolean {
         logger.info("--> shouldInstallHullmodExoticToVariant()\tvariant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}")
         // Fail fast if the variant already has the hullmod
         val hullmodId = hullmodExotic.getHullmodId()
@@ -110,7 +110,7 @@ object HullmodExoticHandler {
     /**
      * Method that installs a [HullmodExotic] into the [variant]
      */
-    private fun installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+    private fun installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
         synchronized(lookupMap) {
             logger.info("--> installHullmodExoticToVariant()\thullmodExotic: ${hullmodExotic}, parentFleetMember: ${parentFleetMember}, variant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}")
             // Basically, this should be easy:
@@ -182,7 +182,7 @@ object HullmodExoticHandler {
      * @param parentFleetMember the [FleetMemberAPI] of the root module, or the whole ship's if it's a single-module ship
      * @param variant the variant to check
      */
-    private fun shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+    private fun shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
         // Fail fast if the variant doesn't have the hullmod
         val hullmodId = hullmodExotic.getHullmodId()
         val hasHullmod2 = variant.hullMods.contains(hullmodId)
@@ -216,7 +216,7 @@ object HullmodExoticHandler {
         }
     }
 
-    private fun removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
+    private fun removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
         synchronized(lookupMap) {
             // Now, we get the install data, check whether the 'variant' is in 'installed variant' list, if yes, we "uninstall" it
             // and finally unset that member from the list of installed variants
@@ -420,6 +420,15 @@ object HullmodExoticHandler {
                     onShouldCallback: OnShouldCallback,
                     onInstallToChildModuleCallback: OnInstallToChildModuleCallback
             ) {
+                // First things first, figure out whether we're running from Refit or Exotica screen
+                val isFromRefitScreen = runningFromRefitScreen()
+                val workMode = if (isFromRefitScreen) {
+                    HullmodExoticHandlerWorkMode.LENIENT
+                } else {
+                    HullmodExoticHandlerWorkMode.STRICT
+                }
+
+                // Carry on
                 val moduleSlotList = fleetMemberVariant.moduleSlots
                 logger.info("onInstall()\tmoduleSlots: ${moduleSlotList}")
                 val moduleSlotsNullOrEmpty = moduleSlotList == null || moduleSlotList.isEmpty()
@@ -447,7 +456,8 @@ object HullmodExoticHandler {
                                     hullmodExotic = hullmodExotic,
                                     parentFleetMember = fleetMember,
                                     variant = moduleVariant,
-                                    variantList = Optional.of(variantList)
+                                    variantList = Optional.of(variantList),
+                                    workMode = workMode
                             )
                             onShouldCallback.execute(shouldInstallOnModuleVariant, moduleVariant)
                             logger.info("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, variant: ${moduleVariant}")
@@ -456,7 +466,8 @@ object HullmodExoticHandler {
                                 val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
                                         hullmodExotic = hullmodExotic,
                                         parentFleetMember = fleetMember,     //oh lets hope this one works out ...
-                                        variant = moduleVariant
+                                        variant = moduleVariant,
+                                        workMode = workMode
                                 )
 
                                 onInstallToChildModuleCallback.execute(installResult, moduleVariant, nonNullMods)
@@ -474,6 +485,16 @@ object HullmodExoticHandler {
                     onShouldCallback: OnShouldCallback,
                     onInstallCallback: OnInstallToMemberCallback
             ) {
+                // First things first, figure out whether we're running from Refit or Exotica screen
+                val isFromRefitScreen = runningFromRefitScreen()
+                val workMode = if (isFromRefitScreen) {
+                    HullmodExoticHandlerWorkMode.LENIENT
+                } else {
+                    HullmodExoticHandlerWorkMode.STRICT
+                }
+
+                // Carry on
+
                 // This 'variantList' is complicating things alot
                 // because the Optional must be present if we don't already have an entry in HullmodExoticHandler's map
                 // but if we do, we can just send whatever because it won't be used.
@@ -517,7 +538,8 @@ object HullmodExoticHandler {
                         hullmodExotic = hullmodExotic,
                         parentFleetMember = member,
                         variant = memberVariant,
-                        variantList = variantListOptional
+                        variantList = variantListOptional,
+                        workMode = workMode
                 )
                 onShouldCallback.execute(shouldInstallOnMemberVariant, memberVariant)
                 logger.info("onInstall()\tshouldInstallOnMemberVariant: ${shouldInstallOnMemberVariant}, variant: ${memberVariant}")
@@ -525,7 +547,8 @@ object HullmodExoticHandler {
                     val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
                             hullmodExotic = hullmodExotic,
                             parentFleetMember = member,
-                            variant = memberVariant
+                            variant = memberVariant,
+                            workMode = workMode
                     )
                     onInstallCallback.execute(installResult, memberVariant)
                     // TODO get rid of these two, their place is in hte callback
@@ -542,6 +565,15 @@ object HullmodExoticHandler {
                     onShouldCallback: OnShouldCallback,
                     onRemoveFromChildModuleCallback: OnRemoveFromChildModuleCallback
             ) {
+                // First things first, figure out whether we're running from Refit or Exotica screen
+                val isFromRefitScreen = runningFromRefitScreen()
+                val workMode = if (isFromRefitScreen) {
+                    HullmodExoticHandlerWorkMode.LENIENT
+                } else {
+                    HullmodExoticHandlerWorkMode.STRICT
+                }
+
+                // Carry on
                 val moduleSlotList = fleetMemberVariant.moduleSlots
                 logger.info("onInstall()\tmoduleSlots: ${moduleSlotList}")
                 val moduleSlotsNullOrEmpty = moduleSlotList == null || moduleSlotList.isEmpty()
@@ -558,7 +590,8 @@ object HullmodExoticHandler {
                             val shouldRemoveFromModuleVariant = HullmodExoticHandler.shouldRemoveHullmodExoticFromVariant(
                                     hullmodExotic = hullmodExotic,
                                     parentFleetMember = fleetMember,
-                                    variant = moduleVariant
+                                    variant = moduleVariant,
+                                    workMode = workMode
                             )
                             onShouldCallback.execute(
                                     onShouldResult = shouldRemoveFromModuleVariant,
@@ -569,7 +602,8 @@ object HullmodExoticHandler {
                                 val removeFromChildModuleResult = HullmodExoticHandler.removeHullmodExoticFromVariant(
                                         hullmodExotic = hullmodExotic,
                                         parentFleetMember = fleetMember,
-                                        variant = moduleVariant
+                                        variant = moduleVariant,
+                                        workMode = workMode
                                 )
 
                                 onRemoveFromChildModuleCallback.execute(
@@ -602,10 +636,20 @@ object HullmodExoticHandler {
                     onShouldCallback: OnShouldCallback,
                     onRemoveFromMemberModuleCallback: OnRemoveFromMemberCallback
             ) {
+                // First things first, figure out whether we're running from Refit or Exotica screen
+                val isFromRefitScreen = runningFromRefitScreen()
+                val workMode = if (isFromRefitScreen) {
+                    HullmodExoticHandlerWorkMode.LENIENT
+                } else {
+                    HullmodExoticHandlerWorkMode.STRICT
+                }
+
+                // Carry on
                 val shouldRemoveFromMemberVariant = HullmodExoticHandler.shouldRemoveHullmodExoticFromVariant(
                         hullmodExotic = hullmodExotic,
                         parentFleetMember = fleetMember,
-                        variant = fleetMemberVariant
+                        variant = fleetMemberVariant,
+                        workMode = workMode
                 )
                 onShouldCallback.execute(
                         onShouldResult = shouldRemoveFromMemberVariant,
@@ -616,7 +660,8 @@ object HullmodExoticHandler {
                     val removeFromMemberResult = HullmodExoticHandler.removeHullmodExoticFromVariant(
                             hullmodExotic = hullmodExotic,
                             parentFleetMember = fleetMember,
-                            variant = fleetMemberVariant
+                            variant = fleetMemberVariant,
+                            workMode = workMode
                     )
 
                     onRemoveFromMemberModuleCallback.execute(
@@ -696,7 +741,7 @@ object HullmodExoticHandler {
     @VisibleForTesting
     @TestOnly
     internal fun testsOnly_shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>): Boolean {
-        return shouldInstallHullmodExoticToVariant(hullmodExotic, parentFleetMember, variant, variantList)
+        return shouldInstallHullmodExoticToVariant(hullmodExotic, parentFleetMember, variant, variantList, HullmodExoticHandlerWorkMode.STRICT)
     }
 
     /**
@@ -707,7 +752,7 @@ object HullmodExoticHandler {
     @VisibleForTesting
     @TestOnly
     internal fun testsOnly_installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
-        return installHullmodExoticToVariant(hullmodExotic, parentFleetMember, variant)
+        return installHullmodExoticToVariant(hullmodExotic, parentFleetMember, variant, HullmodExoticHandlerWorkMode.STRICT)
     }
 
     /**
@@ -729,7 +774,7 @@ object HullmodExoticHandler {
     @VisibleForTesting
     @TestOnly
     internal fun testsOnly_shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
-        return shouldRemoveHullmodExoticFromVariant(hullmodExotic, parentFleetMember, variant)
+        return shouldRemoveHullmodExoticFromVariant(hullmodExotic, parentFleetMember, variant, HullmodExoticHandlerWorkMode.STRICT)
     }
 
     /**
@@ -740,7 +785,7 @@ object HullmodExoticHandler {
     @VisibleForTesting
     @TestOnly
     internal fun testsOnly_removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
-        return removeHullmodExoticFromVariant(hullmodExotic, parentFleetMember, variant)
+        return removeHullmodExoticFromVariant(hullmodExotic, parentFleetMember, variant, HullmodExoticHandlerWorkMode.STRICT)
     }
 }
 
