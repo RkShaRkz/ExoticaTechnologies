@@ -51,81 +51,11 @@ open class HullmodExotic(
         val isChildModule = member.shipName.isNullOrEmpty()
         logger.info("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules}, isChildModule = ${isChildModule}")
         if (shouldShareEffectToOtherModules) {
-            /*
-            val moduleSlotList = member.variant.moduleSlots
-            logger.info("onInstall()\tmoduleSlots: ${moduleSlotList}")
-            val moduleSlotsNullOrEmpty = member.variant.moduleSlots == null || member.variant.moduleSlots.isEmpty()
-            if (moduleSlotsNullOrEmpty.not()) {
-                // Print out the module slot list, and generate a small map of
-                // <this exotic>, <parent FleetMember> + <list of expected variants> + <list of variants we installed on>
-                val mutableVariantList = moduleSlotList
-                        .map { slot -> member.variant.getModuleVariant(slot) }
-                        .toMutableList()
-                // Obviously, add the 'member' variant to the list as well
-                mutableVariantList.add(member.variant)
-                // Now forget about the mutable version and use a immutable version
-                val variantList = mutableVariantList.toList()
-                logger.info("onInstall()\tvariantList: ${variantList}")
-
-                // Iterate through each slot, getting their variant and trying to install there
-                for (slot in moduleSlotList) {
-                    val moduleVariant = member.variant.getModuleVariant(slot)
-                    logger.info("onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}")
-                    if (moduleVariant == null) continue
-                    val mods = get(member, moduleVariant)
-                    logger.info("onInstall()\tmods: ${mods}")
-                    mods?.let { nonNullMods ->
-
-                        //TODO both the HullmodExoticHandler and the InstallData offer two different ways of stopping recursion
-                        // obviously, once the system is installed somewhere, the recursion starts from that module and spreads
-                        // on all other modules.
-                        // However, now that they're both in place, not only have I forgotten how the InstallData was supposed
-                        // to be working (and be used) but as it is - it gets rejected every single time, thus not applying
-                        // the exoticatech hullmod properly.
-                        // Both of these most likely need to be unified into just one method.
-                        // As such, the proper idea of handling this, might also involve the HullmodExotic keeping a reference
-                        // to the "installing FleetMember" so that all other HullmodExotics cannot be uninstalled from their
-                        // non-originating FleetMembers to avoid duplicating them ad-infinitum
-                        // I need to look back into how this used to work, and either rewrite this whole piece, or do something
-                        // clever about it, but one thing is for certain:
-                        // 1. HullmodExotics that were "synthetically" installed should not be uninstallable from non-originating modules
-                        // 2. The recursion will be problematic if we call exotic.onInstall() from this onInstall() method
-                        // 3. If we keep getting 'fake' FleetMemberAPIs, maybe generating them once and having them be a part of the
-                        // "expected child fleetMembers" list will make them match.
-                        // 4. installWorkaround most likely needs to go away and it's functionality needs to be moved back here
-                        // 5. this whole thing needs to be extracted into a "installToSubmodule(...)" method
-
-                        //TODO refit screen throws a curve in this. so for refit to work as well, we need "lax" versions
-                        // that won't compare specific instances, but just hullSpec.hullIds or some such.
-                        val shouldInstallOnModuleVariant = HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
-                                hullmodExotic = this,
-                                parentFleetMember = member,
-                                variant = moduleVariant,
-                                variantList = Optional.of(variantList)
-                        )
-                        logger.info("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, variant: ${moduleVariant}")
-                        if (shouldInstallOnModuleVariant) {
-                            // Lets try starting from the HullmodExoticHandler installation
-                            val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
-                                    hullmodExotic = this,
-                                    parentFleetMember = member,     //oh lets hope this one works out ...
-                                    variant = moduleVariant
-                            )
-                            logger.info("onInstall()\tinstallHullmodExoticToVariant result: ${installResult}")
-                            logger.info("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}")
-                            installHullmodOnVariant(moduleVariant)
-
-                            // This is the installWorkaround code
-                            mods.putExotic(ExoticData(this.key))
-
-                            ShipModLoader.set(member, moduleVariant, mods)
-                            // Install the exoticatech hullmod to show the thing we just installed
-                            ExoticaTechHM.addToFleetMember(member, moduleVariant)
-                        }
-                    }
-                }
-            }
-             */
+            // If we should share to other modules, lets just focus on being able to share from the root module
+            // to other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
+            // on how to allow replicating from *any* module to *all* other modules.
+            // SPOILER: the lookup to find the root module from which we'll discover the other modules is going to be
+            // much more difficult/trickier/slower
             HullmodExoticHandler.Flows.CheckAndInstallOnAllChildModulesVariants(
                     fleetMember = member,
                     fleetMemberVariant = member.variant,
@@ -151,55 +81,6 @@ open class HullmodExotic(
                     }
             )
         }
-        /*
-        // This 'variantList' is complicating things alot
-        // because the Optional must be present if we don't already have an entry in HullmodExoticHandler's map
-        // but if we do, we can just send whatever because it won't be used.
-        // Taking non-modular ships into account, we should check if we have an entry in the lookup map
-        // and if we do - we can send Optional.empty() since it won't be used
-        // but if we do not - we need to generate a list of our variants (which is most likely just this variant
-        // because the modules are handled first up there and they'd have already setup the whole entry
-        val variantListOptional = if(HullmodExoticHandler.doesEntryExist(this, member)) {
-            // Entry exists, lets just send an empty optional
-            Optional.empty()
-        } else {
-            // Entry does not exist, lets just create one, even though we're probably not a multimodule ship
-            val moduleSlotList = member.variant.moduleSlots
-            val variants = if(moduleSlotList == null || moduleSlotList.isEmpty()) {
-                // It's just this variant
-                listOf(member.variant)
-            } else {
-                // Otherwise, it's all of them
-                val mutableVariantList = moduleSlotList
-                        .map { slot -> member.variant.getModuleVariant(slot) }
-                        .toMutableList()
-                // Obviously, add the 'member' variant to the list as well
-                mutableVariantList.add(member.variant)  //TODO get rid of this, we should probably just rename this into childModulesVariantList
-
-                mutableVariantList.toList()
-            }
-
-            // Return the optional of the list
-            Optional.of(variants)
-        }
-
-        val shouldInstallOnMemberVariant = HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
-                hullmodExotic = this,
-                parentFleetMember = member,
-                variant = member.variant,
-                variantList = variantListOptional
-        )
-        logger.info("onInstall()\tshouldInstallOnMemberVariant: ${shouldInstallOnMemberVariant}, variant: ${member.variant}")
-        if (shouldInstallOnMemberVariant) {
-            installHullmodOnVariant(member.variant)
-            HullmodExoticHandler.installHullmodExoticToVariant(
-                    hullmodExotic = this,
-                    parentFleetMember = member,
-                    variant = member.variant
-            )
-            installHullmodOnVariant(member.checkRefitVariant())
-        }
-         */
         HullmodExoticHandler.Flows.CheckAndInstallOnMemberModule(
                 member = member,
                 memberVariant = member.variant,
@@ -250,47 +131,11 @@ open class HullmodExotic(
 
     override fun onDestroy(member: FleetMemberAPI) {
         if (shouldShareEffectToOtherModules(null, null)) {
-            /*
-            val moduleSlotsNullOrEmpty = member.variant.moduleSlots == null || member.variant.moduleSlots.isEmpty()
-            if (moduleSlotsNullOrEmpty.not()) {
-                val moduleSlotList = member.variant.moduleSlots
-                for (slot in moduleSlotList) {
-                    val moduleVariant = member.variant.getModuleVariant(slot)
-                    if (moduleVariant == null) continue
-                    val mods = get(member, moduleVariant)
-                    mods?.let { nonNullMods ->
-                        // Since this can be *any* HullmodExotic referencing their own ExoticHullmods, we should first
-                        // check the ExoticHullmodLookup map for any instances of the exotic hullmod.
-                        // And if we find one, we'll just pass it over to the HullmodExoticHandler to remove it from this fleetmember
-                        val shouldRemoveFromModuleVariant = HullmodExoticHandler.shouldRemoveHullmodExoticFromVariant(
-                                hullmodExotic = this,
-                                parentFleetMember = member,
-                                variant = moduleVariant
-                        )
-                        logger.info("onDestroy()\tshouldRemoveFromModuleVariant: ${shouldRemoveFromModuleVariant}, variant: ${moduleVariant}")
-                        if (shouldRemoveFromModuleVariant) {
-                            HullmodExoticHandler.removeHullmodExoticFromVariant(
-                                    hullmodExotic = this,
-                                    parentFleetMember = member,
-                                    variant = moduleVariant
-                            )
-
-                            mods.removeExotic(this)
-                            ShipModLoader.set(member, moduleVariant, mods)
-                            ExoticaTechHM.addToFleetMember(member, moduleVariant)
-                            removeHullmodFromVariant(moduleVariant)
-                        }
-
-                        //TODO this part doesn't work for refit screen - so see what you can do about this with the flows
-                        // and the whole is(runningFromRefitScreen()) / otherwise
-
-                        // Otherwise... just unapply the effect. Maybe that fixes the Refit screen too.
-                        unapplyExoticHullmodFromVariant(moduleVariant)
-                    }
-                }
-            }
-             */
-
+            // If we should share to other modules, lets just focus on being able to share from the root module
+            // to other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
+            // on how to allow replicating from *any* module to *all* other modules.
+            // SPOILER: the lookup to find the root module from which we'll discover the other modules is going to be
+            // much more difficult/trickier/slower
             HullmodExoticHandler.Flows.CheckAndRemoveFromAllChildModulesVariants(
                     fleetMember = member,
                     fleetMemberVariant = member.variant,
@@ -317,24 +162,6 @@ open class HullmodExotic(
             )
         }
 
-        /*
-        val shouldRemoveFromMemberVariant = HullmodExoticHandler.shouldRemoveHullmodExoticFromVariant(
-                hullmodExotic = this,
-                parentFleetMember = member,
-                variant = member.variant
-        )
-        logger.info("onDestroy()\tshouldRemoveFromMemberVariant: ${shouldRemoveFromMemberVariant}, variant: ${member.variant}")
-        if (shouldRemoveFromMemberVariant) {
-            HullmodExoticHandler.removeHullmodExoticFromVariant(
-                    hullmodExotic = this,
-                    parentFleetMember = member,
-                    variant = member.variant
-            )
-
-            removeHullmodFromVariant(member.variant)
-            removeHullmodFromVariant(member.checkRefitVariant())
-        }
-         */
         HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
                 fleetMember = member,
                 fleetMemberVariant = member.variant,
@@ -348,6 +175,8 @@ open class HullmodExotic(
                     override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI) {
                         logger.info("onDestroy()\tremoveFromMemberVariant: ${onRemoveResult}, variant: ${moduleVariant}")
                         removeHullmodFromVariant(moduleVariant)
+                        //TODO get rid of this one
+                        removeHullmodFromVariant(member.checkRefitVariant())
                     }
                 }
         )
