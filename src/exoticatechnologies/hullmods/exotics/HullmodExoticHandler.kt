@@ -622,16 +622,12 @@ object HullmodExoticHandler {
                             workMode = workMode
                     )
                     onInstallCallback.execute(installResult, memberVariant)
-                    // TODO get rid of these two, their place is in hte callback
-//                    installHullmodOnVariant(member.variant)
-//                    installHullmodOnVariant(member.checkRefitVariant())
                 }
             }
 
             @JvmStatic
             fun CheckAndRemoveFromAllChildModulesVariants(
                     fleetMember: FleetMemberAPI,
-                    fleetMemberVariant: ShipVariantAPI,
                     hullmodExotic: HullmodExotic,
                     onShouldCallback: OnShouldCallback,
                     onRemoveFromChildModuleCallback: OnRemoveFromChildModuleCallback
