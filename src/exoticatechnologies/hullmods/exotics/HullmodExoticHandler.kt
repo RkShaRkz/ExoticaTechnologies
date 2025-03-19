@@ -644,56 +644,49 @@ object HullmodExoticHandler {
                     HullmodExoticHandlerWorkMode.STRICT
                 }
 
-                // Carry on
-                val moduleSlotList = fleetMemberVariant.moduleSlots
-                logger.info("onInstall()\tmoduleSlots: ${moduleSlotList}")
-                val moduleSlotsNullOrEmpty = moduleSlotList == null || moduleSlotList.isEmpty()
-                if (moduleSlotsNullOrEmpty.not()) {
-                    // If we have slots, start doing what needs to be done
-                    for (slot in moduleSlotList) {
-                        val moduleVariant = fleetMemberVariant.getModuleVariant(slot)
-                        if (moduleVariant == null) continue
-                        val mods = ShipModLoader.get(fleetMember, moduleVariant)
-                        mods?.let { nonNullMods ->
-                            // Since this can be *any* HullmodExotic referencing their own ExoticHullmods, we should first
-                            // check the ExoticHullmodLookup map for any instances of the exotic hullmod.
-                            // And if we find one, we'll just pass it over to the HullmodExoticHandler to remove it from this fleetmember
-                            val shouldRemoveFromModuleVariant = HullmodExoticHandler.shouldRemoveHullmodExoticFromVariant(
+                //Lets go through all 'installed modules' and uninstall from them, instead of these module slots
+                // that were the root cause of the whole problem... damn you 3-5am copypasted code ...
+                val hullmodExoticKey = HullmodExoticKey(
+                        hullmodExotic = hullmodExotic,
+                        parentFleetMemberId = fleetMember.id
+                )
+                val currentInstallData = synchronized(lookupMap) { lookupMap[hullmodExoticKey] }
+                val installedOnVariantsList = currentInstallData?.listOfVariantsWeInstalledOn
+                        ?: throw IllegalStateException("No InstallData found for key ${hullmodExoticKey}")
+
+                // Carry on now that we have install data
+
+                // If we have slots, start doing what needs to be done
+                for (installedOnVariant in installedOnVariantsList) {
+                    val mods = ShipModLoader.get(fleetMember, installedOnVariant)
+                    mods?.let { nonNullMods ->
+                        // Since this can be *any* HullmodExotic referencing their own ExoticHullmods, we should first
+                        // check the ExoticHullmodLookup map for any instances of the exotic hullmod.
+                        // And if we find one, we'll just pass it over to the HullmodExoticHandler to remove it from this fleetmember
+                        val shouldRemoveFromModuleVariant = HullmodExoticHandler.shouldRemoveHullmodExoticFromVariant(
+                                hullmodExotic = hullmodExotic,
+                                parentFleetMember = fleetMember,
+                                variant = installedOnVariant,
+                                workMode = workMode
+                        )
+                        onShouldCallback.execute(
+                                onShouldResult = shouldRemoveFromModuleVariant,
+                                moduleVariant = installedOnVariant
+                        )
+                        logger.info("onDestroy()\tshouldRemoveFromModuleVariant: ${shouldRemoveFromModuleVariant}, variant: ${installedOnVariant}")
+                        if (shouldRemoveFromModuleVariant) {
+                            val removeFromChildModuleResult = HullmodExoticHandler.removeHullmodExoticFromVariant(
                                     hullmodExotic = hullmodExotic,
                                     parentFleetMember = fleetMember,
-                                    variant = moduleVariant,
+                                    variant = installedOnVariant,
                                     workMode = workMode
                             )
-                            onShouldCallback.execute(
-                                    onShouldResult = shouldRemoveFromModuleVariant,
-                                    moduleVariant = moduleVariant
+
+                            onRemoveFromChildModuleCallback.execute(
+                                    onRemoveResult = removeFromChildModuleResult,
+                                    moduleVariant = installedOnVariant,
+                                    moduleVariantMods = nonNullMods
                             )
-                            logger.info("onDestroy()\tshouldRemoveFromModuleVariant: ${shouldRemoveFromModuleVariant}, variant: ${moduleVariant}")
-                            if (shouldRemoveFromModuleVariant) {
-                                val removeFromChildModuleResult = HullmodExoticHandler.removeHullmodExoticFromVariant(
-                                        hullmodExotic = hullmodExotic,
-                                        parentFleetMember = fleetMember,
-                                        variant = moduleVariant,
-                                        workMode = workMode
-                                )
-
-                                onRemoveFromChildModuleCallback.execute(
-                                        onRemoveResult = removeFromChildModuleResult,
-                                        moduleVariant = moduleVariant,
-                                        moduleVariantMods = nonNullMods
-                                )
-                                //TODO move to callback - done
-//                                mods.removeExotic(this)
-//                                ShipModLoader.set(member, moduleVariant, mods)
-//                                ExoticaTechHM.addToFleetMember(member, moduleVariant)
-//                                removeHullmodFromVariant(moduleVariant)
-                            }
-
-                            //TODO this part doesn't work for refit screen - so see what you can do about this with the flows
-                            // and the whole is(runningFromRefitScreen()) / otherwise
-
-                            // Otherwise... just unapply the effect. Maybe that fixes the Refit screen too.
-//                            unapplyExoticHullmodFromVariant(moduleVariant)
                         }
                     }
                 }
