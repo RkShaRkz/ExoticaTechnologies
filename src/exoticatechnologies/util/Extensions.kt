@@ -308,7 +308,7 @@ fun addAfterimageTo(ship: ShipAPI, data: AfterimageData) {
 fun addAfterimageToWholeShip(ship: ShipAPI, data: AfterimageData) {
     val sections = getAllShipSections(ship)
     for (section in sections) {
-        addAfterimageTo(ship, data)
+        addAfterimageTo(section, data)
     }
 }
 
