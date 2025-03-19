@@ -153,27 +153,6 @@ open class HullmodExotic(
                 }
         )
 
-        // Try the refit variant too    //TODO do we even need this?
-        HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
-                fleetMember = member,
-                fleetMemberVariant = member.checkRefitVariant(),
-                hullmodExotic = this@HullmodExotic,
-                onShouldCallback = object : HullmodExoticHandler.Flows.OnShouldCallback {
-                    override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
-                        // Again, we really don't care about this callback, it's just been put in because "why not"
-                    }
-                },
-                onRemoveFromMemberModuleCallback = object : HullmodExoticHandler.Flows.OnRemoveFromMemberCallback {
-                    override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI) {
-                        unapplyExoticHullmodAndRemoveExoticaAndHullmod(
-                                member = member,
-                                moduleVariant = moduleVariant,
-                                optionalMemberMods = Optional.empty()
-                        )
-                    }
-                }
-        )
-
         // And finally, for good measure
         HullmodExoticHandler.removeHullmodExoticFromFleetMember(
                 exoticHullmodId = getHullmodId(),
