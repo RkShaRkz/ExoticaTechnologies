@@ -71,6 +71,7 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
     }
 
     inner class BoosterRockets(ship: ShipAPI) : MagicSubsystem(ship) {
+
         override fun getBaseActiveDuration(): Float {
             return BOOSTER_ROCKETS_ACTIVE_DURATION
         }
@@ -113,11 +114,13 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
                 stats.turnAcceleration.modifyPercent(boosterRocketsBuffId, BOOSTER_ROCKETS_TURNING_PENALTY)
                 stats.maxTurnRate.modifyPercent(boosterRocketsBuffId, BOOSTER_ROCKETS_TURNING_PENALTY)
 
+                // adding visual flair to the engines by turning them up to the max will be done in advance()
+
                 // Give a visual que
                 addAfterimageToWholeShip(
                         ship,
                         AfterimageData(
-                                color = Color(255, 200, 15, (0.65f * 255).roundToInt()),
+                                color = AFTERIMAGE_COLOR,
                                 locX = 0f,
                                 locY = 0f,
                                 velX = 0f,
@@ -146,6 +149,13 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
         override fun advance(amount: Float, isPaused: Boolean) {
             if (isPaused) return //lets try this
 
+            // Once activated, start running the "rocket visuals" which extend the engine's flames with a hardcoded duration of 1 second
+            // since the hardcoding was done in the Starsector API's ValueShifter, this works fine with no IntervalUtil
+
+            if (state == State.IN || state == State.ACTIVE) {
+                rocketEngineVisuals()
+            }
+
             if (state == State.OUT) {
                 val speed = ship.angularVelocity
 
@@ -172,6 +182,29 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
         override fun getDisplayText(): String {
             return this@ExternalThrusters.name
         }
+
+        private fun rocketEngineVisuals() {
+            ship.engineController.fadeToOtherColor(
+                    this,
+                    ENGINE_COLOR,
+                    ENGINE_ENTRAIL_COLOR,
+                    effectLevel,
+                    ENGINE_CONTROLLER_MAX_BLEND
+            )
+            ship.engineController.extendFlame(
+                    this,
+                    ENGINE_CONTROLLER_EXTENDED_FLAME_LENGTH * effectLevel,
+                    ENGINE_CONTROLLER_EXTENDED_FLAME_WIDTH * effectLevel,
+                    ENGINE_CONTROLLER_EXTENDED_FLAME_GLOW_FACTOR * effectLevel
+            )
+            ship.engineController.forceShowAccelerating()
+
+            for (engine in ship.engineController.shipEngines) {
+                if (engine.isSystemActivated) {
+                    ship.engineController.setFlameLevel(engine.engineSlot, 1f)
+                }
+            }
+        }
     }
 
     companion object {
@@ -191,6 +224,16 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
         const val BOOSTER_ROCKETS_OUT_DURATION = 0.6f
 
         const val DISTANCE_TO_HINT_ACTIVATION_TO_AI = 2000
+
+        private val ENGINE_COLOR = Color(225, 95, 0, 255)
+        private val ENGINE_ENTRAIL_COLOR = Color(255, 35, 0, 165)
+        private val AFTERIMAGE_COLOR = Color(255, 200, 15, (0.65f * 255).roundToInt())
+
+        // engine controller (rocket visuals) constants
+        private val ENGINE_CONTROLLER_MAX_BLEND = 0.67f
+        private val ENGINE_CONTROLLER_EXTENDED_FLAME_LENGTH = 3f
+        private val ENGINE_CONTROLLER_EXTENDED_FLAME_WIDTH = 2f
+        private val ENGINE_CONTROLLER_EXTENDED_FLAME_GLOW_FACTOR = 2f
 
         val log: Logger = Logger.getLogger(ExternalThrusters::class.java)
     }
