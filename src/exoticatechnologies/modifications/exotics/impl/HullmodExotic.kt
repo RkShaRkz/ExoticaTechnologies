@@ -261,6 +261,15 @@ open class HullmodExotic(
         return hullmodId
     }
 
+
+    /**
+     * The opposite method of [unapplyExoticHullmodAndRemoveExoticaAndHullmod] which:
+     *
+     * - installs the [ExoticHullmod] on the [moduleVariant]
+     * - adds this [HullmodExotic.key] to the [moduleVariantMods]
+     * - calls [ShipModLoader.set] to install the [Exotic]
+     * - and finally adds the ExoticaTech hullmod by calling [ExoticaTechHM.addToFleetMember]
+     */
     private fun installThisHullmodExoticToFleetMembersVariant(member: FleetMemberAPI, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
         installHullmodOnVariant(moduleVariant)
 
