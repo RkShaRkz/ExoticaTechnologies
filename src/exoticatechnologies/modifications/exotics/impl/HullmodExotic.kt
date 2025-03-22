@@ -18,6 +18,8 @@ import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.datastructures.Optional
+import exoticatechnologies.util.log
+import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import java.awt.Color
@@ -49,7 +51,7 @@ open class HullmodExotic(
     override fun onInstall(member: FleetMemberAPI) {
         val shouldShareEffectToOtherModules = shouldShareEffectToOtherModules(null, null)
         val isChildModule = member.shipName.isNullOrEmpty()
-        logger.info("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules}, isChildModule = ${isChildModule}")
+        shouldLog("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules}, isChildModule = ${isChildModule}", logger, Level.INFO)
         if (shouldShareEffectToOtherModules) {
             // If we should share to other modules, lets just focus on being able to share from the root module
             // to other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
@@ -62,13 +64,13 @@ open class HullmodExotic(
                     hullmodExotic = this,
                     onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
                         override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
-                            logger.info("onInstall()\tshouldInstallOnModuleVariant: ${onShouldResult}, variant: ${moduleVariant}")
+                            shouldLog("onInstall()\tshouldInstallOnModuleVariant: ${onShouldResult}, variant: ${moduleVariant}", logger, Level.INFO)
                         }
                     },
                     onInstallToChildModuleCallback = object : HullmodExoticHandler.Flows.OnInstallToChildModuleCallback {
                         override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
-                            logger.info("onInstall()\tinstallHullmodExoticToVariant result: ${onInstallResult}")
-                            logger.info("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}")
+                            shouldLog("onInstall()\tinstallHullmodExoticToVariant result: ${onInstallResult}", logger, Level.INFO)
+                            shouldLog("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}", logger, Level.INFO)
                             installHullmodOnVariant(moduleVariant)
 
                             // This is the installWorkaround code
@@ -87,7 +89,7 @@ open class HullmodExotic(
                 hullmodExotic = this@HullmodExotic,
                 onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
                     override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
-                        logger.info("onInstall()\tshouldInstallOnMemberVariant: ${onShouldResult}, variant: ${moduleVariant}")
+                        shouldLog("onInstall()\tshouldInstallOnMemberVariant: ${onShouldResult}, variant: ${moduleVariant}", logger, Level.INFO)
                     }
                 },
                 onInstallCallback = object: HullmodExoticHandler.Flows.OnInstallToMemberCallback {
@@ -160,7 +162,7 @@ open class HullmodExotic(
         )
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
-        logger.info("<-- onDestroy()\tStill has hullmod: ${check}")
+        shouldLog("<-- onDestroy()\tStill has hullmod: ${check}", logger, Level.INFO)
     }
 
     /**
@@ -264,5 +266,19 @@ open class HullmodExotic(
 
     fun getHullmodId(): String {
         return hullmodId
+    }
+
+    private fun shouldLog(logMsg: String, logger: Logger, logLevel: Level) {
+        // We won't log any logLevels below the minimum one
+        if (logLevel.isGreaterOrEqual(MIN_LOG_LEVEL).not()) return;
+        log(
+                logMsg = logMsg,
+                logger = logger,
+                logLevel = logLevel
+        )
+    }
+
+    companion object {
+        val MIN_LOG_LEVEL: Level = Level.WARN
     }
 }
