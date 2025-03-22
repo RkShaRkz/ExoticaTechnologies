@@ -71,14 +71,7 @@ open class HullmodExotic(
                         override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
                             shouldLog("onInstall()\tinstallHullmodExoticToVariant result: ${onInstallResult}", logger, Level.INFO)
                             shouldLog("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}", logger, Level.INFO)
-                            installHullmodOnVariant(moduleVariant)
-
-                            // This is the installWorkaround code
-                            moduleVariantMods.putExotic(ExoticData(this@HullmodExotic.key))
-
-                            ShipModLoader.set(member, moduleVariant, moduleVariantMods)
-                            // Install the exoticatech hullmod to show the thing we just installed
-                            ExoticaTechHM.addToFleetMember(member, moduleVariant)
+                            installThisHullmodExoticToFleetMembersVariant(member, moduleVariant, moduleVariantMods)
                         }
                     }
             )
@@ -266,6 +259,17 @@ open class HullmodExotic(
 
     fun getHullmodId(): String {
         return hullmodId
+    }
+
+    private fun installThisHullmodExoticToFleetMembersVariant(member: FleetMemberAPI, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
+        installHullmodOnVariant(moduleVariant)
+
+        // This is the installWorkaround code
+        moduleVariantMods.putExotic(ExoticData(this@HullmodExotic.key))
+
+        ShipModLoader.set(member, moduleVariant, moduleVariantMods)
+        // Install the exoticatech hullmod to show the thing we just installed
+        ExoticaTechHM.addToFleetMember(member, moduleVariant)
     }
 
     private fun shouldLog(logMsg: String, logger: Logger, logLevel: Level) {
