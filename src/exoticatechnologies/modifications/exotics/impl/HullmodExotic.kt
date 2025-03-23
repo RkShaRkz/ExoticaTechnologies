@@ -18,7 +18,7 @@ import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.datastructures.Optional
-import exoticatechnologies.util.log
+import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.json.JSONObject
@@ -51,7 +51,7 @@ open class HullmodExotic(
     override fun onInstall(member: FleetMemberAPI) {
         val shouldShareEffectToOtherModules = shouldShareEffectToOtherModules(null, null)
         val isChildModule = member.shipName.isNullOrEmpty()
-        shouldLog("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules}, isChildModule = ${isChildModule}", logger, Level.INFO)
+        logIfOverMinLogLevel("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules}, isChildModule = ${isChildModule}", Level.INFO)
         if (shouldShareEffectToOtherModules) {
             // If we should share to other modules, lets just focus on being able to share from the root module
             // to other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
@@ -64,13 +64,13 @@ open class HullmodExotic(
                     hullmodExotic = this,
                     onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
                         override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
-                            shouldLog("onInstall()\tshouldInstallOnModuleVariant: ${onShouldResult}, variant: ${moduleVariant}", logger, Level.INFO)
+                            logIfOverMinLogLevel("onInstall()\tshouldInstallOnModuleVariant: ${onShouldResult}, variant: ${moduleVariant}", Level.INFO)
                         }
                     },
                     onInstallToChildModuleCallback = object : HullmodExoticHandler.Flows.OnInstallToChildModuleCallback {
                         override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
-                            shouldLog("onInstall()\tinstallHullmodExoticToVariant result: ${onInstallResult}", logger, Level.INFO)
-                            shouldLog("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}", logger, Level.INFO)
+                            logIfOverMinLogLevel("onInstall()\tinstallHullmodExoticToVariant result: ${onInstallResult}", Level.INFO)
+                            logIfOverMinLogLevel("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}", Level.INFO)
                             installThisHullmodExoticToFleetMembersVariant(member, moduleVariant, moduleVariantMods)
                         }
                     }
@@ -82,7 +82,7 @@ open class HullmodExotic(
                 hullmodExotic = this@HullmodExotic,
                 onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
                     override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
-                        shouldLog("onInstall()\tshouldInstallOnMemberVariant: ${onShouldResult}, variant: ${moduleVariant}", logger, Level.INFO)
+                        logIfOverMinLogLevel("onInstall()\tshouldInstallOnMemberVariant: ${onShouldResult}, variant: ${moduleVariant}", Level.INFO)
                     }
                 },
                 onInstallCallback = object: HullmodExoticHandler.Flows.OnInstallToMemberCallback {
@@ -155,7 +155,7 @@ open class HullmodExotic(
         )
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
-        shouldLog("<-- onDestroy()\tStill has hullmod: ${check}", logger, Level.INFO)
+        logIfOverMinLogLevel("<-- onDestroy()\tStill has hullmod: ${check}", Level.INFO)
     }
 
     /**
@@ -281,13 +281,12 @@ open class HullmodExotic(
         ExoticaTechHM.addToFleetMember(member, moduleVariant)
     }
 
-    private fun shouldLog(logMsg: String, logger: Logger, logLevel: Level) {
-        // We won't log any logLevels below the minimum one
-        if (logLevel.isGreaterOrEqual(MIN_LOG_LEVEL).not()) return;
-        log(
+    private fun logIfOverMinLogLevel(logMsg: String, logLevel: Level) {
+        shouldLog(
                 logMsg = logMsg,
                 logger = logger,
-                logLevel = logLevel
+                logLevel = logLevel,
+                minLogLevel = MIN_LOG_LEVEL
         )
     }
 

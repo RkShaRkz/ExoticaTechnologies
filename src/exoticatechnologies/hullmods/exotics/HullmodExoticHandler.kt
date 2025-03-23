@@ -8,7 +8,7 @@ import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.datastructures.Optional
-import exoticatechnologies.util.log
+import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.jetbrains.annotations.TestOnly
@@ -32,12 +32,12 @@ object HullmodExoticHandler {
      * @param variantList list of module variants belonging to the parent module (optional)
      */
     private fun shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>, workMode: HullmodExoticHandlerWorkMode): Boolean {
-        shouldLog("--> shouldInstallHullmodExoticToVariant()\tvariant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}", logger, Level.INFO)
+        logIfOverMinLogLevel("--> shouldInstallHullmodExoticToVariant()\tvariant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}", Level.INFO)
         // Fail fast if the variant already has the hullmod
         val hullmodId = hullmodExotic.getHullmodId()
         val alreadyHasHullmod = variant.hasHullMod(hullmodId)
         if (alreadyHasHullmod) {
-            shouldLog("shouldInstallHullmodExoticToVariant()\tVariant ${variant} already had hullmod with the ${hullmodId} ID. Nothing to do here. Bailing out !!!", logger, Level.WARN)
+            logIfOverMinLogLevel("shouldInstallHullmodExoticToVariant()\tVariant ${variant} already had hullmod with the ${hullmodId} ID. Nothing to do here. Bailing out !!!", Level.WARN)
 //            return false
         }
         // Otherwise, prepare the key in the lookup map
@@ -55,7 +55,7 @@ object HullmodExoticHandler {
             // Major difference being in that the duplicates all have "shipName = null", so try discarding those if possible
             // unless those are for the child modules themselves.
             if (parentFleetMember.shipName == null) {
-                shouldLog("shouldInstallHullmodExoticToVariant()\tEncountered parentFleetMember with shipName == null !!! Bailing out !!!", logger, Level.WARN)
+                logIfOverMinLogLevel("shouldInstallHullmodExoticToVariant()\tEncountered parentFleetMember with shipName == null !!! Bailing out !!!", Level.WARN)
                 return false
             }
 
@@ -65,7 +65,7 @@ object HullmodExoticHandler {
             // 2. is it already NOT in the installed list?
             // we'll just do nothing if it fails either of these and return false.
             val retVal = if (currentInstallData != null) {
-                shouldLog("shouldInstallHullmodExoticToVariant()\talready had install data !!!", logger, Level.INFO)
+                logIfOverMinLogLevel("shouldInstallHullmodExoticToVariant()\talready had install data !!!", Level.INFO)
                 // now, check if this variant is in the expected list
                 val expectedVariants = currentInstallData.listOfExpectedVariants
 
@@ -84,16 +84,16 @@ object HullmodExoticHandler {
                     expectedVariants.contains(variant)
                 }
                 // Everything else should remain the same ...
-                shouldLog("shouldInstallHullmodExoticToVariant()\t${workMode}\tisExpected: ${isExpected}", logger, Level.INFO)
+                logIfOverMinLogLevel("shouldInstallHullmodExoticToVariant()\t${workMode}\tisExpected: ${isExpected}", Level.INFO)
 
                 val variantsWeAlreadyInstalledOn = currentInstallData.listOfVariantsWeInstalledOn
                 val hasNotInstalledOnThisVariantAlready = variantsWeAlreadyInstalledOn.contains(variant).not()
-                shouldLog("shouldInstallHullmodExoticToVariant()\thasNotInstalledOnThisAlready: ${hasNotInstalledOnThisVariantAlready}", logger, Level.INFO)
+                logIfOverMinLogLevel("shouldInstallHullmodExoticToVariant()\thasNotInstalledOnThisAlready: ${hasNotInstalledOnThisVariantAlready}", Level.INFO)
 
                 // Since I don't know how to check anything with parentFleetMember yet, lets just leave it out of the equation for now
                 isExpected && hasNotInstalledOnThisVariantAlready
             } else {
-                shouldLog("shouldInstallHullmodExoticToVariant()\tthere was no install data for this key ${hullmodExoticKey}", logger, Level.WARN)
+                logIfOverMinLogLevel("shouldInstallHullmodExoticToVariant()\tthere was no install data for this key ${hullmodExoticKey}", Level.WARN)
                 // If we don't have any install data in the map, this is going to be simple. The optional variant list must be present
                 // If not present, just... do nothing for now, because we can't start off from a submodule I hope. So for now, throw
                 if (variantList.isPresent().not()) {
@@ -114,7 +114,7 @@ object HullmodExoticHandler {
                 true
             }
 
-            shouldLog("<-- shouldInstallHullmodExoticToVariant()\treturning ${retVal}", logger, Level.INFO)
+            logIfOverMinLogLevel("<-- shouldInstallHullmodExoticToVariant()\treturning ${retVal}", Level.INFO)
             return retVal
         }
     }
@@ -124,7 +124,7 @@ object HullmodExoticHandler {
      */
     private fun installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
         synchronized(lookupMap) {
-            shouldLog("--> installHullmodExoticToVariant()\thullmodExotic: ${hullmodExotic}, parentFleetMember: ${parentFleetMember}, variant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}", logger, Level.INFO)
+            logIfOverMinLogLevel("--> installHullmodExoticToVariant()\thullmodExotic: ${hullmodExotic}, parentFleetMember: ${parentFleetMember}, variant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}", Level.INFO)
             // Basically, this should be easy:
             // 1. form up the key
             // 2. grab the InstallData. Throw if there is none.
@@ -151,7 +151,7 @@ object HullmodExoticHandler {
             if (alreadyIn) {
                 // Actually, lets not throw just yet
                 // TODO change to throwing
-                shouldLog("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's already been installed on, returning false!!!!!", logger, Level.WARN)
+                logIfOverMinLogLevel("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's already been installed on, returning false!!!!!", Level.WARN)
                 return false
             }
 
@@ -179,12 +179,12 @@ object HullmodExoticHandler {
                         lookupMap[hullmodExoticKey] = newKeyValue
                     }
 
-                    shouldLog("installHullmodExoticToVariant()\t\tnew expected list: ${mutableExpectedList}", logger, Level.INFO)
-                    shouldLog("installHullmodExoticToVariant()\t\tnew installed list: ${mutableInstalledList}", logger, Level.INFO)
-                    shouldLog("<-- installHullmodExoticToVariant()\t\treturning true", logger, Level.INFO)
+                    logIfOverMinLogLevel("installHullmodExoticToVariant()\t\tnew expected list: ${mutableExpectedList}", Level.INFO)
+                    logIfOverMinLogLevel("installHullmodExoticToVariant()\t\tnew installed list: ${mutableInstalledList}", Level.INFO)
+                    logIfOverMinLogLevel("<-- installHullmodExoticToVariant()\t\treturning true", Level.INFO)
                     return true
                 } else {
-                    shouldLog("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's NOT expected, returning false!!!!!", logger, Level.WARN)
+                    logIfOverMinLogLevel("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's NOT expected, returning false!!!!!", Level.WARN)
                     return false
                 }
             } else {
@@ -202,9 +202,9 @@ object HullmodExoticHandler {
                     lookupMap[hullmodExoticKey] = newKeyValue
                 }
 
-                shouldLog("installHullmodExoticToVariant()\t\tnew expected list: ${expectedList}", logger, Level.INFO)
-                shouldLog("installHullmodExoticToVariant()\t\tnew installed list: ${mutableInstalledList}", logger, Level.INFO)
-                shouldLog("<-- installHullmodExoticToVariant()\t\treturning true", logger, Level.INFO)
+                logIfOverMinLogLevel("installHullmodExoticToVariant()\t\tnew expected list: ${expectedList}", Level.INFO)
+                logIfOverMinLogLevel("installHullmodExoticToVariant()\t\tnew installed list: ${mutableInstalledList}", Level.INFO)
+                logIfOverMinLogLevel("<-- installHullmodExoticToVariant()\t\treturning true", Level.INFO)
 
                 return true
             }
@@ -227,7 +227,7 @@ object HullmodExoticHandler {
             val hullmodId = hullmodExotic.getHullmodId()
             val alreadyHasHullmod = variant.hasHullMod(hullmodId)
             if (alreadyHasHullmod.not()) {
-                shouldLog("shouldRemoveHullmodExoticFromVariant()\tVariant ${variant} doesn't have with the ${hullmodId} ID. Nothing to do here. Bailing out !!!", logger, Level.WARN)
+                logIfOverMinLogLevel("shouldRemoveHullmodExoticFromVariant()\tVariant ${variant} doesn't have with the ${hullmodId} ID. Nothing to do here. Bailing out !!!", Level.WARN)
                 return false
             }
         } else {
@@ -245,7 +245,7 @@ object HullmodExoticHandler {
 
             // If we do not have install data, then obviously we should bail out and return false
             if (currentInstallData == null) {
-                shouldLog("There was no InstallData for this key ${hullmodExoticKey}, bailing out and returning false", logger, Level.ERROR)
+                logIfOverMinLogLevel("There was no InstallData for this key ${hullmodExoticKey}, bailing out and returning false", Level.ERROR)
                 return false
             }
 
@@ -324,21 +324,21 @@ object HullmodExoticHandler {
                                 listOfExpectedVariants = installData.listOfExpectedVariants,
                                 listOfVariantsWeInstalledOn = installListToUse
                         )
-                        shouldLog("The exoticHullmod ${exoticHullmodInstance.hullModId} has been removed and lookup map has been updated. [${workMode}] Old installed list size: ${installedOnVariants.size}, new install list size: ${installListToUse.size}", logger, Level.INFO)
+                        logIfOverMinLogLevel("The exoticHullmod ${exoticHullmodInstance.hullModId} has been removed and lookup map has been updated. [${workMode}] Old installed list size: ${installedOnVariants.size}, new install list size: ${installListToUse.size}", Level.INFO)
 
                         return true
                     } else {
-                        shouldLog("No ExoticHullmod with id ${hullmodId} was found !!!", logger, Level.ERROR)
+                        logIfOverMinLogLevel("No ExoticHullmod with id ${hullmodId} was found !!!", Level.ERROR)
 
                         return false
                     }
                 } else {
-                    shouldLog("The 'variant' was not in the 'installedOnVariants' list", logger, Level.ERROR)
+                    logIfOverMinLogLevel("The 'variant' was not in the 'installedOnVariants' list", Level.ERROR)
 
                     return false
                 }
             } else {
-                shouldLog("There was no installed data for key: ${hullmodExoticKey}", logger, Level.ERROR)
+                logIfOverMinLogLevel("There was no installed data for key: ${hullmodExoticKey}", Level.ERROR)
 
                 return false
             }
@@ -354,11 +354,11 @@ object HullmodExoticHandler {
 
             // Grab the ExoticHullmod instance
             val exoticHullmodOptional = ExoticHullmodLookup.getFromMap(exoticHullmodId)
-            var exoticHullmod: ExoticHullmod
+            val exoticHullmod: ExoticHullmod
             if (exoticHullmodOptional.isPresent()) {
                 exoticHullmod = exoticHullmodOptional.get()
             } else {
-                shouldLog("removeHullmodExoticFromFleetMember()\texotic hullmod with ID ${exoticHullmodId} not found !!! bailing out", logger, Level.ERROR)
+                logIfOverMinLogLevel("removeHullmodExoticFromFleetMember()\texotic hullmod with ID ${exoticHullmodId} not found !!! bailing out", Level.ERROR)
                 return
             }
 
@@ -382,9 +382,9 @@ object HullmodExoticHandler {
                 }
             }
             // Log before
-            shouldLog("removeHullmodExoticFromFleetMember()\tkeysToRemove.size: ${keysToRemove.size}\tkeysToRemove: ${keysToRemove}", logger, Level.INFO)
-            shouldLog("removeHullmodExoticFromFleetMember()\tlookupMap before cleaning: ${lookupMap}", logger, Level.INFO)
-            shouldLog("removeHullmodExoticFromFleetMember()\tlookupMap.size(): ${lookupMap.size}", logger, Level.INFO)
+            logIfOverMinLogLevel("removeHullmodExoticFromFleetMember()\tkeysToRemove.size: ${keysToRemove.size}\tkeysToRemove: ${keysToRemove}", Level.INFO)
+            logIfOverMinLogLevel("removeHullmodExoticFromFleetMember()\tlookupMap before cleaning: ${lookupMap}", Level.INFO)
+            logIfOverMinLogLevel("removeHullmodExoticFromFleetMember()\tlookupMap.size(): ${lookupMap.size}", Level.INFO)
 
 
             // Now, cleanup the lookupMap from all the to-remove keys
@@ -404,7 +404,7 @@ object HullmodExoticHandler {
                 }
             }
             // Log after
-            shouldLog("<-- removeHullmodExoticFromFleetMember()\tlookupMap.size(): ${lookupMap.size}\tlookupMap AFTER cleaning: ${lookupMap}", logger, Level.INFO)
+            logIfOverMinLogLevel("<-- removeHullmodExoticFromFleetMember()\tlookupMap.size(): ${lookupMap.size}\tlookupMap AFTER cleaning: ${lookupMap}", Level.INFO)
         }
     }
 
@@ -492,7 +492,7 @@ object HullmodExoticHandler {
 
                 // Carry on
                 val moduleSlotList = fleetMemberVariant.moduleSlots
-                shouldLog("onInstall()\tmoduleSlots: ${moduleSlotList}", logger, Level.INFO)
+                logIfOverMinLogLevel("onInstall()\tmoduleSlots: ${moduleSlotList}", Level.INFO)
                 val moduleSlotsNullOrEmpty = moduleSlotList == null || moduleSlotList.isEmpty()
                 if (moduleSlotsNullOrEmpty.not()) {
                     // Print out the module slot list, and generate a small map of
@@ -504,15 +504,15 @@ object HullmodExoticHandler {
                     mutableVariantList.add(fleetMemberVariant)
                     // Now forget about the mutable version and use a immutable version
                     val variantList = mutableVariantList.toList()
-                    shouldLog("onInstall()\tvariantList: ${variantList}", logger, Level.INFO)
+                    logIfOverMinLogLevel("onInstall()\tvariantList: ${variantList}", Level.INFO)
 
                     // Iterate through each slot, getting their variant and trying to install there
                     for (slot in moduleSlotList) {
                         val moduleVariant = fleetMemberVariant.getModuleVariant(slot)
-                        shouldLog("onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}", logger, Level.INFO)
+                        logIfOverMinLogLevel("onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}", Level.INFO)
                         if (moduleVariant == null) continue
                         val mods = ShipModLoader.get(fleetMember, moduleVariant)
-                        shouldLog("onInstall()\tmods: ${mods}", logger, Level.INFO)
+                        logIfOverMinLogLevel("onInstall()\tmods: ${mods}", Level.INFO)
                         mods?.let { nonNullMods ->
                             val shouldInstallOnModuleVariant = HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
                                     hullmodExotic = hullmodExotic,
@@ -522,7 +522,7 @@ object HullmodExoticHandler {
                                     workMode = workMode
                             )
                             onShouldCallback.execute(shouldInstallOnModuleVariant, moduleVariant)
-                            shouldLog("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, variant: ${moduleVariant}", logger, Level.INFO)
+                            logIfOverMinLogLevel("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, variant: ${moduleVariant}", Level.INFO)
                             if (shouldInstallOnModuleVariant) {
                                 // Lets try starting from the HullmodExoticHandler installation
                                 val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
@@ -601,7 +601,7 @@ object HullmodExoticHandler {
                         workMode = workMode
                 )
                 onShouldCallback.execute(shouldInstallOnMemberVariant, memberVariant)
-                shouldLog("onInstall()\tshouldInstallOnMemberVariant: ${shouldInstallOnMemberVariant}, variant: ${memberVariant}", logger, Level.INFO)
+                logIfOverMinLogLevel("onInstall()\tshouldInstallOnMemberVariant: ${shouldInstallOnMemberVariant}, variant: ${memberVariant}", Level.INFO)
                 if (shouldInstallOnMemberVariant) {
                     val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
                             hullmodExotic = hullmodExotic,
@@ -657,7 +657,7 @@ object HullmodExoticHandler {
                                 onShouldResult = shouldRemoveFromModuleVariant,
                                 moduleVariant = installedOnVariant
                         )
-                        shouldLog("onDestroy()\tshouldRemoveFromModuleVariant: ${shouldRemoveFromModuleVariant}, variant: ${installedOnVariant}", logger, Level.INFO)
+                        logIfOverMinLogLevel("onDestroy()\tshouldRemoveFromModuleVariant: ${shouldRemoveFromModuleVariant}, variant: ${installedOnVariant}", Level.INFO)
                         if (shouldRemoveFromModuleVariant) {
                             val removeFromChildModuleResult = HullmodExoticHandler.removeHullmodExoticFromVariant(
                                     hullmodExotic = hullmodExotic,
@@ -703,7 +703,7 @@ object HullmodExoticHandler {
                         onShouldResult = shouldRemoveFromMemberVariant,
                         moduleVariant = fleetMemberVariant
                 )
-                shouldLog("onDestroy()\tshouldRemoveFromMemberVariant: ${shouldRemoveFromMemberVariant}, variant: ${fleetMemberVariant}", logger, Level.INFO)
+                logIfOverMinLogLevel("onDestroy()\tshouldRemoveFromMemberVariant: ${shouldRemoveFromMemberVariant}, variant: ${fleetMemberVariant}", Level.INFO)
                 if (shouldRemoveFromMemberVariant) {
                     val removeFromMemberResult = HullmodExoticHandler.removeHullmodExoticFromVariant(
                             hullmodExotic = hullmodExotic,
@@ -741,13 +741,12 @@ object HullmodExoticHandler {
         }
     }
 
-    private fun shouldLog(logMsg: String, logger: Logger, logLevel: Level) {
-        // We won't log any logLevels below the minimum one
-        if (logLevel.isGreaterOrEqual(MIN_LOG_LEVEL).not()) return;
-        log(
+    private fun logIfOverMinLogLevel(logMsg: String, logLevel: Level) {
+        shouldLog(
                 logMsg = logMsg,
                 logger = logger,
-                logLevel = logLevel
+                logLevel = logLevel,
+                minLogLevel = MIN_LOG_LEVEL
         )
     }
 
