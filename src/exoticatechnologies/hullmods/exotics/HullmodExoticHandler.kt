@@ -1003,6 +1003,10 @@ object HullmodExoticHandler {
     }
 }
 
+/**
+ * Data class holding all "install" data for a particular [FleetMemberAPI] so that we can track which Variants we installed
+ * a particular [HullmodExotic] on, where we should also install it on, and where we can remove it from.
+ */
 data class HullmodExoticInstallData(
         val parentFleetMemberAPI: FleetMemberAPI,
         val listOfAllModuleVariants: List<ShipVariantAPI>,
@@ -1010,6 +1014,9 @@ data class HullmodExoticInstallData(
         val listOfVariantsWeInstalledOn: List<ShipVariantAPI>
 )
 
+/**
+ * Data class used as a key for the [HullmodExoticHandler]'s lookup map
+ */
 data class HullmodExoticKey(
         val hullmodExotic: HullmodExotic,
         val parentFleetMemberId: String
