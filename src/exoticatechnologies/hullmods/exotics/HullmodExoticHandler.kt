@@ -142,8 +142,8 @@ object HullmodExoticHandler {
             // just check
             val alreadyIn = alreadyInstalledList.contains(variant)
             if (alreadyIn) {
-                // Actually, lets not throw just yet
-                // TODO change to throwing
+                // If we're already installed on this variant, just log as warning - because it's not necessarily an error
+                // if we already installed the HullmodExotic and then just go through the modules in the REFIT screen
                 logIfOverMinLogLevel("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's already been installed on, returning false!!!!!", Level.WARN)
                 return false
             }
