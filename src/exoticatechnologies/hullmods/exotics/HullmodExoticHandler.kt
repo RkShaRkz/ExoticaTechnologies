@@ -275,6 +275,17 @@ object HullmodExoticHandler {
         }
     }
 
+    /**
+     * Method for removing the [HullmodExotic] from a [ShipVariantAPI] by checking if we had already installed it
+     * and that the [ExoticHullmod] installed on it has a valid hullmod ID. Returns whether the removal was successful.
+     *
+     * @return whether the hullmod exotic was successfully removed or not
+     *
+     * @param hullmodExotic the HullmodExotic in question
+     * @param parentFleetMember the [FleetMemberAPI] of the root module, or the whole ship's if it's a single-module ship
+     * @param variant the variant to check
+     * @param workMode the [HullmodExoticHandlerWorkMode] in which we're **currently** operating, because we do things differently for [HullmodExoticHandlerWorkMode.LENIENT] and [HullmodExoticHandlerWorkMode.STRICT] work modes
+     */
     private fun removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
         // STRICT vs LENIENT - for STRICT we should be reducing the 'installed on' list; for LENIENT - meh, lets try not to.
         synchronized(lookupMap) {
@@ -286,7 +297,7 @@ object HullmodExoticHandler {
             )
             val currentInstallData = getDataForKey(hullmodExoticKey)
 
-            if (currentInstallData.isPresent()) {
+            return if (currentInstallData.isPresent()) {
                 val installData = currentInstallData.get()
                 val installedOnVariants = installData.listOfVariantsWeInstalledOn
 
@@ -324,21 +335,27 @@ object HullmodExoticHandler {
                         )
                         logIfOverMinLogLevel("The exoticHullmod ${exoticHullmodInstance.hullModId} has been removed and lookup map has been updated. [${workMode}] Old installed list size: ${installedOnVariants.size}, new install list size: ${installListToUse.size}", Level.INFO)
 
-                        return true
+                        // Return 'true' since we should uninstall/remove from this variant since we successfully logically removed it
+                        true
                     } else {
                         logIfOverMinLogLevel("No ExoticHullmod with id ${hullmodId} was found !!!", Level.ERROR)
 
-                        return false
+                        // Return 'false' since we should not uninstall/remove from this variant because we couldn't find
+                        // the ExoticHullmod we applied on it - this is a funny "should never happen" edge-case that is here
+                        // just for completeness sake
+                        false
                     }
                 } else {
                     logIfOverMinLogLevel("The 'variant' was not in the 'installedOnVariants' list", Level.ERROR)
 
-                    return false
+                    // Return 'false' since we should not uninstall/remove from this variant because we never installed on it
+                    false
                 }
             } else {
                 logIfOverMinLogLevel("There was no installed data for key: ${hullmodExoticKey}", Level.ERROR)
 
-                return false
+                // Return 'false' since we should not uninstall/remove from this variant because we never had InstallData for it
+                false
             }
         }
     }
