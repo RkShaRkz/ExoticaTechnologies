@@ -32,6 +32,7 @@ import java.util.Objects;
  * on it. This hullmod is actually in charge of 'installing' exoticas/upgrades and calling their relevant methods
  */
 public class ExoticaTechHM extends BaseHullMod {
+    public static final String HULLMOD_ID = "exoticatech";
     private static final Color hullmodColor = new Color(94, 206, 226);
     private static final Logger log = Logger.getLogger(ExoticaTechHM.class);
 
@@ -42,14 +43,14 @@ public class ExoticaTechHM extends BaseHullMod {
 
         ShipModifications mods = ShipModFactory.generateForFleetMember(member);
 
-        if (variant.hasHullMod("exoticatech")) {
-            variant.removePermaMod("exoticatech");
+        if (variant.hasHullMod(HULLMOD_ID)) {
+            variant.removePermaMod(HULLMOD_ID);
         }
 
         if (mods.shouldApplyHullmod()) {
 
             ExtensionsKt.fixVariant(member);
-            variant.addPermaMod("exoticatech");
+            variant.addPermaMod(HULLMOD_ID);
 
             member.updateStats();
         }
@@ -65,8 +66,8 @@ public class ExoticaTechHM extends BaseHullMod {
         }
 
         ShipVariantAPI shipVariant = member.getVariant();
-        if (shipVariant.hasHullMod("exoticatech")) {
-            shipVariant.removePermaMod("exoticatech");
+        if (shipVariant.hasHullMod(HULLMOD_ID)) {
+            shipVariant.removePermaMod(HULLMOD_ID);
         }
 
         member.updateStats();
@@ -86,7 +87,7 @@ public class ExoticaTechHM extends BaseHullMod {
     public void advanceInCampaign(FleetMemberAPI member, float amount) {
         ShipModifications mods = ShipModLoader.get(member, member.getVariant());
         if (mods == null) {
-            member.getVariant().removePermaMod("exoticatech");
+            member.getVariant().removePermaMod(HULLMOD_ID);
             return;
         }
 
@@ -222,7 +223,7 @@ public class ExoticaTechHM extends BaseHullMod {
         ShipModifications mods = ShipModLoader.get(member, stats.getVariant());
 
         if (mods == null) {
-            member.getVariant().removePermaMod("exoticatech");
+            member.getVariant().removePermaMod(HULLMOD_ID);
             return;
         }
 
@@ -313,9 +314,9 @@ public class ExoticaTechHM extends BaseHullMod {
     }
 
     public static void removeHullModFromVariant(ShipVariantAPI v) {
-        v.removePermaMod("exoticatech");
-        v.removeMod("exoticatech");
-        v.removeSuppressedMod("exoticatech");
+        v.removePermaMod(HULLMOD_ID);
+        v.removeMod(HULLMOD_ID);
+        v.removeSuppressedMod(HULLMOD_ID);
     }
 
     private static boolean checkIsModuleInternal(ShipAPI ship) {

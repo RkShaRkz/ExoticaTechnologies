@@ -100,6 +100,10 @@ class AlphaSubcore(key: String, settingsObj: JSONObject) :
 
     override fun shouldAffectModulesToShareEffectsToOtherModules() = false
 
+    override fun shouldAffectModule(moduleStats: MutableShipStatsAPI) = false
+
+    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
+
     companion object {
         private const val ITEM = "alpha_core"
         private const val BANDWIDTH_INCREASE = 60

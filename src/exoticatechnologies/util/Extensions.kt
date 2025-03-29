@@ -689,6 +689,16 @@ fun log(logMsg: String, logger: Logger, logLevel: Level = Level.DEBUG) {
     }
 }
 
+fun shouldLog(logMsg: String, logger: Logger, logLevel: Level, minLogLevel: Level = Level.ALL) {
+    // We won't log any logLevels below the minimum one
+    if (logLevel.isGreaterOrEqual(minLogLevel).not()) return;
+    log(
+            logMsg = logMsg,
+            logger = logger,
+            logLevel = logLevel
+    )
+}
+
 object AnonymousLogger {
     private val logger: Logger = Logger.getLogger(AnonymousLogger::class.java)
 
