@@ -635,8 +635,12 @@ object HullmodExoticHandler {
                         parentFleetMemberId = fleetMember.id
                 )
                 val currentInstallData = synchronized(lookupMap) { lookupMap[hullmodExoticKey] }
-                val installedOnVariantsList = currentInstallData?.listOfVariantsWeInstalledOn
-                        ?: throw IllegalStateException("No InstallData found for key ${hullmodExoticKey}")
+                val installedOnVariantsList = if(currentInstallData != null) {
+                    currentInstallData.listOfVariantsWeInstalledOn
+                } else {
+                    logIfOverMinLogLevel("No InstallData found for key ${hullmodExoticKey}", Level.ERROR)
+                    return
+                }
 
                 // Carry on now that we have install data
 
