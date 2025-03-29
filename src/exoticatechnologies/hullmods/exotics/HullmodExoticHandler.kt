@@ -8,6 +8,7 @@ import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.datastructures.Optional
+import exoticatechnologies.util.getChildModuleVariantList
 import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -586,20 +587,13 @@ object HullmodExoticHandler {
                     Optional.empty()
                 } else {
                     // Entry does not exist, lets just create one, even though we're probably not a multimodule ship
-                    val moduleSlotList = memberVariant.moduleSlots
-                    val variants = if(moduleSlotList == null || moduleSlotList.isEmpty()) {
-                        // It's just this variant
-                        listOf(memberVariant)
-                    } else {
-                        // Otherwise, it's all of them
-                        val mutableVariantList = moduleSlotList
-                                .map { slot -> memberVariant.getModuleVariant(slot) }
-                                .toMutableList()
-                        // Obviously, add the 'member' variant to the list as well
-                        mutableVariantList.add(memberVariant)
-
-                        mutableVariantList.toList()
-                    }
+                    val variantsList = getChildModuleVariantList(member)
+                    variantsList
+                            // Change to mutable so we can add our variant
+                            .toMutableList()
+                            // Obviously, add the 'member' variant to the list as well
+                            .add(memberVariant)
+                    val variants = variantsList.toList()
 
                     // Return the optional of the list
                     Optional.of(variants)
