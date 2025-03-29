@@ -52,6 +52,9 @@ open class HullmodExotic(
         val shouldShareEffectToOtherModules = shouldShareEffectToOtherModules(null, null)
         val isChildModule = member.shipName.isNullOrEmpty()
         logIfOverMinLogLevel("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules}, isChildModule = ${isChildModule}", Level.INFO)
+        //FIXME: for the time being, only "root" modules are able to share effects to all other (child) modules
+        // Ideally, any module should be able to share effects to all other modules
+        // Relevant issue: https://github.com/RkShaRkz/ExoticaTechnologies/issues/39
         if (shouldShareEffectToOtherModules) {
             // If we should share to other modules, lets just focus on being able to share from the root module
             // to other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
