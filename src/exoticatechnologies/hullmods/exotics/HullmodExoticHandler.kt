@@ -421,6 +421,13 @@ object HullmodExoticHandler {
         }
     }
 
+    /**
+     * Utility method to check if a [HullmodExoticKey] entry exists for a given [HullmodExotic] and [FleetMemberAPI] combination.
+     *
+     * @param hullmodExotic the hullmod exotic to look up
+     * @param fleetMember the fleet member to look up
+     * @return whether the [lookupMap] contains the key formed by hullmodExotic and fleetMember's ID
+     */
     private fun doesEntryExist(hullmodExotic: HullmodExotic, fleetMember: FleetMemberAPI): Boolean {
         synchronized(lookupMap) {
             val hullmodExoticKey = HullmodExoticKey(
@@ -432,6 +439,12 @@ object HullmodExoticHandler {
         }
     }
 
+    /**
+     * Utility method to grab **all** [HullmodExoticKey] keys matching a given [FleetMemberAPI] regardless of their [HullmodExotic]
+     *
+     * @param fleetMemberAPI the fleet member to look up the keys for
+     * @return the list of keys pertaining to this fleet member
+     */
     private fun grabAllKeysForParticularFleetMember(fleetMemberAPI: FleetMemberAPI): List<HullmodExoticKey> {
         synchronized(lookupMap) {
             val retVal = mutableSetOf<HullmodExoticKey>()
@@ -445,19 +458,36 @@ object HullmodExoticHandler {
         }
     }
 
+    /**
+     * Utility method that returns [HullmodExoticInstallData] for a given [HullmodExoticKey]
+     *
+     * @param hullmodExoticKey the key to look up the data for
+     * @return returns an [Optional] that may or may not contain the data for the passed-in key
+     */
     private fun getDataForKey(hullmodExoticKey: HullmodExoticKey): Optional<HullmodExoticInstallData> {
         return Optional.ofNullable(synchronized(lookupMap) { lookupMap.get(hullmodExoticKey) })
     }
 
-    internal fun areHullmodExoticsEqual(hm1: HullmodExotic, hm2: HullmodExotic): Boolean {
-        // NOTE: keep this in-sync with the HullmodExoticKey::equals()
-        return hm1.getHullmodId() == hm2.getHullmodId()
-    }
-
+    /**
+     * Useless utility method that clearly checks whether the two HullmodIDs (strings) are equal.
+     * It is currently doing it via a mere equality (`==`) check.
+     *
+     * @param id1 the hullmod ID of the first hullmod
+     * @param id2 the hullmod ID of the second hullmod
+     * @return whether they are equal
+     */
     private fun areHullmodIDsEqual(id1: String, id2: String): Boolean {
         return id1 == id2
     }
 
+    /**
+     * Useless utility method that clearly checks whether the two FleetMemberIDs (strings) are equal.
+     * It is currently doing it via a mere equality (`==`) check.
+     *
+     * @param id1 the ID of the first fleet member
+     * @param id2 the ID of the second fleet member
+     * @return whether they are equal
+     */
     private fun areFleetMemberIDsEqual(id1: String, id2: String): Boolean {
         return id1 == id2
     }
@@ -480,6 +510,18 @@ object HullmodExoticHandler {
         return runningFromRefitScreen
     }
 
+    /**
+     * Inner "class" holding certain "flows" which are a somewhat long list of steps/actions to perform, such as:
+     * - checking and installing on all child modules' variants
+     * - checking and installing on member (root) module variant
+     * - checking and removing from all child modules' variants
+     * - checking and removing from member (root) module variant
+     *
+     * @see CheckAndInstallOnAllChildModulesVariants
+     * @see CheckAndInstallOnMemberModule
+     * @see CheckAndRemoveFromAllChildModulesVariants
+     * @see CheckAndRemoveFromMemberModule
+     */
     class Flows {
         /**
          * For each child module of [fleetMember] or rather, the fleetMember's [ShipVariantAPI] variant,
@@ -487,6 +529,21 @@ object HullmodExoticHandler {
          * with their respective callbacks in proper places
          */
         companion object {
+
+            /**
+             * A "flow" method that checks whether we should install the [HullmodExotic] on all child modules of a [fleetMember],
+             * throws a [OnShouldCallback] for each of them before proceeding to install the hullmod exotic on all of them
+             * (meeting the "should install" criteria) after which a [OnInstallToChildModuleCallback] is called for each of them.
+             *
+             * @param fleetMember the [FleetMemberAPI] of the root module, from which all child modules will be obtained
+             * @param fleetMemberVariant the [ShipVariantAPI] of the root module, so that we can generate a list of all variants on which we should install
+             * @param hullmodExotic the [HullmodExotic] to install on these child modules' variants
+             * @param onShouldCallback the callback to invoke for each of the child modules' variants with their "should install" result
+             * @param onInstallToChildModuleCallback the callback to invoke for each of the child modules' variants after installing with their installation result
+             *
+             * @see shouldInstallHullmodExoticToVariant
+             * @see installHullmodExoticToVariant
+             */
             @JvmStatic
             fun CheckAndInstallOnAllChildModulesVariants(
                     fleetMember: FleetMemberAPI,
@@ -546,6 +603,20 @@ object HullmodExoticHandler {
                 }
             }
 
+            /**
+             * A "flow" method that checks whether we should install the [HullmodExotic] on the root module of a [fleetMember]
+             * (or rather, the whole [fleetMember] itself for single-module ships), calls a [OnShouldCallback] with the result
+             * before proceeding to install after which a [OnInstallToMemberCallback] is called with the installation result
+             *
+             * @param member the [FleetMemberAPI] of the root module
+             * @param memberVariant the [ShipVariantAPI] of the root module, so that we can generate a list of all variants on which we should install
+             * @param hullmodExotic the [HullmodExotic] to install on this fleet member's variant
+             * @param onShouldCallback the callback to invoke with the "should install" result
+             * @param onInstallCallback the callback to invoke for the root module's variant after installing, with the installation result
+             *
+             * @see shouldInstallHullmodExoticToVariant
+             * @see installHullmodExoticToVariant
+             */
             @JvmStatic
             fun CheckAndInstallOnMemberModule(
                     member: FleetMemberAPI,
@@ -613,6 +684,19 @@ object HullmodExoticHandler {
                 }
             }
 
+            /**
+             * A "flow" method that checks whether we should remove the [HullmodExotic] from all child modules of a [fleetMember],
+             * throws a [OnShouldCallback] for each of them before proceeding to remove the hullmod exotic from all of them
+             * (meeting the "should remove" criteria) after which a [OnRemoveFromChildModuleCallback] is called for each of them.
+             *
+             * @param fleetMember the [FleetMemberAPI] of the root module, from which all child modules will be obtained
+             * @param hullmodExotic the [HullmodExotic] to remove from these child modules' variants
+             * @param onShouldCallback the callback to invoke for each of the child modules' variants with their "should remove" result
+             * @param onRemoveFromChildModuleCallback the callback to invoke for each of the child modules' variants after removing with their removal result
+             *
+             * @see shouldRemoveHullmodExoticFromVariant
+             * @see removeHullmodExoticFromVariant
+             */
             @JvmStatic
             fun CheckAndRemoveFromAllChildModulesVariants(
                     fleetMember: FleetMemberAPI,
@@ -680,6 +764,20 @@ object HullmodExoticHandler {
                 }
             }
 
+            /**
+             * A "flow" method that checks whether we should remove the [HullmodExotic] from the root module of a [fleetMember]
+             * (or rather, the whole [fleetMember] itself for single-module ships), calls a [OnShouldCallback] with the result
+             * before proceeding to remove after which a [OnRemoveFromMemberCallback] is called with the removal result
+             *
+             * @param fleetMember the [FleetMemberAPI] of the root module
+             * @param fleetMemberVariant the [ShipVariantAPI] of the root module, so that we can generate a list of all variants from which we should remove
+             * @param hullmodExotic the [HullmodExotic] to remove from this fleet member's variant
+             * @param onShouldCallback the callback to invoke with the "should remove" result
+             * @param onRemoveFromMemberModuleCallback the callback to invoke for the root module's variant after removing, with the removal result
+             *
+             * @see shouldRemoveHullmodExoticFromVariant
+             * @see removeHullmodExoticFromVariant
+             */
             @JvmStatic
             fun CheckAndRemoveFromMemberModule(
                     fleetMember: FleetMemberAPI,
@@ -724,22 +822,38 @@ object HullmodExoticHandler {
             }
         }
 
+        /**
+         * Interface for a callback to be received after a "should remove" or "should install" evaluation was performed
+         * on a module's variant
+         */
         interface OnShouldCallback {
             fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI)
         }
 
+        /**
+         * Interface for a callback to be received after a installation was performed on a child module
+         */
         interface OnInstallToChildModuleCallback {
             fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications)
         }
 
+        /**
+         * Interface for a callback to be received after a installation was performed on a root module
+         */
         interface OnInstallToMemberCallback {
             fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI)
         }
 
+        /**
+         * Interface for a callback to be received after a removal (uninstallation) from a child module
+         */
         interface OnRemoveFromChildModuleCallback {
             fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications)
         }
 
+        /**
+         * Interface for a callback to be received after a removal (uninstallation) from the root module
+         */
         interface OnRemoveFromMemberCallback {
             fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI)
         }
