@@ -504,26 +504,20 @@ object HullmodExoticHandler {
                 }
 
                 // Carry on
-                val moduleSlotList = fleetMemberVariant.moduleSlots
-                logIfOverMinLogLevel("onInstall()\tmoduleSlots: ${moduleSlotList}", Level.INFO)
-                val moduleSlotsNullOrEmpty = moduleSlotList == null || moduleSlotList.isEmpty()
-                if (moduleSlotsNullOrEmpty.not()) {
+
+                val childModuleVariants = getChildModuleVariantList(fleetMember)
+                val allVariantsList = childModuleVariants.toMutableList().apply { add(fleetMemberVariant) }.toList()
+
+                logIfOverMinLogLevel("onInstall()\tchildModuleVariants: ${childModuleVariants}", Level.INFO)
+                if (childModuleVariants.isEmpty().not()) {
                     // Print out the module slot list, and generate a small map of
                     // <this exotic>, <parent FleetMember> + <list of expected variants> + <list of variants we installed on>
-                    val mutableVariantList = moduleSlotList
-                            .map { slot -> fleetMemberVariant.getModuleVariant(slot) }
-                            .toMutableList()
-                    // Obviously, add the 'member' variant to the list as well
-                    mutableVariantList.add(fleetMemberVariant)
-                    // Now forget about the mutable version and use a immutable version
-                    val variantList = mutableVariantList.toList()
-                    logIfOverMinLogLevel("onInstall()\tvariantList: ${variantList}", Level.INFO)
+                    //
+                    // Since we've already created the "all variants" and "child module" lists, lets just use them now
+                    logIfOverMinLogLevel("onInstall()\tvariantList: ${allVariantsList}", Level.INFO)
 
                     // Iterate through each slot, getting their variant and trying to install there
-                    for (slot in moduleSlotList) {
-                        val moduleVariant = fleetMemberVariant.getModuleVariant(slot)
-                        logIfOverMinLogLevel("onInstall()\tslot: ${slot}\tmoduleVariant: ${moduleVariant}", Level.INFO)
-                        if (moduleVariant == null) continue
+                    for (moduleVariant in childModuleVariants) {
                         val mods = ShipModLoader.get(fleetMember, moduleVariant)
                         logIfOverMinLogLevel("onInstall()\tmods: ${mods}", Level.INFO)
                         mods?.let { nonNullMods ->
@@ -531,7 +525,7 @@ object HullmodExoticHandler {
                                     hullmodExotic = hullmodExotic,
                                     parentFleetMember = fleetMember,
                                     variant = moduleVariant,
-                                    variantList = Optional.of(variantList),
+                                    variantList = Optional.of(allVariantsList),
                                     workMode = workMode
                             )
                             onShouldCallback.execute(shouldInstallOnModuleVariant, moduleVariant)
