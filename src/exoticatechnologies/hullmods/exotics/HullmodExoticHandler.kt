@@ -145,6 +145,7 @@ object HullmodExoticHandler {
                 // If we're already installed on this variant, just log as warning - because it's not necessarily an error
                 // if we already installed the HullmodExotic and then just go through the modules in the REFIT screen
                 logIfOverMinLogLevel("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's already been installed on, returning false!!!!!", Level.WARN)
+
                 return false
             }
 
@@ -152,7 +153,7 @@ object HullmodExoticHandler {
             // installing *only* on the expected variants, where the lenient one won't even look at the expected list,
             // as well as *not* reducing the 'expected' list because we'll get many more than originally expected ...
 
-            if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
+            return if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
                 // STRICT work mode - only install on the 'expected' variants and do nothing for unexpected ones
                 val isExpected = expectedList.contains(variant)
                 // If we're expected, remove from expected list and add to installed list and return true
@@ -175,10 +176,14 @@ object HullmodExoticHandler {
                     logIfOverMinLogLevel("installHullmodExoticToVariant()\t\tnew expected list: ${mutableExpectedList}", Level.INFO)
                     logIfOverMinLogLevel("installHullmodExoticToVariant()\t\tnew installed list: ${mutableInstalledList}", Level.INFO)
                     logIfOverMinLogLevel("<-- installHullmodExoticToVariant()\t\treturning true", Level.INFO)
-                    return true
+
+                    // And return 'true' to indicate we *should* install on this variant
+                    true
                 } else {
-                    logIfOverMinLogLevel("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's NOT expected, returning false!!!!!", Level.WARN)
-                    return false
+                    logIfOverMinLogLevel("installHullmodExoticToVariant()\t\t !!!!! Trying to install on a variant that's NOT expected, returning false!!!!!", Level.ERROR)
+
+                    // And return 'false' to indicate we *should not* install on this variant
+                    false
                 }
             } else {
                 // LENIENT work mode - install on whatever comes in and/or we get called with AND do not reduce expected list ... *shrug*
@@ -199,7 +204,8 @@ object HullmodExoticHandler {
                 logIfOverMinLogLevel("installHullmodExoticToVariant()\t\tnew installed list: ${mutableInstalledList}", Level.INFO)
                 logIfOverMinLogLevel("<-- installHullmodExoticToVariant()\t\treturning true", Level.INFO)
 
-                return true
+                // And return 'true' to indicate we *should* install on this variant
+                true
             }
         }
     }
