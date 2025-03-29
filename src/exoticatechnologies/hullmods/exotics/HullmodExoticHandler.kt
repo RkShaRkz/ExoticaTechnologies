@@ -361,6 +361,10 @@ object HullmodExoticHandler {
         }
     }
 
+    /**
+     * Utility method that grabs the [ExoticHullmod] by it's ID, and calls it's [ExoticHullmod.removeEffectsBeforeShipCreation]
+     * on variants we installed on, before nuking the key from the [lookupMap]
+     */
     fun removeHullmodExoticFromFleetMember(exoticHullmodId: String, fleetMember: FleetMemberAPI) {
         synchronized(lookupMap) {
             // Obviously, using a Set for this was a wrong idea that led to the ever-growing problem in the first place
