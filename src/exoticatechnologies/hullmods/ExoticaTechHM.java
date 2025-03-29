@@ -15,11 +15,11 @@ import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.ShipModifications;
 import exoticatechnologies.modifications.exotics.Exotic;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
-import exoticatechnologies.modifications.exotics.impl.HullmodExotic;
 import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
 import exoticatechnologies.util.ExtensionsKt;
 import exoticatechnologies.util.FleetMemberUtils;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import java.awt.*;
@@ -35,6 +35,7 @@ public class ExoticaTechHM extends BaseHullMod {
     public static final String HULLMOD_ID = "exoticatech";
     private static final Color hullmodColor = new Color(94, 206, 226);
     private static final Logger log = Logger.getLogger(ExoticaTechHM.class);
+    private static final Level MIN_LOG_LEVEL = Level.WARN;
 
     public static void addToFleetMember(FleetMemberAPI member, ShipVariantAPI variant) {
         if (variant == null) {
@@ -199,9 +200,7 @@ public class ExoticaTechHM extends BaseHullMod {
 
     @Override
     public void applyEffectsBeforeShipCreation(ShipAPI.HullSize hullSize, MutableShipStatsAPI stats, String id) {
-        log.info("--> applyEffectsBeforeShipCreation(hullSize=" + hullSize + ", stats=" + stats + ", id=" + id + ")");
         FleetMemberAPI member = FleetMemberUtils.findMemberForStats(stats);
-        log.info("applyEffectsBeforeShipCreation()\tmember = " + member);
         if (member == null) {
             return;
         }
@@ -217,7 +216,7 @@ public class ExoticaTechHM extends BaseHullMod {
                 }
             }
         } catch (Exception e) {
-            log.info("Failed to get modules", e);
+            log.error("Failed to get modules", e);
         }
 
         ShipModifications mods = ShipModLoader.get(member, stats.getVariant());
@@ -228,16 +227,8 @@ public class ExoticaTechHM extends BaseHullMod {
         }
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
-            if (!mods.hasExotic(exotic)) {
-                if (exotic instanceof HullmodExotic ) {
-                    //TODO maybe get rid of it here?
-                }
-                continue;
-            }
-            log.info("applyEffectsBeforeShipCreation()\tshouldSkipModification(stats="+stats+", exotic="+exotic+") = " + shouldSkipModification(stats, exotic));
+            if (!mods.hasExotic(exotic)) continue;
             if (shouldSkipModification(stats, exotic)) continue;
-
-            log.info("applyEffectsBeforeShipCreation()\t--> exotic.applyExoticToStats()\texotic: "+exotic+", id="+id+", stats="+stats+", member="+member+", mods="+mods+", exoticData="+mods.getExoticData(exotic));
 
             exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
         }
@@ -311,6 +302,15 @@ public class ExoticaTechHM extends BaseHullMod {
 
 
         mods.populateTooltip(member, ship.getMutableStats(), hullmodTooltip, width, 500f, false, false, false);
+    }
+
+    private void logIfOverMinLogLevel(String logMessage, Level logLevel) {
+        ExtensionsKt.shouldLog(
+                logMessage,
+                log,
+                logLevel,
+                MIN_LOG_LEVEL
+        );
     }
 
     public static void removeHullModFromVariant(ShipVariantAPI v) {
