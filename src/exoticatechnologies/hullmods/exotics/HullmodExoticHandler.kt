@@ -27,12 +27,24 @@ object HullmodExoticHandler {
      * Method for checking whether the [HullmodExotic] should be installed onto a [ShipVariantAPI] by checking
      * if we hadn't already installed it or not
      *
+     * **NOTE** regarding this [Optional] parameter - it **must** be present for when there is no InstallData in the
+     * [lookupMap] so it can be initialized properly
+     *
      * @param hullmodExotic the HullmodExotic in question
      * @param parentFleetMember the [FleetMemberAPI] of the root module, or the whole ship's if it's a single-module ship
      * @param variant the variant to check
      * @param variantList list of module variants belonging to the parent module (optional)
+     * @param workMode the [HullmodExoticHandlerWorkMode] we're currently operating in
+     *
+     * @return whether the [hullmodExotic] should be installed into the [variant] or not
      */
-    private fun shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>, workMode: HullmodExoticHandlerWorkMode): Boolean {
+    private fun shouldInstallHullmodExoticToVariant(
+            hullmodExotic: HullmodExotic,
+            parentFleetMember: FleetMemberAPI,
+            variant: ShipVariantAPI,
+            variantList: Optional<List<ShipVariantAPI>>,
+            workMode: HullmodExoticHandlerWorkMode
+    ): Boolean {
         logIfOverMinLogLevel("--> shouldInstallHullmodExoticToVariant()\tvariant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}", Level.INFO)
         // Prepare the key in the lookup map
         synchronized(lookupMap) {
@@ -115,8 +127,20 @@ object HullmodExoticHandler {
 
     /**
      * Method that installs a [HullmodExotic] into the [variant]
+     *
+     * @param hullmodExotic the [HullmodExotic] in question (to be installed)
+     * @param parentFleetMember the [FleetMemberAPI] of the root module, or the whole ship if it's a single-module ship
+     * @param variant the [ShipVariantAPI] variant to install the HullmodExotic in to
+     * @param workMode the [HullmodExoticHandlerWorkMode] work mode we're currently operating in
+     *
+     * @return whether the hullmod exotic was succesfully installed into the variant or not
      */
-    private fun installHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
+    private fun installHullmodExoticToVariant(
+            hullmodExotic: HullmodExotic,
+            parentFleetMember: FleetMemberAPI,
+            variant: ShipVariantAPI,
+            workMode: HullmodExoticHandlerWorkMode
+    ): Boolean {
         synchronized(lookupMap) {
             logIfOverMinLogLevel("--> installHullmodExoticToVariant()\thullmodExotic: ${hullmodExotic}, parentFleetMember: ${parentFleetMember}, variant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}", Level.INFO)
             // Basically, this should be easy:
@@ -219,8 +243,15 @@ object HullmodExoticHandler {
      * @param parentFleetMember the [FleetMemberAPI] of the root module, or the whole ship's if it's a single-module ship
      * @param variant the variant to check
      * @param workMode the [HullmodExoticHandlerWorkMode] in which we're **currently** operating, because we do things differently for [HullmodExoticHandlerWorkMode.LENIENT] and [HullmodExoticHandlerWorkMode.STRICT] work modes
+     *
+     * @return whether the HullmodExotic should be removed from the variant or not
      */
-    private fun shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
+    private fun shouldRemoveHullmodExoticFromVariant(
+            hullmodExotic: HullmodExotic,
+            parentFleetMember: FleetMemberAPI,
+            variant: ShipVariantAPI,
+            workMode: HullmodExoticHandlerWorkMode
+    ): Boolean {
         // LENIENT vs STRICT - for STRICT, we should fail-fast if we don't have the hullmod; for LENIENT - just do nothing and fall through
         if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
             // STRICT work mode - fail fast if we don't have the hullmod
@@ -287,7 +318,12 @@ object HullmodExoticHandler {
      * @param variant the variant to check
      * @param workMode the [HullmodExoticHandlerWorkMode] in which we're **currently** operating, because we do things differently for [HullmodExoticHandlerWorkMode.LENIENT] and [HullmodExoticHandlerWorkMode.STRICT] work modes
      */
-    private fun removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
+    private fun removeHullmodExoticFromVariant(
+            hullmodExotic: HullmodExotic,
+            parentFleetMember: FleetMemberAPI,
+            variant: ShipVariantAPI,
+            workMode: HullmodExoticHandlerWorkMode
+    ): Boolean {
         // STRICT vs LENIENT - for STRICT we should be reducing the 'installed on' list; for LENIENT - meh, lets try not to.
         synchronized(lookupMap) {
             // Now, we get the install data, check whether the 'variant' is in 'installed variant' list, if yes, we "uninstall" it
@@ -364,6 +400,9 @@ object HullmodExoticHandler {
     /**
      * Utility method that grabs the [ExoticHullmod] by it's ID, and calls it's [ExoticHullmod.removeEffectsBeforeShipCreation]
      * on variants we installed on, before nuking the key from the [lookupMap]
+     *
+     * @param exoticHullmodId the hullmod ID of the [ExoticHullmod]
+     * @param fleetMember the [FleetMemberAPI] on whose variants' we want to uninstall the ExoticHullmod from
      */
     fun removeHullmodExoticFromFleetMember(exoticHullmodId: String, fleetMember: FleetMemberAPI) {
         synchronized(lookupMap) {
