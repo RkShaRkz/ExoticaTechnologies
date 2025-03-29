@@ -33,14 +33,7 @@ object HullmodExoticHandler {
      */
     private fun shouldInstallHullmodExoticToVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, variantList: Optional<List<ShipVariantAPI>>, workMode: HullmodExoticHandlerWorkMode): Boolean {
         logIfOverMinLogLevel("--> shouldInstallHullmodExoticToVariant()\tvariant: ${variant}, runningFromRefit: ${runningFromRefitScreen()}", Level.INFO)
-        // Fail fast if the variant already has the hullmod
-        val hullmodId = hullmodExotic.getHullmodId()
-        val alreadyHasHullmod = variant.hasHullMod(hullmodId)
-        if (alreadyHasHullmod) {
-            logIfOverMinLogLevel("shouldInstallHullmodExoticToVariant()\tVariant ${variant} already had hullmod with the ${hullmodId} ID. Nothing to do here. Bailing out !!!", Level.WARN)
-//            return false
-        }
-        // Otherwise, prepare the key in the lookup map
+        // Prepare the key in the lookup map
         synchronized(lookupMap) {
             // First things first, check if we have this in the map
             // we will do this by forming up a [HullmodExotica, FleetMemberAPI] pair as a key
