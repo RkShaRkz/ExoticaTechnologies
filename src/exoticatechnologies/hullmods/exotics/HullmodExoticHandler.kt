@@ -404,18 +404,15 @@ object HullmodExoticHandler {
 
             // Now, cleanup the lookupMap from all the to-remove keys
             for (keyToRemove in keysToRemove) {
-//            lookupMap.remove(keyToRemove)
                 // Somehow, lookupMap.remove(keyToRemove) doesn't quite work here.... so lets try something else instead
                 synchronized(lookupMap) {
                     val mapIterator = lookupMap.entries.iterator()
                     while (mapIterator.hasNext()) {
                         val mapEntry = mapIterator.next()
-                        if (mapEntry.key.equals(keyToRemove)) {
+                        if (mapEntry.key == keyToRemove) {
                             mapIterator.remove()
                         }
                     }
-
-                    lookupMap.entries.removeAll { entry -> entry.key in keysToRemove }
                 }
             }
             // Log after
