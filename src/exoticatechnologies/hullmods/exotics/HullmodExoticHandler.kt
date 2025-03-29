@@ -217,6 +217,7 @@ object HullmodExoticHandler {
      * @param hullmodExotic the HullmodExotic in question
      * @param parentFleetMember the [FleetMemberAPI] of the root module, or the whole ship's if it's a single-module ship
      * @param variant the variant to check
+     * @param workMode the [HullmodExoticHandlerWorkMode] in which we're **currently** operating, because we do things differently for [HullmodExoticHandlerWorkMode.LENIENT] and [HullmodExoticHandlerWorkMode.STRICT] work modes
      */
     private fun shouldRemoveHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
         // LENIENT vs STRICT - for STRICT, we should fail-fast if we don't have the hullmod; for LENIENT - just do nothing and fall through
@@ -255,8 +256,6 @@ object HullmodExoticHandler {
             // On the other hand/thought - why not try making these two the same?
             // UPDATE: for some reason, the list of variants we get from the root module *does not* equal any of the variants
             // in the "all module variants" list, so similar to before with the 'is expected' - lets check via hullspec hullID
-
-            //TODO update documentation so that it refers to both LENIENT and STRICT
             if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
                 // STRICT work mode - validate if the variant is both in the 'installed on' list and 'module variants' list
                 val isInstalledOn = currentInstallData.listOfVariantsWeInstalledOn.contains(variant)
@@ -877,4 +876,30 @@ data class HullmodExoticKey(
     }
 }
 
-enum class HullmodExoticHandlerWorkMode { STRICT, LENIENT }
+/**
+ * Enum denoting the "work mode" in which the [HullmodExoticHandler] or it's "flows" are going to be operating.
+ *
+ * For reference:
+ * - the Exotica Techonologies screen in the colony menu will be operating on a STRICT mode
+ * - the Refit screen will be operating in a LENIENT mode
+ *
+ * @see STRICT
+ * @see LENIENT
+ */
+enum class HullmodExoticHandlerWorkMode {
+    /**
+     * "Strict" work mode, where only expected variants will be installed on, and only installed on variants will be
+     * uninstalled from. Anything non-conforming to the actual expected/installed instances will be discarded.
+     *
+     * Used only from "exotica technologies" colony screen.
+     */
+    STRICT,
+
+    /**
+     * "Lenient" work mode, where typically 'expected' variants will be looked and matched by their type, or
+     * 'installed' variants won't be really respected so strictly.
+     *
+     * Used only from "refit" fleet screen.
+     */
+    LENIENT
+}
