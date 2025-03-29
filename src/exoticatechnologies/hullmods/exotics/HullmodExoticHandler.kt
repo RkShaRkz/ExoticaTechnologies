@@ -534,7 +534,7 @@ object HullmodExoticHandler {
                                 // Lets try starting from the HullmodExoticHandler installation
                                 val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
                                         hullmodExotic = hullmodExotic,
-                                        parentFleetMember = fleetMember,     //oh lets hope this one works out ...
+                                        parentFleetMember = fleetMember,
                                         variant = moduleVariant,
                                         workMode = workMode
                                 )
