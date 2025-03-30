@@ -11,29 +11,28 @@ import com.fs.starfarer.api.loading.WeaponSpecAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import exoticatechnologies.hullmods.exotics.ExoticHullmod
 import exoticatechnologies.hullmods.exotics.ExoticHullmodLookup
-import exoticatechnologies.modifications.exotics.impl.AlphaSubcore
 import exoticatechnologies.modifications.exotics.impl.DaemonCore
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.exhaustive
 
 /**
- * Exotic Hullmod used by both [AlphaSubcore] and [DaemonCore]
+ * Exotic Hullmod used by [DaemonCore]
  */
-class AlphaSubcoreHM : ExoticHullmod() {
-    val listener = AlphaSubcoreOPCostListener()
+class DaemonCoreHM : ExoticHullmod() {
+    val listener = DaemonCoreOPCostListener()
 
-    override val hullModId: String = "et_alphasubcore"
+    override val hullModId: String = "et_daemoncore"
 
     init {
         ExoticHullmodLookup.addToLookupMap(this)
     }
 
     private fun hasOPCostListener(stats: MutableShipStatsAPI): Boolean {
-        return stats.hasListenerOfClass(AlphaSubcoreOPCostListener::class.java)
+        return stats.hasListenerOfClass(DaemonCoreOPCostListener::class.java)
     }
 
     override fun applyEffectsBeforeShipCreation(hullSize: HullSize, stats: MutableShipStatsAPI, id: String) {
-        if(stats.variant.hullMods.any { AlphaSubcore.BLOCKED_HULLMODS.contains(it) }) {
+        if(stats.variant.hullMods.any { DaemonCore.BLOCKED_HULLMODS.contains(it) }) {
             return
         }
 
@@ -44,7 +43,7 @@ class AlphaSubcoreHM : ExoticHullmod() {
     }
 
     override fun removeEffectsBeforeShipCreation(hullSize: HullSize, stats: MutableShipStatsAPI, id: String) {
-        stats.removeListenerOfClass(AlphaSubcoreOPCostListener::class.java)
+        stats.removeListenerOfClass(DaemonCoreOPCostListener::class.java)
     }
 
     override fun addPostDescriptionSection(
@@ -54,9 +53,9 @@ class AlphaSubcoreHM : ExoticHullmod() {
         width: Float,
         isForModSpec: Boolean
     ) {
-        if(ship?.variant?.hullMods?.any { AlphaSubcore.BLOCKED_HULLMODS.contains(it) } == true) {
+        if(ship?.variant?.hullMods?.any { DaemonCore.BLOCKED_HULLMODS.contains(it) } == true) {
             StringUtils
-                    .getTranslation("AlphaSubcore", "conflictDetected")
+                    .getTranslation("DaemonCore", "conflictDetected")
                     .addToTooltip(tooltip)
         }
 
@@ -78,7 +77,7 @@ class AlphaSubcoreHM : ExoticHullmod() {
         return true
     }
 
-    class AlphaSubcoreOPCostListener : WeaponOPCostModifier,FighterOPCostModifier {
+    class DaemonCoreOPCostListener : WeaponOPCostModifier,FighterOPCostModifier {
         override fun getWeaponOPCost(stats: MutableShipStatsAPI, weapon: WeaponSpecAPI, currCost: Int): Int {
             return currCost - (WEAPON_REDUCTIONS[weapon.size] ?: 0)
         }

@@ -269,7 +269,8 @@
 		"description": "A Daemon Core is far more efficient at all things warfare-related: ordnance calculations, ammunition placement, and diverting energy from non-efficient subsystems, such as reactive armor and shield emitters.",
 		"tooltip": "Increases usable bandwidth of the ship. Reduces ordnance point costs for weapons and fighters. Increases damage dealt and received.",
 		"needItem": "You need a ${itemName} to install this.",
-		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. Reduces ordnance point costs for weapons by *${smallReduction}/${medReduction}/${largeReduction}* based on weapon size, and for fighters and bombers by *${fghtrReduction}/${bmberReduction}*. Increases damage *dealt* and =received= by &${doubleEdge}%%&."
+		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. Reduces ordnance point costs for weapons by *${smallReduction}/${medReduction}/${largeReduction}* based on weapon size, and for fighters and bombers by *${fghtrReduction}/${bmberReduction}*. Increases damage *dealt* and =received= by &${doubleEdge}%%&.",
+		"conflictDetected": "The subcore is receiving interference from something else installed on the ship, and can't reduce ordnance point costs."
 	},
 	"AnomalousConjuration": {
 		"description": "Impure.",
