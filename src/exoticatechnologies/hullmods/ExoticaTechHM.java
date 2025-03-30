@@ -70,8 +70,6 @@ public class ExoticaTechHM extends BaseHullMod {
         if (shipVariant.hasHullMod(HULLMOD_ID)) {
             shipVariant.removePermaMod(HULLMOD_ID);
         }
-
-        member.updateStats();
     }
 
     @Override
