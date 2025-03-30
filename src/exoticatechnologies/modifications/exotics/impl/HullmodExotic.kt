@@ -18,6 +18,7 @@ import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.datastructures.Optional
+import exoticatechnologies.util.runningFromRefitScreen
 import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -89,14 +90,33 @@ open class HullmodExotic(
                     }
                 },
                 onInstallCallback = object: HullmodExoticHandler.Flows.OnInstallToMemberCallback {
-                    override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI) {
-                        installHullmodOnVariant(moduleVariant)
+                    override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
+                        installThisHullmodExoticToFleetMembersVariant(member, moduleVariant, moduleVariantMods)
                     }
                 }
         )
+        //TODO reevaluate this bit here
+        if (runningFromRefitScreen()) {
+            logIfOverMinLogLevel("onInstall()\tRUNNING FROM REFIT SCREEN", Level.DEBUG)
+            HullmodExoticHandler.Flows.CheckAndInstallOnMemberModule(
+                    member = member,
+                    memberVariant = member.checkRefitVariant(),
+                    hullmodExotic = this@HullmodExotic,
+                    onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
+                        override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
+                            logIfOverMinLogLevel("onInstall()\tshouldInstallOnMemberVariant: ${onShouldResult}, variant: ${moduleVariant}", Level.INFO)
+                        }
+                    },
+                    onInstallCallback = object: HullmodExoticHandler.Flows.OnInstallToMemberCallback {
+                        override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
+                            installThisHullmodExoticToFleetMembersVariant(member, moduleVariant, moduleVariantMods)
+                        }
+                    }
+            )
+        }
     }
 
-    fun installHullmodOnVariant(variant: ShipVariantAPI?) {
+    private fun installHullmodOnVariant(variant: ShipVariantAPI?) {
         variant?.let {
             variant.addPermaMod(hullmodId)
         }
@@ -140,16 +160,39 @@ open class HullmodExotic(
                     }
                 },
                 onRemoveFromMemberModuleCallback = object : HullmodExoticHandler.Flows.OnRemoveFromMemberCallback {
-                    override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI) {
+                    override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
 
                         unapplyExoticHullmodAndRemoveExoticaAndHullmod(
                                 member = member,
                                 moduleVariant = moduleVariant,
-                                optionalMemberMods = Optional.empty()
+                                optionalMemberMods = Optional.of(moduleVariantMods)
                         )
                     }
                 }
         )
+        //TODO reevaluate this bit here
+        if (runningFromRefitScreen()) {
+            HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
+                    fleetMember = member,
+                    fleetMemberVariant = member.checkRefitVariant(),
+                    hullmodExotic = this@HullmodExotic,
+                    onShouldCallback = object : HullmodExoticHandler.Flows.OnShouldCallback {
+                        override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
+                            // Again, do nothing
+                        }
+                    },
+                    onRemoveFromMemberModuleCallback = object : HullmodExoticHandler.Flows.OnRemoveFromMemberCallback {
+                        override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
+
+                            unapplyExoticHullmodAndRemoveExoticaAndHullmod(
+                                    member = member,
+                                    moduleVariant = moduleVariant,
+                                    optionalMemberMods = Optional.of(moduleVariantMods)
+                            )
+                        }
+                    }
+            )
+        }
 
         // And finally, for good measure
         HullmodExoticHandler.removeHullmodExoticFromFleetMember(
@@ -277,6 +320,7 @@ open class HullmodExotic(
         installHullmodOnVariant(moduleVariant)
 
         // This is the installWorkaround code
+        //TODO check if we have it first before adding
         moduleVariantMods.putExotic(ExoticData(this@HullmodExotic.key))
 
         ShipModLoader.set(member, moduleVariant, moduleVariantMods)
