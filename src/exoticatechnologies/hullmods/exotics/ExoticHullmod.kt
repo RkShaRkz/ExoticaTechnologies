@@ -22,9 +22,4 @@ abstract class ExoticHullmod: BaseHullMod() {
      * You should undo all effects you've applied to the [stats] in [applyEffectsBeforeShipCreation]
      */
     abstract fun removeEffectsBeforeShipCreation(hullSize: HullSize, stats: MutableShipStatsAPI, id: String)
-
-    /**
-     * You should undo all effects you've applied to [ship] in [applyEffectsAfterShipCreation]
-     */
-//    abstract fun removeEffectsAfterShipCreation(ship: ShipAPI, id: String)
 }
