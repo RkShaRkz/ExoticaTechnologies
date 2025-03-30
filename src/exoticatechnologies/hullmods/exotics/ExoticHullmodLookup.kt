@@ -18,10 +18,6 @@ object ExoticHullmodLookup {
 
     fun getFromMap(hullmodId: String): Optional<ExoticHullmod> {
         return if (lookupMap.contains(hullmodId)) {
-//            lookupMap[hullmodId]?.let {
-//                Optional.of(it)
-//            }
-
             // Ugh, lets do the ugly thing... but should be fine since it's contained in the map.
             Optional.of(lookupMap[hullmodId]!!)
         } else {
