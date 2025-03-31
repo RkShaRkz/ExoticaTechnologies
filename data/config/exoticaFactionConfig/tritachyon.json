@@ -9,6 +9,7 @@
     "PhasedFighterTether": 0.7,
     "HyperspecLPC": 0.7,
     "PhasefieldEngine": 0.7,
+    "AlphaSubcore": 0.2,
     "TerminatorSubsystems": 0.4
   },
   "allowedUpgrades": {
