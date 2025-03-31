@@ -18,6 +18,7 @@ import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.datastructures.Optional
+import exoticatechnologies.util.runningFromRefitScreen
 import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -150,6 +151,30 @@ open class HullmodExotic(
                     }
                 }
         )
+
+        // This should really not be needed... it wasn't needed for the AlphaSubcore, but somehow... it's needed for DaemonCore
+        if (runningFromRefitScreen()) {
+            HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
+                    fleetMember = member,
+                    fleetMemberVariant = member.checkRefitVariant(),
+                    hullmodExotic = this@HullmodExotic,
+                    onShouldCallback = object : HullmodExoticHandler.Flows.OnShouldCallback {
+                        override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
+                            // Again, do nothing
+                        }
+                    },
+                    onRemoveFromMemberModuleCallback = object : HullmodExoticHandler.Flows.OnRemoveFromMemberCallback {
+                        override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
+
+                            unapplyExoticHullmodAndRemoveExoticaAndHullmod(
+                                    member = member,
+                                    moduleVariant = moduleVariant,
+                                    optionalMemberMods = Optional.of(moduleVariantMods)
+                            )
+                        }
+                    }
+            )
+        }
 
         // And finally, for good measure
         HullmodExoticHandler.removeHullmodExoticFromFleetMember(
