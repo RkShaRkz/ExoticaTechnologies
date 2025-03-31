@@ -152,7 +152,7 @@ open class HullmodExotic(
                 }
         )
 
-        // This should really not be needed... it wasn't needed for the AlphaSubcore, but somehow... it's needed for DaemonCore
+        // While this totally isn't needed for when we're sharing to other modules, it is **VERY** much necessary for when we don't
         if (runningFromRefitScreen()) {
             HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
                     fleetMember = member,
