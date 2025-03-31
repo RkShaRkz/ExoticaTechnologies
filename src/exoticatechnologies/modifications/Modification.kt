@@ -14,7 +14,7 @@ import exoticatechnologies.modifications.conditions.toList
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.upgrades.Upgrade
 import org.apache.log4j.Logger
-import org.jetbrains.annotations.NotNull
+import org.jetbrains.annotations.Nullable
 import org.json.JSONObject
 import org.lazywizard.lazylib.ext.json.optFloat
 import java.awt.Color
@@ -197,10 +197,7 @@ abstract class Modification(val key: String, val settings: JSONObject) {
      *
      * This version is called in [ExoticaTechHM]'s [BaseHullMod.applyEffectsBeforeShipCreation],
      * and is used mainly to determine whether [Exotic.applyExoticToStats] and [Upgrade.applyUpgradeToStats]
-     * are called on modules.
-     *
-     * **Be aware**, that in [BaseHullMod.applyEffectsBeforeShipCreation] time, modules do not exist yet, so
-     * applied effects might only work on just the installable module rather than all of them.
+     * are called on modules
      *
      * **NOTE** A certain false-positive can be observed when playing in 'simulation' mode vs actual combat;
      * namely, while a mod installed on a module (in a multi-module environment) will affect only the module it's
@@ -210,18 +207,36 @@ abstract class Modification(val key: String, val settings: JSONObject) {
      *
      * @see shouldAffectModule
      * @see shouldShareEffectToOtherModules
+     * @see shouldAffectModulesToShareEffectsToOtherModules
      */
     open fun shouldAffectModule(moduleStats: MutableShipStatsAPI): Boolean {
         return true
     }
 
     /**
-     * Relevant only for multi-module ships; if [shouldAffectModule] is true, this determines whether the effects
+     * Relevant only for multi-module ships; if [shouldAffectModule] is **[true]**, this determines whether the effects
      * of the modification should affect (or rather, replicate to) all other modules as well
      *
-     * Only relevant for callbacks happening **after ship creation**
+     * Unsetting (clearing) the special [shouldAffectModulesToShareEffectsToOtherModules] flag makes it disregard the
+     * [shouldAffectModule] requirement
      */
-    open fun shouldShareEffectToOtherModules(@NotNull ship: ShipAPI?, @NotNull module: ShipAPI?) = false
+    open fun shouldShareEffectToOtherModules(@Nullable ship: ShipAPI?, @Nullable module: ShipAPI?) = false
+
+    /**
+     * Special flag used to enforce/bypass the [shouldAffectModule] requirement for sharing effects to other modules
+     * for multi-module ships; this allows for the usecase to limit installing the exotica/upgrade only on main module
+     * but also have it work for (share effects to) the whole ship as well.
+     *
+     * When **[true]** then the [shouldAffectModule] also needs to be true for [shouldShareEffectToOtherModules] to work; or
+     * for effect sharing to work at all.
+     *
+     * When **[false]** then the [shouldAffectModule] doesn't matter for [shouldShareEffectToOtherModules] to work.
+     *
+     * Defaults to **[true]**
+     *
+     * @see shouldShareEffectToOtherModules
+     */
+    open fun shouldAffectModulesToShareEffectsToOtherModules() = true
 
     open fun canApply(member: FleetMemberAPI, mods: ShipModifications?): Boolean {
         return canApply(member, member.variant, mods)

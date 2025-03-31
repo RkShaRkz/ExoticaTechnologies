@@ -60,7 +60,7 @@ public class StringUtils {
         return false;
     }
 
-    public static Translation getTranslation(String parent, String key) {
+    public static synchronized Translation getTranslation(String parent, String key) {
         return new Translation(parent, key);
     }
 
@@ -76,7 +76,7 @@ public class StringUtils {
      * @param values the values
      * @return the string
      */
-    public static String formatString(String format, List<String> keys, List<String> values) {
+    public static synchronized String formatString(String format, List<String> keys, List<String> values) {
         if (keys.size() != values.size()) {
             return null;
         }
@@ -95,7 +95,7 @@ public class StringUtils {
         return new StringBuilder("${").append(key).append("}").toString();
     }
 
-    private static String formatValue(Object value) {
+    private static synchronized String formatValue(Object value) {
         if(value instanceof Float) {
             return Misc.getFormat().format(value);
         } else {
@@ -217,7 +217,7 @@ public class StringUtils {
             this.key = key;
         }
 
-        public Translation format(String flag, Object value) {
+        public synchronized Translation format(String flag, Object value) {
             formats.add(flag);
             values.add(StringUtils.formatValue(value));
 
@@ -340,7 +340,7 @@ public class StringUtils {
             return getModifier(value) + Misc.getRoundedValue(value.floatValue());
         }
 
-        public String toString() {
+        public synchronized String toString() {
             try {
                 String format = formatString(getString(scope, key), formats, values);
 
@@ -378,7 +378,7 @@ public class StringUtils {
             return StringUtils.addToTooltip(tooltip, this.toString(), pad, colors);
         }
 
-        public LabelAPI addToTooltip(TooltipMakerAPI tooltip, UIComponentAPI positionBelowThis) {
+        public synchronized LabelAPI addToTooltip(TooltipMakerAPI tooltip, UIComponentAPI positionBelowThis) {
             LabelAPI label = this.addToTooltip(tooltip, 0);
             UIComponentAPI prev = tooltip.getPrev();
             prev.getPosition().belowLeft(positionBelowThis, 2);

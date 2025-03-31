@@ -1,6 +1,7 @@
 package exoticatechnologies.util
 
 import com.fs.starfarer.api.Global
+import com.fs.starfarer.api.campaign.CoreUITabId
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.combat.WeaponAPI
@@ -11,6 +12,7 @@ import com.fs.starfarer.api.ui.UIPanelAPI
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModifications
+import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.reflect.ReflectionUtils
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -386,6 +388,17 @@ fun ShipAPI.isThisAMultiModuleShipFast(): Boolean {
 }
 
 /**
+ * Returns whether this ship is a multi-module ship - or rather, whether this [FleetMemberAPI] has children.
+ * Internally calls [getChildModuleVariantList] so you might not want to call this in every frame
+ *
+ * @param ship the ship to check
+ * @return [false] if it's a single-module or [true] if it's a multi-module ship
+ */
+fun FleetMemberAPI.isMultiModuleShip(): Boolean {
+    return getChildModuleVariantList(this).isNotEmpty()
+}
+
+/**
  * Method for calculating a vector pointing from [fromVector] to [toVector]
  *
  * @param fromVector the vector from which we want to start pointing
@@ -554,7 +567,8 @@ fun calculateVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Floa
 
 /**
  * Method that combines [lists] into a single List
- * List **have** to be of same type
+ *
+ * Lists **have** to be of same type
  *
  * @param list the list to combine into the resulting list
  * @return list containing all listed elements (arguments)
@@ -647,6 +661,33 @@ fun List<String>.containsIgnoreCase(string: String?): Boolean {
     return false
 }
 
+/**
+ * Method that returns a list of all child module variants belonging to the passed-in [fleetMemberAPI]
+ *
+ * **NOTE:** Does **not** include the root module's variant in the list.
+ *
+ * @param fleetMemberAPI the [FleetMemberAPI] to look up child module variants for
+ * @return a list containing [ShipVariantAPI] variants belonging to child modules, or empty list
+ * if [fleetMemberAPI]'s variant's moduleSlots are empty or [fleetMemberAPI] does not belong to the root module of the ship
+ */
+fun getChildModuleVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantAPI> {
+    val retVal = mutableListOf<ShipVariantAPI>()
+    if (fleetMemberAPI.variant.moduleSlots == null || fleetMemberAPI.variant.moduleSlots.isEmpty()) return emptyList()
+    val moduleSlotList = fleetMemberAPI.variant.moduleSlots
+    for (slot in moduleSlotList) {
+        val moduleVariant = fleetMemberAPI.variant.getModuleVariant(slot)
+        retVal.add(moduleVariant)
+    }
+    return retVal.toList()
+}
+
+/**
+ * Method that checks whether we're currently located in the Refit screen or not.
+ */
+fun runningFromRefitScreen(): Boolean {
+    val runningFromRefitScreen = Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT
+    return runningFromRefitScreen
+}
 
 val <T> T.exhaustive: T
     get() = this
@@ -663,6 +704,16 @@ fun log(logMsg: String, logger: Logger, logLevel: Level = Level.DEBUG) {
             else -> { /* do nothing */ }
         }.exhaustive
     }
+}
+
+fun shouldLog(logMsg: String, logger: Logger, logLevel: Level, minLogLevel: Level = Level.ALL) {
+    // We won't log any logLevels below the minimum one
+    if (logLevel.isGreaterOrEqual(minLogLevel).not()) return;
+    log(
+            logMsg = logMsg,
+            logger = logger,
+            logLevel = logLevel
+    )
 }
 
 object AnonymousLogger {
