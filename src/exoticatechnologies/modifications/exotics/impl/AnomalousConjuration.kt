@@ -32,7 +32,7 @@ import java.awt.Color
 
 class AnomalousConjuration(key: String, settings: JSONObject) : Exotic(key, settings) {
     override var color = Color(180, 255, 200)
-    override var canDropFromCombat: Boolean = false
+    override var canDropFromCombat: Boolean = true
 
     override fun modifyToolTip(
         tooltip: TooltipMakerAPI,
@@ -48,17 +48,13 @@ class AnomalousConjuration(key: String, settings: JSONObject) : Exotic(key, sett
         }
     }
 
-    override fun shouldShow(member: FleetMemberAPI, mods: ShipModifications, market: MarketAPI?): Boolean {
-        return false
-    }
+    override fun shouldShow(member: FleetMemberAPI, mods: ShipModifications, market: MarketAPI?) = true
 
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
         return true
     }
 
-    override fun canUseExoticType(type: ExoticType): Boolean {
-        return false
-    }
+    override fun canUseExoticType(type: ExoticType) = true
 
     override fun getGenerationChanceMult(member: FleetMemberAPI): Float {
         var spawnChance = 1f
@@ -220,8 +216,7 @@ class AnomalousConjuration(key: String, settings: JSONObject) : Exotic(key, sett
                     weightFriends += if (other.isFighter || other.isDrone) {
                         0.25f
                     } else {
-                        val w = Misc.getShipWeight(other)
-                        w
+                        Misc.getShipWeight(other)
                     }
                 }
             }

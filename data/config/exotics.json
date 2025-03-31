@@ -141,7 +141,10 @@
   },
   "AnomalousConjuration": {
     "name": "Anomalous Conjuration",
-    "exoticClass": "exoticatechnologies.modifications.exotics.impl.AnomalousConjuration"
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.AnomalousConjuration",
+    "conditions": [
+      {"id": "hullmods", "operator": "in", "expected": "automated", "cannotApplyReason": "The ship must be an automated ship."}
+    ]
   },
   "SubsumedAlphaCore": {
     "name": "Subsumed Alpha Core",

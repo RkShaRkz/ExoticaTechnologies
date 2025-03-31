@@ -274,7 +274,8 @@
 	},
 	"AnomalousConjuration": {
 		"description": "Impure.",
-		"tooltip": "Impure."
+		"tooltip": "Impure.",
+		"longDescription": "Randomly spawns anomalous fighters during combat."
 	},
 	"SubsumedAlphaCore": {
 		"description": "There's a faint trace of an Alpha-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
