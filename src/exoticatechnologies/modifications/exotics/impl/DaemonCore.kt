@@ -162,7 +162,6 @@ class DaemonCore(key: String, settingsObj: JSONObject) :
             add("specialsphmod_alpha_core_upgrades")
             add("specialsphmod_beta_core_upgrades")
             add("specialsphmod_gamma_core_upgrades")
-//            add("et_alphasubcore")
         }
     }
 }
