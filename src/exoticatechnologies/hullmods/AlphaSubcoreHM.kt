@@ -84,9 +84,11 @@ class AlphaSubcoreHM : ExoticHullmod() {
         }
 
         override fun getFighterOPCost(stats: MutableShipStatsAPI, fighter: FighterWingSpecAPI, currCost: Int): Int {
-            if (fighter.isBomber)
-                return currCost - BOMBER_REDUCTION
-            return currCost - FIGHTER_REDUCTION
+            return if (fighter.isBomber) {
+                currCost - BOMBER_REDUCTION
+            } else {
+                currCost - FIGHTER_REDUCTION
+            }
         }
     }
 
