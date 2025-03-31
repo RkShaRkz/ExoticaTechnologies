@@ -13,6 +13,7 @@ import exoticatechnologies.campaign.market.MarketManager;
 import exoticatechnologies.config.FactionConfigLoader;
 import exoticatechnologies.config.VariantConfigLoader;
 import exoticatechnologies.hullmods.ExoticaTechHM;
+import exoticatechnologies.hullmods.exotics.HullmodExoticHandler;
 import exoticatechnologies.integration.indevo.IndEvoUtil;
 import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.exotics.ExoticSpecialItemPlugin;
@@ -59,6 +60,8 @@ public class ETModPlugin extends BaseModPlugin {
         UpgradesHandler.initialize();
         ExoticsHandler.initialize();
         FactionConfigLoader.load();
+        // And cleanup the HullmodExoticHandler's map
+        HullmodExoticHandler.INSTANCE.reinitialize();
     }
 
     @Override
@@ -81,6 +84,8 @@ public class ETModPlugin extends BaseModPlugin {
         addListeners();
 
         Utilities.mergeChipsIntoCrate(Global.getSector().getPlayerFleet().getCargo());
+        // And cleanup the HullmodExoticHandler's map
+        HullmodExoticHandler.INSTANCE.reinitialize();
     }
 
     public static String getSectorSeedString() {

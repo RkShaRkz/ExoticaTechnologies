@@ -1,6 +1,7 @@
 package exoticatechnologies.util
 
 import com.fs.starfarer.api.Global
+import com.fs.starfarer.api.campaign.CoreUITabId
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.combat.WeaponAPI
@@ -660,6 +661,15 @@ fun List<String>.containsIgnoreCase(string: String?): Boolean {
     return false
 }
 
+/**
+ * Method that returns a list of all child module variants belonging to the passed-in [fleetMemberAPI]
+ *
+ * **NOTE:** Does **not** include the root module's variant in the list.
+ *
+ * @param fleetMemberAPI the [FleetMemberAPI] to look up child module variants for
+ * @return a list containing [ShipVariantAPI] variants belonging to child modules, or empty list
+ * if [fleetMemberAPI]'s variant's moduleSlots are empty or [fleetMemberAPI] does not belong to the root module of the ship
+ */
 fun getChildModuleVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantAPI> {
     val retVal = mutableListOf<ShipVariantAPI>()
     if (fleetMemberAPI.variant.moduleSlots == null || fleetMemberAPI.variant.moduleSlots.isEmpty()) return emptyList()
@@ -671,6 +681,13 @@ fun getChildModuleVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantA
     return retVal.toList()
 }
 
+/**
+ * Method that checks whether we're currently located in the Refit screen or not.
+ */
+fun runningFromRefitScreen(): Boolean {
+    val runningFromRefitScreen = Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT
+    return runningFromRefitScreen
+}
 
 val <T> T.exhaustive: T
     get() = this
@@ -687,6 +704,16 @@ fun log(logMsg: String, logger: Logger, logLevel: Level = Level.DEBUG) {
             else -> { /* do nothing */ }
         }.exhaustive
     }
+}
+
+fun shouldLog(logMsg: String, logger: Logger, logLevel: Level, minLogLevel: Level = Level.ALL) {
+    // We won't log any logLevels below the minimum one
+    if (logLevel.isGreaterOrEqual(minLogLevel).not()) return;
+    log(
+            logMsg = logMsg,
+            logger = logger,
+            logLevel = logLevel
+    )
 }
 
 object AnonymousLogger {

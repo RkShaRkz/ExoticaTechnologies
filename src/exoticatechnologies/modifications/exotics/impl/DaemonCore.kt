@@ -3,16 +3,14 @@ package exoticatechnologies.modifications.exotics.impl
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.campaign.CampaignFleetAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
-import com.fs.starfarer.api.combat.CombatEntityAPI
-import com.fs.starfarer.api.combat.DamageAPI
-import com.fs.starfarer.api.combat.MutableShipStatsAPI
-import com.fs.starfarer.api.combat.ShipAPI
+import com.fs.starfarer.api.combat.*
 import com.fs.starfarer.api.combat.listeners.DamageDealtModifier
 import com.fs.starfarer.api.combat.listeners.DamageTakenModifier
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.Misc
+import exoticatechnologies.hullmods.DaemonCoreHM
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.StringUtils
@@ -61,15 +59,16 @@ class DaemonCore(key: String, settingsObj: JSONObject) :
         expand: Boolean
     ) {
         if (expand) {
-            StringUtils.getTranslation(key, "longDescription")
-                .format("bandwidthIncrease", BANDWIDTH_INCREASE * exoticData.type.getPositiveMult(member, mods))
-                .format("smallReduction", SMALL_REDUCTION)
-                .format("medReduction", MEDIUM_REDUCTION)
-                .format("largeReduction", LARGE_REDUCTION)
-                .format("fghtrReduction", FIGHTER_REDUCTION)
-                .format("bmberReduction", BOMBER_REDUCTION)
-                .format("doubleEdge", DOUBLE_EDGE * exoticData.type.getPositiveMult(member, mods))
-                .addToTooltip(tooltip, title)
+            StringUtils
+                    .getTranslation(key, "longDescription")
+                    .format("bandwidthIncrease", BANDWIDTH_INCREASE * getPositiveMult(member, mods, exoticData))
+                    .format("smallReduction", DaemonCoreHM.WEAPON_REDUCTIONS[WeaponAPI.WeaponSize.SMALL])
+                    .format("medReduction", DaemonCoreHM.WEAPON_REDUCTIONS[WeaponAPI.WeaponSize.MEDIUM])
+                    .format("largeReduction", DaemonCoreHM.WEAPON_REDUCTIONS[WeaponAPI.WeaponSize.LARGE])
+                    .format("fghtrReduction", DaemonCoreHM.FIGHTER_REDUCTION)
+                    .format("bmberReduction", DaemonCoreHM.BOMBER_REDUCTION)
+                    .format("doubleEdge", DOUBLE_EDGE * exoticData.type.getPositiveMult(member, mods))
+                    .addToTooltip(tooltip, title)
         }
     }
 
@@ -120,6 +119,14 @@ class DaemonCore(key: String, settingsObj: JSONObject) :
         return 60f * (exoticData?.type?.getPositiveMult(member, mods) ?: 1f)
     }
 
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
+
+    override fun shouldAffectModulesToShareEffectsToOtherModules() = false
+
+    override fun shouldAffectModule(moduleStats: MutableShipStatsAPI) = false
+
+    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
+
     inner class DaemonCoreDamageTakenListener(val member: FleetMemberAPI, val mods: ShipModifications, val exoticData: ExoticData) : DamageTakenModifier {
         override fun modifyDamageTaken(
             param: Any?,
@@ -149,11 +156,12 @@ class DaemonCore(key: String, settingsObj: JSONObject) :
     companion object {
         private const val ITEM = "tahlan_archdaemoncore"
         private const val BANDWIDTH_INCREASE = 60
-        private const val SMALL_REDUCTION = 1
-        private const val MEDIUM_REDUCTION = 2
-        private const val LARGE_REDUCTION = 4
-        private const val FIGHTER_REDUCTION = 2
-        private const val BOMBER_REDUCTION = 4
         private const val DOUBLE_EDGE = 20f
+
+        val BLOCKED_HULLMODS: MutableSet<String> = HashSet<String>().apply {
+            add("specialsphmod_alpha_core_upgrades")
+            add("specialsphmod_beta_core_upgrades")
+            add("specialsphmod_gamma_core_upgrades")
+        }
     }
 }
