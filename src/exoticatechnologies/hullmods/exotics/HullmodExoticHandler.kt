@@ -2,6 +2,7 @@ package exoticatechnologies.hullmods.exotics
 
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.campaign.CoreUITabId
+import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import exoticatechnologies.modifications.ShipModLoader
@@ -347,9 +348,12 @@ object HullmodExoticHandler {
                     if (hullmodOptional.isPresent()) {
                         val exoticHullmodInstance = hullmodOptional.get()
 
+                        // Since single-moduled ship always return 'null' for variant.statsForOpCosts, and we don't care
+                        // whether the ship is multimodule or singlemodule here, lets grab a non-null variant of them.
+                        val statsToUse = getNonNullStatsToUse(parentFleetMember, variant)
                         exoticHullmodInstance.removeEffectsBeforeShipCreation(
                                 hullSize = variant.hullSpec.hullSize,
-                                stats = variant.statsForOpCosts,
+                                stats = statsToUse,
                                 id = exoticHullmodInstance.hullModId
                         )
 
@@ -431,7 +435,10 @@ object HullmodExoticHandler {
                     if (areHullmodIDsEqual(key.hullmodExotic.getHullmodId(), exoticHullmod.hullModId)) {
                         for (variant in exoticHandlerData.listOfVariantsWeInstalledOn) {
                             val variantHullSize = variant.hullSpec.hullSize
-                            exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, variant.statsForOpCosts, exoticHullmod.hullModId)
+                            // Since single-moduled ship always return 'null' for variant.statsForOpCosts, and we don't care
+                            // whether the ship is multimodule or singlemodule here, lets grab a non-null variant of them.
+                            val statsToUse = getNonNullStatsToUse(fleetMember, variant)
+                            exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, statsToUse, exoticHullmod.hullModId)
                             // Lets not keep track of keys to remove here, but outside of this loop, this spot made sense while
                             // we used a Set to keep track of the keys, so multiple adds of the same key wouldn't cause problems.
                             // Now - we might end up wanting to remove more keys than the map has
@@ -552,6 +559,25 @@ object HullmodExoticHandler {
     private fun runningFromRefitScreen(): Boolean {
         val runningFromRefitScreen = Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT
         return runningFromRefitScreen
+    }
+
+    /**
+     * Because, for some reason, single-module ships' [ShipVariantAPI.getStatsForOpCosts] returns [null], but works fine
+     * for multimoduled ships, it is somewhat safe to assume that if there is only one variant (no child variants)
+     * we can just use the [fleetMember]'s stats instead of the [variant]'s
+     *
+     * @param fleetMember the 'parent' (root module's) fleet member (or the whole ship for single-module ships)
+     * @param variant the variant for which we should return stats, if available
+     *
+     * @return non-null stats that we should use; defaults to [ShipVariantAPI.getStatsForOpCosts] and
+     * falls back to [FleetMemberAPI.getStats] if variant's stats were [null]
+     */
+    private fun getNonNullStatsToUse(fleetMember: FleetMemberAPI, variant: ShipVariantAPI): MutableShipStatsAPI {
+        return if(variant.statsForOpCosts == null) {
+            fleetMember.stats
+        } else {
+            variant.statsForOpCosts
+        }
     }
 
     /**
