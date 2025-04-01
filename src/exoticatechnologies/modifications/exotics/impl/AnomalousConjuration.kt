@@ -26,6 +26,7 @@ import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.StringUtils
+import exoticatechnologies.util.Utilities
 import org.json.JSONObject
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
@@ -48,13 +49,14 @@ class AnomalousConjuration(key: String, settings: JSONObject) : Exotic(key, sett
         }
     }
 
-    override fun shouldShow(member: FleetMemberAPI, mods: ShipModifications, market: MarketAPI?) = true
+    override fun shouldShow(member: FleetMemberAPI, mods: ShipModifications, market: MarketAPI?): Boolean {
+        return Utilities.hasExoticChip(Global.getSector().playerFleet.cargo, key)
+                || Utilities.hasExoticChip(Misc.getStorageCargo(market), key)
+    }
 
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
         return true
     }
-
-    override fun canUseExoticType(type: ExoticType) = true
 
     override fun getGenerationChanceMult(member: FleetMemberAPI): Float {
         var spawnChance = 1f
