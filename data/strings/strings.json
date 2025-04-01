@@ -279,15 +279,18 @@
 	},
 	"SubsumedAlphaCore": {
 		"description": "There's a faint trace of an Alpha-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
-		"tooltip": "There's a faint trace of an Alpha-level AI coming from the ship. Whether it actually wants to be there requires a much closer look."
+		"tooltip": "There's a faint trace of an Alpha-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
+		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. =Does not count towards exotic limit="
 	},
 	"SubsumedBetaCore": {
 		"description": "There's a faint trace of an Beta-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
-		"tooltip": "There's a faint trace of an Beta-level AI coming from the ship. Whether it actually wants to be there requires a much closer look."
+		"tooltip": "There's a faint trace of an Beta-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
+		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. =Does not count towards exotic limit="
 	},
 	"SubsumedGammaCore": {
 		"description": "There's a faint trace of an Gamma-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
-		"tooltip": "There's a faint trace of an Gamma-level AI coming from the ship. Whether it actually wants to be there requires a much closer look."
+		"tooltip": "There's a faint trace of an Gamma-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
+		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. =Does not count towards exotic limit="
 	},
 	"WeldedArmor": {
 		"description": "Improve hull and armor by welding additional armor plates, but reduce EMP resistance and weapon and engine health due to the additional conduits and weight."

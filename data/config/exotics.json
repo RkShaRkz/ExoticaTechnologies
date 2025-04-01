@@ -148,15 +148,24 @@
   },
   "SubsumedAlphaCore": {
     "name": "Subsumed Alpha Core",
-    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedAlphaCore"
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedAlphaCore",
+    "conditions": [
+      {"id": "hullmods", "operator": "in", "expected": "automated", "cannotApplyReason": "The ship must be an automated ship."}
+    ]
   },
   "SubsumedBetaCore": {
     "name": "Subsumed Beta Core",
-    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedBetaCore"
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedBetaCore",
+    "conditions": [
+      {"id": "hullmods", "operator": "in", "expected": "automated", "cannotApplyReason": "The ship must be an automated ship."}
+    ]
   },
   "SubsumedGammaCore": {
     "name": "Subsumed Gamma Core",
-    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedGammaCore"
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedGammaCore",
+    "conditions": [
+      {"id": "hullmods", "operator": "in", "expected": "automated", "cannotApplyReason": "The ship must be an automated ship."}
+    ]
   },
   "GuardianShield": {
     "name": "Guardian Shield",
