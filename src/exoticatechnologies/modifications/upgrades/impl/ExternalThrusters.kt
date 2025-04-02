@@ -154,6 +154,9 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
 
             if (state == State.IN || state == State.ACTIVE) {
                 rocketEngineVisuals()
+
+                // Put the pedal to the metal and don't stop accelerating
+                ship.giveCommand(ShipCommand.ACCELERATE, ship.copyLocation, 0)
             }
 
             if (state == State.OUT) {

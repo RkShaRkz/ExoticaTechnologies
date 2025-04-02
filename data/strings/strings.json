@@ -373,7 +373,7 @@
 	},
 	"ExternalThrusters": {
 		"description": "Install external thrusters and booster rockets to provide a flat increase to top speed.",
-		"tooltip": "*+${maxSpeed}* bonus to max speed.\n*-${suppliesPerMonthFlat}* flat penalty to supplies per month upkeep, as well as an additional *-${suppliesPerMonthPercentage}%%* on top of that.\n\nAlso adds an ability that makes the ship charge straight for 15sec but loses capability to steer left or right. =Works only on module(s) where it's installed=. =Installable only on the main module=."
+		"tooltip": "*+${maxSpeed}* bonus to max speed.\n*-${suppliesPerMonthFlat}* flat penalty to supplies per month upkeep, as well as an additional *-${suppliesPerMonthPercentage}%%* on top of that.\n\nAlso adds an ability that makes the ship charge straight for 15sec but loses capability to steer left or right. *The ship will constantly accelerate forward while the system is active* =Works only on module(s) where it's installed=. =Installable only on the main module=."
 	},
 	"ExoticTypes": {
 		"TooltipText": "Exotics of this type have a ^positive effect multiplier^ of *${positiveMult}x* and a =negative effect multiplier= of *${negativeMult}x*. This affects exotics in differing ways.",
