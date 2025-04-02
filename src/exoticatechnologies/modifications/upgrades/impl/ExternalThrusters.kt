@@ -89,16 +89,17 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
                 val target = ship.shipTarget
 
                 val differenceInDegrees = ship.getAbsoluteAngleToAnotherShip(target)
+                val isWithinChargingArc = differenceInDegrees < ANGLE_TO_HINT_ACTIVATION_TO_AI
 
                 val activationDistanceSquared = DISTANCE_TO_HINT_ACTIVATION_TO_AI * DISTANCE_TO_HINT_ACTIVATION_TO_AI
                 val distanceToTargetSquared = MathUtils.getDistanceSquared(ship.location, target.location)
                 val farEnoughToActivate = distanceToTargetSquared.absoluteValue > activationDistanceSquared
-                if (farEnoughToActivate && differenceInDegrees < 15) {
+                if (farEnoughToActivate && isWithinChargingArc) {
                     // If further than 2000 range and within a 30-degree arc, activate the boosters
                     true
                 } else {
-                    // otherwise, just activate if far enough - this must remain here because kotlin reasons
-                    farEnoughToActivate
+                    // otherwise, don't activate because we don't want to charge in a random direction and end up off course
+                    false
                 }
             } else {
                 // Nothing to charge at or chase, return false
@@ -227,6 +228,7 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
         const val BOOSTER_ROCKETS_OUT_DURATION = 0.6f
 
         const val DISTANCE_TO_HINT_ACTIVATION_TO_AI = 2000
+        const val ANGLE_TO_HINT_ACTIVATION_TO_AI = 15
 
         private val ENGINE_COLOR = Color(225, 95, 0, 255)
         private val ENGINE_ENTRAIL_COLOR = Color(255, 35, 0, 165)
