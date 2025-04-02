@@ -221,7 +221,9 @@ open class HullmodExotic(
         // And the shared common part for both that has nothing to do with the mods
         ExoticaTechHM.addToFleetMember(member, moduleVariant)
         removeHullmodFromVariant(moduleVariant)
-        unapplyExoticHullmodFromVariant(moduleVariant)
+        // grab stats to use
+        val stats = HullmodExoticHandler.getNonNullStatsToUse(member, moduleVariant)
+        unapplyExoticHullmodFromVariant(moduleVariant, stats)
     }
 
     private fun removeHullmodFromVariant(variant: ShipVariantAPI?) {
@@ -245,10 +247,11 @@ open class HullmodExotic(
      * necessary parameters
      *
      * @param variant a [ShipVariantAPI] from which to unapply the [ExoticHullmod]
+     * @param stats the [MutableShipStatsAPI] from which to unapply the [ExoticHullmod]
      */
-    private fun unapplyExoticHullmodFromVariant(variant: ShipVariantAPI) {
+    private fun unapplyExoticHullmodFromVariant(variant: ShipVariantAPI, stats: MutableShipStatsAPI) {
         val variantHullSize = variant.hullSpec.hullSize
-        exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, variant.statsForOpCosts, exoticHullmod.hullModId)
+        exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, stats, exoticHullmod.hullModId)
     }
 
     override fun applyExoticToStats(

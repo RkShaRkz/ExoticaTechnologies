@@ -572,7 +572,7 @@ object HullmodExoticHandler {
      * @return non-null stats that we should use; defaults to [ShipVariantAPI.getStatsForOpCosts] and
      * falls back to [FleetMemberAPI.getStats] if variant's stats were [null]
      */
-    private fun getNonNullStatsToUse(fleetMember: FleetMemberAPI, variant: ShipVariantAPI): MutableShipStatsAPI {
+    internal fun getNonNullStatsToUse(fleetMember: FleetMemberAPI, variant: ShipVariantAPI): MutableShipStatsAPI {
         return if(variant.statsForOpCosts == null) {
             fleetMember.stats
         } else {
