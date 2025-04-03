@@ -43,6 +43,11 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
      */
     private val systemDeactivatedForGood = AtomicBoolean(false)
 
+    /**
+     * This flag is used to avoid looking up through all ships to determine whether the ship is in combat or not
+     */
+    private val shipIsInCombat = AtomicBoolean(false)
+
     private val logger: Logger = Logger.getLogger(GuardianShieldDrone::class.java)
 
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
@@ -111,6 +116,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
 
     override fun onOwnerShipRemovedFromCombat(ship: ShipAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData, reason: ExoticaShipRemovalReason) {
         super.onOwnerShipRemovedFromCombat(ship, member, mods, exoticData, reason)
+        shipIsInCombat.set(false)
 
         log("--> onOwnerShipRemovedFromCombat(ship=$ship, member=$member, mods=$mods, exoticData=$exoticData, reason=$reason)")
         if (::subsystem.isInitialized) {
@@ -121,6 +127,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
 
     override fun onOwnerShipEnteredCombat(ship: ShipAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData) {
         super.onOwnerShipEnteredCombat(ship, member, mods, exoticData)
+        shipIsInCombat.set(true)
 
         log("--> onOwnerShipEnteredCombat(ship=$ship, member=$member, mods=$mods, exoticData=$exoticData)\t\tsystemDeactivatedForGood: ${systemDeactivatedForGood.get()}")
         systemDeactivatedForGood.set(false)
@@ -297,7 +304,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             if (engine.isPaused) {
                 return false
             }
-            if (drone == null) {
+            if (drone == null && isShipAliveAndInCombat()) {
                 drone = spawnDrone()
             }
             drone?.let {
@@ -333,6 +340,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 drone?.let {
                     it.location.set(ship.location.x, ship.location.y)
                     it.facing = ship.facing
+
+                    if (isShipAliveAndInCombat().not()) removeDroneAndDeactivateForGood()
                 }
 
                 shieldController.assesSituation(amount)
@@ -342,13 +351,18 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             }
         }
 
+        private fun isShipAliveAndInCombat() : Boolean {
+            val shipAlive = ship.isAlive
+            val shipInCombat = shipIsInCombat.get() //Global.getCombatEngine().ships.contains(ship)
+
+            return shipAlive && shipInCombat
+        }
+
         override fun dronesExplodeWhenShipDies() = true
 
         override fun onShipDeath() {
             super.onShipDeath()
-            drone?.let {
-                Global.getCombatEngine().removeEntity(it)
-            }
+            removeDroneAndDeactivateForGood()
         }
 
         private fun systemOn() {
