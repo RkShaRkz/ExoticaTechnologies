@@ -16,6 +16,7 @@ import exoticatechnologies.hullmods.ExoticaTechHM;
 import exoticatechnologies.hullmods.exotics.HullmodExoticHandler;
 import exoticatechnologies.integration.indevo.IndEvoUtil;
 import exoticatechnologies.modifications.ShipModLoader;
+import exoticatechnologies.modifications.bandwidth.Bandwidth;
 import exoticatechnologies.modifications.exotics.ExoticSpecialItemPlugin;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
 import exoticatechnologies.modifications.exotics.GenericExoticItemPlugin;
@@ -213,7 +214,15 @@ public class ETModPlugin extends BaseModPlugin {
         @Override
         public void settingsChanged(@NotNull String modId) {
             if (modId.equalsIgnoreCase(MOD_ID)) {
+                // Max Exotics per ship
                 ETModSettings.MAX_EXOTICS = safeUnboxing(LunaSettings.getInt(MOD_ID, "exoticatechnologies_maxExoticas"));
+
+                // Enable max bandwidth extensions
+                int bandwidthExtensionsLevelsEnabled =
+                        safeUnboxing(LunaSettings.getInt(MOD_ID, "exoticatechnologies_enableMaxBandwidthExtensionLevels"));
+                Bandwidth.enableExtensions(bandwidthExtensionsLevelsEnabled);
+
+                // Should overlay exotic icon over exotic item - looks better without it
                 boolean shouldOverlayIcons = safeUnboxing(LunaSettings.getBoolean(MOD_ID, "exoticatechnologies_exoticIconOverlay"));
                 ExoticSpecialItemPlugin.setShouldOverlayExoticIconOverExoticItemIcon(shouldOverlayIcons);
             }
