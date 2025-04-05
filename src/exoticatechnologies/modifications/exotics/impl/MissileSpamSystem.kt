@@ -39,13 +39,22 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
         return true
     }
 
-    override fun modifyToolTip(tooltip: TooltipMakerAPI, title: UIComponentAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData, expand: Boolean) {
-        StringUtils.getTranslation(key, "longDescription")
-                .format("passive_boost", passiveBoostString)
-                .format("active_boost", activeBoostString)
-                .formatFloat("duration", ABILITY_DURATION_IN_SEC * getPositiveMult(member, mods, exoticData))
-                .formatFloat("cooldown", ABILITY_COOLDOWN_IN_SEC * getNegativeMult(member, mods, exoticData))
-                .addToTooltip(tooltip, title)
+    override fun modifyToolTip(
+            tooltip: TooltipMakerAPI,
+            title: UIComponentAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData,
+            expand: Boolean
+    ) {
+        if (expand) {
+            StringUtils.getTranslation(key, "longDescription")
+                    .format("passive_boost", passiveBoostString)
+                    .format("active_boost", activeBoostString)
+                    .formatFloat("duration", ABILITY_DURATION_IN_SEC * getPositiveMult(member, mods, exoticData))
+                    .formatFloat("cooldown", ABILITY_COOLDOWN_IN_SEC * getNegativeMult(member, mods, exoticData))
+                    .addToTooltip(tooltip, title)
+        }
     }
 
     override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = false
