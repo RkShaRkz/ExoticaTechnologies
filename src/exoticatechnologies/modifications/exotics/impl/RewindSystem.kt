@@ -51,11 +51,14 @@ class RewindSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
             member: FleetMemberAPI,
             mods: ShipModifications,
             exoticData: ExoticData,
-            expand: Boolean) {
-        StringUtils.getTranslation(key, "longDescription")
-                .format("how_much", calculateTooltipStringReplacement())
-                .formatFloat("cooldown", COOLDOWN * getNegativeMult(member, mods, exoticData))
-                .addToTooltip(tooltip, title)
+            expand: Boolean
+    ) {
+        if (expand) {
+            StringUtils.getTranslation(key, "longDescription")
+                    .format("how_much", calculateTooltipStringReplacement())
+                    .formatFloat("cooldown", COOLDOWN * getNegativeMult(member, mods, exoticData))
+                    .addToTooltip(tooltip, title)
+        }
     }
 
     override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
