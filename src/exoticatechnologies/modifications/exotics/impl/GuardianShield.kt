@@ -347,7 +347,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 shieldController.assesSituation(amount)
                 shieldController.controlShield(amount)
                 shieldController.shieldPushOutEffect(amount)
-                shieldController.transferFlux(amount, workingMode = FluxTransferMode.ONE_WAY, transfer = USE_TRANSFER)
+                shieldController.transferFlux(amount, workingMode = WORKING_MODE, transfer = USE_TRANSFER)
             }
         }
 
