@@ -453,6 +453,7 @@
 		"missileDamage": "Missile damage",
 		"missileHealth": "Missile health",
 		"missileSpeed": "Missile speed",
+		"missileRange": "Missile range",
 		"missileTurnRate": "Missile turn rate",
 		"missileTurnAcceleration": "Missile turn acceleration",
 		"damageToFighters": "Damage to fighters",
