@@ -30,6 +30,7 @@ import org.magiclib.util.MagicUI
 import java.awt.Color
 import java.util.*
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 class NanotechArmor(key: String, settingsObj: JSONObject) : Exotic(key, settingsObj) {
@@ -146,7 +147,7 @@ class NanotechArmor(key: String, settingsObj: JSONObject) : Exotic(key, settings
             color,
             0f,
             statusBarText,
-            -1
+            damage.roundToInt()
         )
     }
 
@@ -348,4 +349,5 @@ class NanoTechParticleData(
     startingColor = startingColor,
     endColor = endColor,
     spritesInRow = 2,
-    spritesInColumn = 2)
+    spritesInColumn = 2
+)
