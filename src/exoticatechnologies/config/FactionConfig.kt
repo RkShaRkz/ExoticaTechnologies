@@ -138,7 +138,7 @@ class FactionConfig(var factionId: String, loadFromJson: Boolean) {
             if (member.owner == Misc.OWNER_PLAYER) {
                 // For player owned, grab the player's fleet
                 val playerFleet = Global.getSector().playerFleet
-                if (playerFleet.commander.stats.hasSkill(SKILL_BEST_OF_THE_BEST)) {
+                if (playerFleet != null && playerFleet.commander.stats.hasSkill(SKILL_BEST_OF_THE_BEST)) {
                     limit++
                 }
             } else {

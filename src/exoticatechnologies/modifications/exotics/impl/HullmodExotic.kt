@@ -318,10 +318,14 @@ open class HullmodExotic(
         installHullmodOnVariant(moduleVariant)
 
         // This is the installWorkaround code
-        if (moduleVariantMods.hasExotic(this@HullmodExotic.key).not()) {
-            moduleVariantMods.putExotic(ExoticData(this@HullmodExotic.key))
+        if (moduleVariantMods.isUnderExoticLimit(member)) {
+            if (moduleVariantMods.hasExotic(this@HullmodExotic.key).not()) {
+                moduleVariantMods.putExotic(ExoticData(this@HullmodExotic.key))
 
-            ShipModLoader.set(member, moduleVariant, moduleVariantMods)
+                ShipModLoader.set(member, moduleVariant, moduleVariantMods)
+            }
+        } else {
+            logIfOverMinLogLevel("Bailing out - not installing HullmodExotic ${this} on module variant ${moduleVariant} due to already being at Max Exoticas Limit !!!", Level.ERROR)
         }
         // Install the exoticatech hullmod to show the thing we just installed - but only if we don't have mods alerady
         if (hasAnyMods.not()) {

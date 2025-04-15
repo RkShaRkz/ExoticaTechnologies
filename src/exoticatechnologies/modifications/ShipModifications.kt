@@ -172,11 +172,12 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
      *
      * **NOTE** Because of problems caused by multimodule ships, for player ships we will fetch the maximum number
      * via [FactionConfigLoader] and the subsequent [FactionConfig.getMaxExotics] call based on the **player faction's**
-     * ID, as obtained by [Global.getSector]'s [SectorAPI.getPlayerFleet]
+     * ID, as obtained by [Global.getSector]'s [SectorAPI.getPlayerFleet]. Non-player ships will simply default to [getMaxExoticsNumber]
      *
      * @return the maximum number of installable [Exotic]s
      *
      * @see FactionConfig.getMaxExotics
+     * @see getMaxExoticsNumber
      */
     fun getMaxExotics(member: FleetMemberAPI): Int {
         return if (member.fleetData != null && member.fleetData.fleet != null) {
@@ -281,6 +282,20 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
      */
     fun hasAnyModifications(): Boolean {
         return hasExotics() || hasUpgrades()
+    }
+
+    /**
+     * Whether we are under the maximum limit of exotics and can install more, or not
+     *
+     * @param member the [FleetMemberAPI] for which we should check max exotics, used only for determining [FleetMemberAPI.getOwner]
+     *
+     * @see getMaxExotics
+     *
+     * @return whether more exotics can be installed or not
+     */
+    fun isUnderExoticLimit(member: FleetMemberAPI): Boolean {
+        val retVal = getMaxExotics(member) > exotics.getCount(member)
+        return retVal
     }
 
     fun getTags(): List<String> {
