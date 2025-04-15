@@ -1,6 +1,7 @@
 package exoticatechnologies.modifications
 
 import com.fs.starfarer.api.Global
+import com.fs.starfarer.api.campaign.SectorAPI
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.Alignment
@@ -9,6 +10,7 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.ETModSettings
+import exoticatechnologies.config.FactionConfig
 import exoticatechnologies.config.FactionConfigLoader
 import exoticatechnologies.modifications.bandwidth.Bandwidth
 import exoticatechnologies.modifications.bandwidth.BandwidthUtil
@@ -151,6 +153,11 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         exotics.putExotic(exoticData)
     }
 
+    /**
+     * Removes the [exotic]
+     *
+     * @return whether the [Exotic] was successfully removed or not
+     */
     fun removeExotic(exotic: Exotic) {
         exotics.removeExotic(exotic)
     }
@@ -159,6 +166,18 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         return exotics.getData(exotic)
     }
 
+    /**
+     * Returns the maximum number of installable [Exotic]s on the [member], will be increased by 1
+     * if the fleet commander has the "best of the best" skill.
+     *
+     * **NOTE** Because of problems caused by multimodule ships, for player ships we will fetch the maximum number
+     * via [FactionConfigLoader] and the subsequent [FactionConfig.getMaxExotics] call based on the **player faction's**
+     * ID, as obtained by [Global.getSector]'s [SectorAPI.getPlayerFleet]
+     *
+     * @return the maximum number of installable [Exotic]s
+     *
+     * @see FactionConfig.getMaxExotics
+     */
     fun getMaxExotics(member: FleetMemberAPI): Int {
         return if (member.fleetData != null && member.fleetData.fleet != null) {
             // When fleetdata is non-null, just return the max exotics from the faction config (fleetdata's fleet's faction)
@@ -190,6 +209,9 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         }
     }
 
+    /**
+     * Returns the maximum number of installable exotics, defaulting to [ETModSettings.MAX_EXOTICS]
+     */
     private fun getMaxExoticsNumber(): Int {
         return ETModSettings.MAX_EXOTICS
     }
@@ -220,8 +242,13 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         return getUpgrade(upgrade.key)
     }
 
-    fun removeUpgrade(upgrade: Upgrade) {
-        upgrades.removeUpgrade(upgrade)
+    /**
+     * Removes the [upgrade]
+     *
+     * @return whether the [Upgrade] was successfully removed or not
+     */
+    fun removeUpgrade(upgrade: Upgrade): Boolean {
+        return upgrades.removeUpgrade(upgrade)
     }
 
     fun hasUpgrade(upgrade: Upgrade): Boolean {
@@ -239,6 +266,21 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
 
     fun isMaxLevel(member: FleetMemberAPI, upgrade: Upgrade): Boolean {
         return this.getUpgrade(upgrade) >= upgrade.maxLevel
+    }
+
+    /**
+     * Whether we have any exotics or upgrades installed, a convenience method for
+     * ```
+     * hasExotics() || hasUpgrades()
+     * ```
+     *
+     * @return whether we have any exotics or upgrades present or not
+     *
+     * @see hasExotics
+     * @see hasUpgrades
+     */
+    fun hasAnyModifications(): Boolean {
+        return hasExotics() || hasUpgrades()
     }
 
     fun getTags(): List<String> {
