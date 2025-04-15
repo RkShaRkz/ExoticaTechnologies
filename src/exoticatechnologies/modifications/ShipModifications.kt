@@ -160,10 +160,37 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     fun getMaxExotics(member: FleetMemberAPI): Int {
-        if (member.fleetData != null && member.fleetData.fleet != null) {
+        return if (member.fleetData != null && member.fleetData.fleet != null) {
+            // When fleetdata is non-null, just return the max exotics from the faction config (fleetdata's fleet's faction)
             val factionConfig = FactionConfigLoader.getFactionConfig(member.fleetData.fleet.faction.id)
-            return factionConfig.getMaxExotics(member)
+            // return the max exotics from the faction config
+            factionConfig.getMaxExotics(member)
+        } else {
+            // Since child modules have null fleetdata *because reasons*, lets check the owner.
+            // If the owner is PLAYER, then also check the faction and let the factionConfig implementation take over
+            // so that we don't check for skills here too, otherwise just fallback to getMaxExoticsNumber()
+            if (member.owner == Misc.OWNER_PLAYER) {
+                // Grab the playerFleet and the faction ID
+                val playerFleet = Global.getSector().playerFleet
+                if (playerFleet != null) {
+                    val playerFactionId = playerFleet.faction.id
+                    // Now, similarly to above, lets return the max exotics from faction config
+
+                    FactionConfigLoader.getFactionConfig(playerFactionId).getMaxExotics(member)
+                } else {
+                    // Weird edge-case usually happening during game load, fall back to getMaxExoticsNumber()
+
+                    getMaxExoticsNumber()
+                }
+            } else {
+                // For computer players, just return the getMaxExoticsNumber()
+
+                getMaxExoticsNumber()
+            }
         }
+    }
+
+    private fun getMaxExoticsNumber(): Int {
         return ETModSettings.MAX_EXOTICS
     }
 
