@@ -214,7 +214,6 @@ open class HullmodExotic(
             memberMods.hasAnyModifications()
         } else {
             // Otherwise, extract them manually and use them
-//            val memberMods = ShipModLoader.get(member, moduleVariant)   //TODO fix
             val memberMods = ShipModLoader.getFromVariant(moduleVariant)
             memberMods?.let { nonNullMods ->
                 nonNullMods.removeExotic(this@HullmodExotic)
