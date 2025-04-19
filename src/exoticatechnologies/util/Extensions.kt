@@ -662,7 +662,7 @@ fun List<String>.containsIgnoreCase(string: String?): Boolean {
 }
 
 /**
- * Method that returns a list of all child module variants belonging to the passed-in [fleetMemberAPI]
+ * Method that returns a sorted list of all child module variants belonging to the passed-in [fleetMemberAPI]
  *
  * **NOTE:** Does **not** include the root module's variant in the list.
  *
@@ -673,12 +673,21 @@ fun List<String>.containsIgnoreCase(string: String?): Boolean {
 fun getChildModuleVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantAPI> {
     val retVal = mutableListOf<ShipVariantAPI>()
     if (fleetMemberAPI.variant.moduleSlots == null || fleetMemberAPI.variant.moduleSlots.isEmpty()) return emptyList()
-    val moduleSlotList = fleetMemberAPI.variant.moduleSlots
+    val moduleSlotList = fleetMemberAPI.variant.moduleSlots.asSortedStringList()
     for (slot in moduleSlotList) {
         val moduleVariant = fleetMemberAPI.variant.getModuleVariant(slot)
         retVal.add(moduleVariant)
     }
     return retVal.toList()
+}
+
+/**
+ * Returns a sorted list of List<String>
+ */
+fun List<String>.asSortedStringList(): List<String> {
+    val temp = this.toMutableList()
+    temp.sort()
+    return temp.toList()
 }
 
 /**
