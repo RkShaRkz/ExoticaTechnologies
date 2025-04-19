@@ -673,7 +673,7 @@ fun List<String>.containsIgnoreCase(string: String?): Boolean {
 fun getChildModuleVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantAPI> {
     val retVal = mutableListOf<ShipVariantAPI>()
     if (fleetMemberAPI.variant.moduleSlots == null || fleetMemberAPI.variant.moduleSlots.isEmpty()) return emptyList()
-    var moduleSlotList = fleetMemberAPI.variant.moduleSlots.asSortedStringList()
+    val moduleSlotList = fleetMemberAPI.variant.moduleSlots.asSortedStringList()
     for (slot in moduleSlotList) {
         val moduleVariant = fleetMemberAPI.variant.getModuleVariant(slot)
         retVal.add(moduleVariant)
