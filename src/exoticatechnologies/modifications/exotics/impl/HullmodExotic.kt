@@ -320,6 +320,8 @@ open class HullmodExotic(
             // Install the hullmod since we're under the exotic limit, this could have been done outside
             // but somehow feels cleaner to do here
             installHullmodOnVariant(moduleVariant)
+
+            // And proceed to install the HullmodExotic if we don't have it in our variant's ShipModifications
             if (moduleVariantMods.hasExotic(this@HullmodExotic.key).not()) {
                 // Install the HullmodExotic into the ShipModifications moduleVariant's "mods"
                 moduleVariantMods.putExotic(ExoticData(this@HullmodExotic.key))
