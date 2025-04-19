@@ -64,6 +64,11 @@ class ShipModLoader {
 
             return null
         }
+
+        @JvmStatic
+        fun getFromVariant(variant: ShipVariantAPI): ShipModifications? {
+            return VariantTagProvider.inst.getFromVariant(variant)
+        }
     }
 
     interface Provider {

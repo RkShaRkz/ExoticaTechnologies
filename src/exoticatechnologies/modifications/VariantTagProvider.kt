@@ -30,7 +30,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
         }
 
         val cacheMods: ShipModifications? = cache.keys
-            .filter { it == member }
+            .filter { it == member && it.specId == member.specId }
             .firstNotNullOfOrNull { cache[it] }
 
         if (cacheMods != null) {
@@ -81,7 +81,8 @@ open class VariantTagProvider : ShipModLoader.Provider {
 
         if (exoticaTag != null) {
             val jsonStr = exoticaTag.replace(EXOTICA_INDICATOR, "")
-            return convertFromJson(jsonStr)
+            val mods = convertFromJson(jsonStr)
+            return mods
         }
 
         return null

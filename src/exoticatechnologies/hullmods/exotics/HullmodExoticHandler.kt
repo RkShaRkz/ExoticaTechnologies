@@ -581,6 +581,27 @@ object HullmodExoticHandler {
     }
 
     /**
+     * To avoid installing on the wrong list of [ShipModifications] from the [ShipModLoader], we'll use this method
+     * to try and pinch out the mods from the concrete variant by using [ShipModLoader.getFromVariant] - if no such
+     * mods are found, we'll fall back to [ShipModLoader.get]
+     *
+     * @return the found ship modifications list
+     *
+     * @see ShipModLoader.get
+     * @see ShipModLoader.getFromVariant
+     */
+    internal fun getCorrectMods(fleetMember: FleetMemberAPI, variant: ShipVariantAPI): ShipModifications? {
+        val fleetMemberMods = ShipModLoader.get(fleetMember, variant)
+        val variantMods = ShipModLoader.getFromVariant(variant)
+
+        return if (variantMods != null) {
+            variantMods
+        } else {
+            fleetMemberMods
+        }
+    }
+
+    /**
      * Inner "class" holding certain "flows" which are a somewhat long list of steps/actions to perform, such as:
      * - checking and installing on all child modules' variants
      * - checking and installing on member (root) module variant
@@ -658,7 +679,7 @@ object HullmodExoticHandler {
 
                     // Iterate through each slot, getting their variant and trying to install there
                     for (moduleVariant in childModuleVariants) {
-                        val mods = ShipModLoader.get(fleetMember, moduleVariant)
+                        val mods = getCorrectMods(fleetMember, moduleVariant)
                         logIfOverMinLogLevel("onInstall()\tmods: ${mods}", Level.INFO)
                         mods?.let { nonNullMods ->
                             val shouldInstallOnModuleVariant = HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
@@ -668,9 +689,11 @@ object HullmodExoticHandler {
                                     variantList = Optional.of(allVariantsList),
                                     workMode = workMode
                             )
-                            onShouldCallback.execute(shouldInstallOnModuleVariant, moduleVariant)
-                            logIfOverMinLogLevel("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, variant: ${moduleVariant}", Level.INFO)
-                            if (shouldInstallOnModuleVariant) {
+                            val underExoticLimit = nonNullMods.isUnderExoticLimit(fleetMember)
+                            val shouldProceedWithInstallation = shouldInstallOnModuleVariant && underExoticLimit
+                            onShouldCallback.execute(shouldProceedWithInstallation, moduleVariant)
+                            logIfOverMinLogLevel("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, underExoticLimit: ${underExoticLimit}, variant: ${moduleVariant}", Level.INFO)
+                            if (shouldProceedWithInstallation) {
                                 // Lets try starting from the HullmodExoticHandler installation
                                 val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
                                         hullmodExotic = hullmodExotic,
@@ -759,7 +782,7 @@ object HullmodExoticHandler {
                 }
 
                 // Now, get the mods
-                val mods = ShipModLoader.get(member, memberVariant)
+                val mods = getCorrectMods(member, memberVariant)
                 mods?.let { nonNullMods ->
                     val shouldInstallOnMemberVariant = HullmodExoticHandler.shouldInstallHullmodExoticToVariant(
                             hullmodExotic = hullmodExotic,
@@ -768,9 +791,11 @@ object HullmodExoticHandler {
                             variantList = variantListOptional,
                             workMode = workMode
                     )
-                    onShouldCallback.execute(shouldInstallOnMemberVariant, memberVariant)
-                    logIfOverMinLogLevel("onInstall()\tshouldInstallOnMemberVariant: ${shouldInstallOnMemberVariant}, variant: ${memberVariant}", Level.INFO)
-                    if (shouldInstallOnMemberVariant) {
+                    val underExoticLimit = nonNullMods.isUnderExoticLimit(member)
+                    val shouldProceedWithInstallation = shouldInstallOnMemberVariant && underExoticLimit
+                    onShouldCallback.execute(shouldProceedWithInstallation, memberVariant)
+                    logIfOverMinLogLevel("onInstall()\tshouldInstallOnMemberVariant: ${shouldInstallOnMemberVariant}, underExoticLimit: ${underExoticLimit}, variant: ${memberVariant}", Level.INFO)
+                    if (shouldProceedWithInstallation) {
                         val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
                                 hullmodExotic = hullmodExotic,
                                 parentFleetMember = member,
@@ -828,7 +853,7 @@ object HullmodExoticHandler {
 
                 // If we have slots, start doing what needs to be done
                 for (installedOnVariant in installedOnVariantsList) {
-                    val mods = ShipModLoader.get(fleetMember, installedOnVariant)
+                    val mods = getCorrectMods(fleetMember, installedOnVariant)
                     mods?.let { nonNullMods ->
                         // Since this can be *any* HullmodExotic referencing their own ExoticHullmods, we should first
                         // check the ExoticHullmodLookup map for any instances of the exotic hullmod.
@@ -893,7 +918,7 @@ object HullmodExoticHandler {
                 }
 
                 // Carry on
-                val mods = ShipModLoader.get(fleetMember, fleetMemberVariant)
+                val mods = getCorrectMods(fleetMember, fleetMemberVariant)
                 mods?.let { nonNullMods ->
                     val shouldRemoveFromMemberVariant = HullmodExoticHandler.shouldRemoveHullmodExoticFromVariant(
                             hullmodExotic = hullmodExotic,
