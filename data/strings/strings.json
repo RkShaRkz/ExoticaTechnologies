@@ -138,6 +138,7 @@
 		"UpgradeHelp": "Upgrades are incremental changes to the stats of a ship. They cost bandwidth, have a limited number of levels, and installing one without a chip costs credits or resources.",
 		"UpgradeLevel": "Level ${level}",
 		"UpgradePerformedSuccessfully": "Your chief engineer reports that the *${name}* upgrade was a success. It is now *level ${level}*.",
+		"UpgradeCannotBePerformed": "\"Whoops chief. Something went wrong, and we couldn't pull off the *${name}* upgrade you wanted. It is still at *level ${level}*.\"",
 		"UpgradeRecoveredSuccessfully": "Your chief engineer reports that your plan to remove the modification from the ship worked. They say this with the slightest disbelief, as if surprised that the plan worked at all.",
 		"ModDescriptionButtonText": "Description",
 		"ModStatsButtonText": "Stats",

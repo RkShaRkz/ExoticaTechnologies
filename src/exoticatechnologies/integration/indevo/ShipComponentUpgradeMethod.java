@@ -15,6 +15,7 @@ import exoticatechnologies.ui.impl.shop.upgrades.methods.DefaultUpgradeMethod;
 import exoticatechnologies.util.FleetMemberUtils;
 import exoticatechnologies.util.StringUtils;
 import lombok.Getter;
+import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -22,8 +23,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ShipComponentUpgradeMethod extends DefaultUpgradeMethod {
-    @Getter
     public String key = "shipComponents";
+    private final Logger logger = Logger.getLogger(ShipComponentUpgradeMethod.class);
+
     @NotNull
     @Override
     public String getOptionText(@NotNull FleetMemberAPI member, @NotNull ShipModifications mods, @NotNull Upgrade upgrade, @Nullable MarketAPI market) {
@@ -41,7 +43,12 @@ public class ShipComponentUpgradeMethod extends DefaultUpgradeMethod {
     }
 
     @Override
-    public boolean canUse(@NotNull FleetMemberAPI member, ShipModifications mods, Upgrade upgrade, MarketAPI market) {
+    public boolean canUse(
+            @NotNull FleetMemberAPI member,
+            ShipModifications mods,
+            @NotNull Upgrade upgrade,
+            MarketAPI market
+    ) {
         int level = mods.getUpgrade(upgrade);
         int upgradeCost = IndEvoUtil.getUpgradeShipComponentPrice(member, upgrade, level);
         int totalComponents = getTotalComponents(FleetMemberUtils.INSTANCE.findFleetForVariant(member.getVariant(), member), market);
@@ -52,7 +59,13 @@ public class ShipComponentUpgradeMethod extends DefaultUpgradeMethod {
 
     @NotNull
     @Override
-    public String apply(@NotNull FleetMemberAPI member, @NotNull ShipVariantAPI variant, ShipModifications mods, Upgrade upgrade, MarketAPI market) {
+    public String apply(
+            @NotNull FleetMemberAPI member,
+            @NotNull ShipVariantAPI variant,
+            ShipModifications mods,
+            @NotNull Upgrade upgrade,
+            MarketAPI market
+    ) {
         int level = mods.getUpgrade(upgrade);
         int upgradeCost = IndEvoUtil.getUpgradeShipComponentPrice(member, upgrade, level);
 
@@ -65,21 +78,34 @@ public class ShipComponentUpgradeMethod extends DefaultUpgradeMethod {
             upgradeCost = removeCommodityAndReturnRemainingCost(storageCargo, IndEvoUtil.SHIP_COMPONENT_ITEM_ID, upgradeCost);
         }
 
-        CargoAPI fleetCargo = FleetMemberUtils.INSTANCE.findFleetForVariant(member.getVariant(), member).getCargo();
-        if (upgradeCost > 0) {
-            removeCommodity(fleetCargo, IndEvoUtil.SHIP_COMPONENT_ITEM_ID, upgradeCost);
+        //FIXME how is this one different from the other 'variant' we have and use below ???
+        ShipVariantAPI memberVariant = member.getVariant();
+        CampaignFleetAPI variantsFleet = FleetMemberUtils.INSTANCE.findFleetForVariant(memberVariant, member);
+        if (variantsFleet != null) {
+            CargoAPI fleetCargo = variantsFleet.getCargo();
+            if( upgradeCost > 0 ) {
+                removeCommodity(fleetCargo, IndEvoUtil.SHIP_COMPONENT_ITEM_ID, upgradeCost);
+            }
+
+            mods.putUpgrade(upgrade);
+            ShipModLoader.set(member, variant, mods);
+            ExoticaTechHM.addToFleetMember(member, variant);
+
+            Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 1f);
+            return StringUtils
+                    .getTranslation("UpgradesDialog", "UpgradePerformedSuccessfully")
+                    .format("name", upgrade.getName())
+                    .format("level", mods.getUpgrade(upgrade))
+                    .toString();
+        } else {
+            logger.error("Fleet was NULL for (member = "+member+", variant "+memberVariant+") !!!");
+//            throw new IllegalStateException("Fleet was NULL for (member = "+member+", variant "+memberVariant+") !!!");
+            return StringUtils
+                    .getTranslation("UpgradesDialog", "UpgradeCannotBePerformed")
+                    .format("name", upgrade.getName())
+                    .format("level", mods.getUpgrade(upgrade))
+                    .toString();
         }
-
-
-        mods.putUpgrade(upgrade);
-        ShipModLoader.set(member, variant, mods);
-        ExoticaTechHM.addToFleetMember(member, variant);
-
-        Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 1f);
-        return StringUtils.getTranslation("UpgradesDialog", "UpgradePerformedSuccessfully")
-                .format("name", upgrade.getName())
-                .format("level", mods.getUpgrade(upgrade))
-                .toString();
     }
 
     @NotNull
@@ -101,7 +127,13 @@ public class ShipComponentUpgradeMethod extends DefaultUpgradeMethod {
     }
 
     private int getComponentsFromFleetForUpgrade(CampaignFleetAPI fleet) {
-        return Math.round(fleet.getCargo().getCommodityQuantity(IndEvoUtil.SHIP_COMPONENT_ITEM_ID));
+        int retVal = 0;
+
+        if (fleet != null && fleet.getCargo() != null) {
+            retVal = Math.round(fleet.getCargo().getCommodityQuantity(IndEvoUtil.SHIP_COMPONENT_ITEM_ID));
+        }
+
+        return retVal;
     }
 
     private int getComponentsFromStorageForUpgrade(MarketAPI market) {
@@ -130,5 +162,11 @@ public class ShipComponentUpgradeMethod extends DefaultUpgradeMethod {
     @Override
     public boolean shouldLoad() {
         return Global.getSettings().getModManager().isModEnabled("IndEvo");
+    }
+
+    @NotNull
+    @Override
+    public String getKey() {
+        return key;
     }
 }
