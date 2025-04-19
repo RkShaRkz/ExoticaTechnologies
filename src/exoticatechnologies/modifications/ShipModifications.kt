@@ -12,6 +12,7 @@ import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.ETModSettings
 import exoticatechnologies.config.FactionConfig
 import exoticatechnologies.config.FactionConfigLoader
+import exoticatechnologies.hullmods.ExoticaTechHM
 import exoticatechnologies.modifications.bandwidth.Bandwidth
 import exoticatechnologies.modifications.bandwidth.BandwidthUtil
 import exoticatechnologies.modifications.exotics.*
@@ -53,9 +54,11 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         val BANDWIDTH_KEY = "baseBandwidth"
     }
 
+    /**
+     * Identically method to [hasAnyModifications], used in [ExoticaTechHM.addToFleetMember]
+     */
     fun shouldApplyHullmod(): Boolean {
-        return (upgrades.hasUpgrades()
-                || exotics.hasAnyExotic())
+        return (upgrades.hasUpgrades() || exotics.hasAnyExotic())
     }
 
     fun getValue(): Float {
@@ -317,24 +320,20 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     override fun toString(): String {
-        return "ShipModifications{" +
-                "bandwidth=" + bandwidth +
-                ", modules=" + exotics +
-                ", upgrades=" + upgrades +
-                '}'
+        return "ShipModifications{bandwidth=${bandwidth}, exotics=${exotics}, upgrades=${upgrades}}"
     }
 
     private val tooltipColor = Misc.getTextColor()
     private val infoColor = Misc.getPositiveHighlightColor()
     fun populateTooltip(
-        member: FleetMemberAPI,
-        stats: MutableShipStatsAPI,
-        mainTooltip: TooltipMakerAPI,
-        width: Float,
-        height: Float = 350f,
-        expandUpgrades: Boolean,
-        expandExotics: Boolean,
-        noScroller: Boolean = false
+            member: FleetMemberAPI,
+            stats: MutableShipStatsAPI,
+            mainTooltip: TooltipMakerAPI,
+            width: Float,
+            height: Float = 350f,
+            expandUpgrades: Boolean,
+            expandExotics: Boolean,
+            noScroller: Boolean = false
     ) {
         val bandwidth: Float = this.getBandwidthWithExotics(member)
         val bandwidthString = BandwidthUtil.getFormattedBandwidthWithName(bandwidth)
@@ -392,10 +391,10 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     private fun addUpgradeSection(
-        tooltip: TooltipMakerAPI,
-        stats: MutableShipStatsAPI,
-        member: FleetMemberAPI,
-        expandUpgrades: Boolean
+            tooltip: TooltipMakerAPI,
+            stats: MutableShipStatsAPI,
+            member: FleetMemberAPI,
+            expandUpgrades: Boolean
     ): Boolean {
         var addedUpgradeSection = false
         for (upgrade in UpgradesHandler.UPGRADES_LIST) {
@@ -403,9 +402,9 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
             if (!addedUpgradeSection) {
                 addedUpgradeSection = true
                 tooltip.addSectionHeading(
-                    StringUtils.getString("FleetScanner", "UpgradeHeader"),
-                    Alignment.MID,
-                    6f
+                        StringUtils.getString("FleetScanner", "UpgradeHeader"),
+                        Alignment.MID,
+                        6f
                 )
             }
 
@@ -418,10 +417,10 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     private fun addExoticSection(
-        tooltip: TooltipMakerAPI,
-        width: Float,
-        member: FleetMemberAPI,
-        expandExotics: Boolean
+            tooltip: TooltipMakerAPI,
+            width: Float,
+            member: FleetMemberAPI,
+            expandExotics: Boolean
     ): Boolean {
         var addedExoticSection = false
         var lastThing: UIComponentAPI? = null
@@ -430,9 +429,9 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
             if (!addedExoticSection) {
                 addedExoticSection = true
                 tooltip.addSectionHeading(
-                    StringUtils.getString("FleetScanner", "ExoticHeader"),
-                    Alignment.MID,
-                    6f
+                        StringUtils.getString("FleetScanner", "ExoticHeader"),
+                        Alignment.MID,
+                        6f
                 )
                 lastThing = tooltip.prev
             }
@@ -464,13 +463,13 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     fun populateTooltip(
-        member: FleetMemberAPI,
-        mainTooltip: TooltipMakerAPI,
-        width: Float,
-        height: Float = 350f,
-        expandUpgrades: Boolean,
-        expandExotics: Boolean,
-        noScroller: Boolean = false
+            member: FleetMemberAPI,
+            mainTooltip: TooltipMakerAPI,
+            width: Float,
+            height: Float = 350f,
+            expandUpgrades: Boolean,
+            expandExotics: Boolean,
+            noScroller: Boolean = false
     ) {
         populateTooltip(member, member.stats, mainTooltip, width, height, expandUpgrades, expandExotics, noScroller)
     }

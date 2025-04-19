@@ -110,9 +110,7 @@ class ETExotics {
     }
 
     override fun toString(): String {
-        return "ETExotics{" +
-                "exoticData=" + exoticData +
-                '}'
+        return "ETExotics{exotics=${exotics},exoticData=${exoticData}}"
     }
 
     fun toJson(): JSONObject? {

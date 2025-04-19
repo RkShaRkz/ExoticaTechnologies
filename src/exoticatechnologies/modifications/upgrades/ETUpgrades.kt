@@ -92,9 +92,7 @@ class ETUpgrades {
     }
 
     override fun toString(): String {
-        return "ETUpgrades{" +
-                "upgrades=" + upgrades +
-                '}'
+        return "ETUpgrades{upgrades=${upgrades}}"
     }
 
     fun toJson(): JSONObject {
