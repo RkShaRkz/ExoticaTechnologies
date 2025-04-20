@@ -313,28 +313,27 @@ open class HullmodExotic(
      * - and finally adds the ExoticaTech hullmod by calling [ExoticaTechHM.addToFleetMember]
      */
     private fun installThisHullmodExoticToFleetMembersVariant(member: FleetMemberAPI, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
-        val hasAnyMods = moduleVariantMods.hasAnyModifications()
+        // Since we already have the exotic installed when we come to this method,
+        // due to chip's InstallMethod implementation, the whole "add hullmods if we don't have any mods" approach
+        // is broken by design, so just proceed to install normally
 
-        // This is the installWorkaround code
+        // This is the installWorkaround code - relevant mostly for modules we "shared installation" to
+        // We have this "if under exotic limit" for child modules, since the InstallMethod will take care of
+        // the installing-module (it won't be applicable if over)
         if (moduleVariantMods.isUnderExoticLimit(member)) {
             // Install the hullmod since we're under the exotic limit, this could have been done outside
             // but somehow feels cleaner to do here
             installHullmodOnVariant(moduleVariant)
 
-            // And proceed to install the HullmodExotic if we don't have it in our variant's ShipModifications
-            if (moduleVariantMods.hasExotic(this@HullmodExotic.key).not()) {
-                // Install the HullmodExotic into the ShipModifications moduleVariant's "mods"
-                moduleVariantMods.putExotic(ExoticData(this@HullmodExotic.key))
+            // And proceed to install the HullmodExotic into the ShipModifications moduleVariant's "mods"
+            moduleVariantMods.putExotic(ExoticData(this@HullmodExotic.key))
 
-                ShipModLoader.set(member, moduleVariant, moduleVariantMods)
-            }
+            ShipModLoader.set(member, moduleVariant, moduleVariantMods)
         } else {
             logIfOverMinLogLevel("Bailing out - not installing HullmodExotic ${this} on module variant ${moduleVariant} due to already being at Max Exoticas Limit !!!", Level.ERROR)
         }
-        // Install the exoticatech hullmod to show the thing we just installed - but only if we don't have mods alerady
-        if (hasAnyMods.not()) {
-            ExoticaTechHM.addToFleetMember(member, moduleVariant)
-        }
+        // Install the exoticatech hullmod to show the thing we just installed
+        ExoticaTechHM.addToFleetMember(member, moduleVariant)
     }
 
     private fun logIfOverMinLogLevel(logMsg: String, logLevel: Level) {
