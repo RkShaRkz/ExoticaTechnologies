@@ -128,7 +128,8 @@
 		"InstallExoticChip": "Use chip",
 		"RecoverExotic": "Recover chip",
 		"DestroyExotic": "Destroy",
-		"InstalledTitle": "INSTALLED"
+		"InstalledTitle": "INSTALLED",
+		"DontDoFromRefitScreen": "Don't use from Refit screen."
 	},
 	"ExoticCosts": {
 		"BandwidthGivenByExotic": "Max bandwidth: *${bandwidth}* (*${exoticBandwidth}*)"

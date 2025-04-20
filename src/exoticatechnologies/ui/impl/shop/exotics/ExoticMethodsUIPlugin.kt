@@ -17,6 +17,8 @@ import exoticatechnologies.ui.InteractiveUIPanelPlugin
 import exoticatechnologies.ui.StringTooltip
 import exoticatechnologies.ui.impl.shop.exotics.methods.ExoticMethod
 import exoticatechnologies.util.StringUtils
+import exoticatechnologies.util.runningFromExoticaTechnologiesScreen
+import exoticatechnologies.util.runningFromRefitScreen
 import org.apache.log4j.Logger
 import java.awt.Color
 
@@ -64,6 +66,8 @@ class ExoticMethodsUIPlugin(
             showCannotApply(mods, tooltip)
 
             prev = tooltip.prev
+        } else if (exotic.showWarningIfApplyingFromRefitScreen() && runningFromExoticaTechnologiesScreen().not()) {
+            tooltip.addTitle(StringUtils.getString("ExoticsDialog", "DontDoFromRefitScreen"), Color(200, 50, 0))
         } else if (!isUnderExoticLimit(member, mods)) {
             tooltip.addTitle(StringUtils.getString("Conditions", "CannotApplyTitle"), Color(200, 100, 100))
 
