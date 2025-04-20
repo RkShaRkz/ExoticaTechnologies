@@ -12,6 +12,7 @@ import exoticatechnologies.hullmods.exotics.ExoticHullmodLookup
 import exoticatechnologies.hullmods.exotics.HullmodExoticHandler
 import exoticatechnologies.hullmods.exotics.HullmodExoticKey
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
+import exoticatechnologies.util.StarsectorAPIInteractor
 import exoticatechnologies.util.datastructures.Optional
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -31,6 +32,8 @@ class HullmodExoticHandlerTests {
     fun setup() {
         // Just clear the lookup map for each test
         HullmodExoticHandler.testsOnly_clearLookupMap()
+        // Set the "test mode" on StarsectorAPI interactor and default to "not in refit screen"
+        StarsectorAPIInteractor.setWorkingInTestMode(true, false)
     }
 
     @Test
@@ -263,6 +266,7 @@ class HullmodExoticHandlerTests {
         Assert.assertEquals(1, handler.testsOnly_grabAllKeysForParticularFleetMember(member2).size)
     }
 
+    //TODO write tests for flows ...
 
 
     private fun createAnnonymousHullmodExotic(key: String, settingsJson: JSONObject = EXOTIC_JSON, hullmodId: String): HullmodExotic {

@@ -9,6 +9,7 @@ import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.refit.checkRefitVariant
+import exoticatechnologies.util.StarsectorAPIInteractor
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.getChildModuleVariantList
 import exoticatechnologies.util.shouldLog
@@ -557,8 +558,7 @@ object HullmodExoticHandler {
      * "lax" version hopefully works ...
      */
     private fun runningFromRefitScreen(): Boolean {
-        val runningFromRefitScreen = Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT
-        return runningFromRefitScreen
+        return StarsectorAPIInteractor.runningFromRefitScreen()
     }
 
     /**
