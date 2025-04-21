@@ -200,6 +200,7 @@ open class HullmodExotic(
      * of the [moduleVariant] or in case it's empty, the 'mods' will be fetched manually via [get] before commencing
      * with the first step - removal of the exotica.
      *
+     * Opposite method of [installThisHullmodExoticToFleetMembersVariant]
      *
      * @param member the "parent" [FleetMemberAPI]
      * @param moduleVariant the [ShipVariantAPI] of the module in question
@@ -211,26 +212,19 @@ open class HullmodExotic(
             val memberMods = optionalMemberMods.get()
             memberMods.removeExotic(this@HullmodExotic)
             ShipModLoader.set(member, moduleVariant, memberMods)
-
-            // And return if we have any mods (exotics or upgrades) left
-            memberMods.hasAnyModifications()
         } else {
             // Otherwise, extract them manually and use them
-            val mods = ShipModLoader.get(member, moduleVariant)
             val memberMods = ShipModLoader.getFromVariant(moduleVariant)
             memberMods?.let { nonNullMods ->
                 nonNullMods.removeExotic(this@HullmodExotic)
                 ShipModLoader.set(member, moduleVariant, nonNullMods)
-
-                // And return if we have any modifications (exotics or upgrades) left
-                nonNullMods.hasAnyModifications()
             }
-            // In case we didn't have any non-null mods, let's default to 'false' for having more exotics
         }
+
         // Refresh (or remove) the ExoticaTech hullmod
         ExoticaTechHM.addToFleetMember(member, moduleVariant)
-
         removeHullmodFromVariant(moduleVariant)
+
         // grab stats to use
         val stats = HullmodExoticHandler.getNonNullStatsToUse(member, moduleVariant)
         unapplyExoticHullmodFromVariant(moduleVariant, stats)
@@ -311,6 +305,10 @@ open class HullmodExotic(
      * - adds this [HullmodExotic.key] to the [moduleVariantMods]
      * - calls [ShipModLoader.set] to install the [Exotic]
      * - and finally adds the ExoticaTech hullmod by calling [ExoticaTechHM.addToFleetMember]
+     *
+     * @param member the root module's [FleetMemberAPI]
+     * @param moduleVariant the [ShipVariantAPI] of the module we're supposed to install the hullmod to
+     * @param moduleVariantMods the [ShipModifications] belonging to the module where the Exotic is going to be installed
      */
     private fun installThisHullmodExoticToFleetMembersVariant(member: FleetMemberAPI, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
         // Since we already have the exotic installed when we come to this method,
