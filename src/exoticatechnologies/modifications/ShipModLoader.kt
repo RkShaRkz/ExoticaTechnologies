@@ -32,21 +32,25 @@ class ShipModLoader {
         private val inst = ShipModLoader()
 
         @JvmStatic
+        @Synchronized
         fun get(member: FleetMemberAPI, variant: ShipVariantAPI): ShipModifications? {
             return inst.getData(member, variant)
         }
 
         @JvmStatic
+        @Synchronized
         fun set(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {
             return inst.saveData(member, variant, mods)
         }
 
         @JvmStatic
+        @Synchronized
         fun remove(member: FleetMemberAPI, variant: ShipVariantAPI) {
             return inst.removeData(member, variant)
         }
 
         @JvmStatic
+        @Synchronized
         fun getForSpecialData(shipData: ShipRecoverySpecial.PerShipData): ShipModifications? {
             if (shipData.getVariant() != null) {
                 val mods = VariantTagProvider.inst.getFromVariant(shipData.getVariant())
@@ -66,6 +70,7 @@ class ShipModLoader {
         }
 
         @JvmStatic
+        @Synchronized
         fun getFromVariant(variant: ShipVariantAPI): ShipModifications? {
             return VariantTagProvider.inst.getFromVariant(variant)
         }
