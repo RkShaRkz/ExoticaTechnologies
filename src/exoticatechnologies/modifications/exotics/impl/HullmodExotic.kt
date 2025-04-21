@@ -207,7 +207,7 @@ open class HullmodExotic(
      */
     private fun unapplyExoticHullmodAndRemoveExoticaAndHullmod(member: FleetMemberAPI, moduleVariant: ShipVariantAPI, optionalMemberMods: Optional<ShipModifications>) {
         // If optional is there
-        val hasAnyMods = if (optionalMemberMods.isPresent()) {
+        if (optionalMemberMods.isPresent()) {
             val memberMods = optionalMemberMods.get()
             memberMods.removeExotic(this@HullmodExotic)
             ShipModLoader.set(member, moduleVariant, memberMods)
@@ -216,6 +216,7 @@ open class HullmodExotic(
             memberMods.hasAnyModifications()
         } else {
             // Otherwise, extract them manually and use them
+            val mods = ShipModLoader.get(member, moduleVariant)
             val memberMods = ShipModLoader.getFromVariant(moduleVariant)
             memberMods?.let { nonNullMods ->
                 nonNullMods.removeExotic(this@HullmodExotic)
@@ -223,15 +224,12 @@ open class HullmodExotic(
 
                 // And return if we have any modifications (exotics or upgrades) left
                 nonNullMods.hasAnyModifications()
-            } ?: false
+            }
             // In case we didn't have any non-null mods, let's default to 'false' for having more exotics
         }
-        // And the shared common part for both that has nothing to do with the mods
-        // Remove "exoticatech" hullmod only if we ran out of exoticas on the member
-        if (hasAnyMods.not()) {
-            // If we don't have any more exotics, remove the "exoticatech" hullmod
-            ExoticaTechHM.addToFleetMember(member, moduleVariant)
-        }
+        // Refresh (or remove) the ExoticaTech hullmod
+        ExoticaTechHM.addToFleetMember(member, moduleVariant)
+
         removeHullmodFromVariant(moduleVariant)
         // grab stats to use
         val stats = HullmodExoticHandler.getNonNullStatsToUse(member, moduleVariant)
