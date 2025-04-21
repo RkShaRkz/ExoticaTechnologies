@@ -12,6 +12,7 @@ import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.StarsectorAPIInteractor
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.getChildModuleVariantList
+import exoticatechnologies.util.runningFromExoticaTechnologiesScreen
 import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -645,11 +646,13 @@ object HullmodExoticHandler {
             ) {
                 // First things first, figure out whether we're running from Refit or Exotica screen
                 val isFromRefitScreen = runningFromRefitScreen()
-                val workMode = if (isFromRefitScreen) {
-                    HullmodExoticHandlerWorkMode.LENIENT
-                } else {
-                    HullmodExoticHandlerWorkMode.STRICT
+                val workModeOptional = getWorkModeOptional()
+                if (workModeOptional.isEmpty()) {
+                    // If empty, log error and return.
+                    logIfOverMinLogLevel("Illegal state detected, tried to CheckAndInstallOnAllChildModulesVariants() from neither Refit or ExoticaTech screens! Bailing out...", Level.ERROR)
+                    return
                 }
+                val workMode = workModeOptional.get()
 
                 // Carry on
 
@@ -733,11 +736,13 @@ object HullmodExoticHandler {
             ) {
                 // First things first, figure out whether we're running from Refit or Exotica screen
                 val isFromRefitScreen = runningFromRefitScreen()
-                val workMode = if (isFromRefitScreen) {
-                    HullmodExoticHandlerWorkMode.LENIENT
-                } else {
-                    HullmodExoticHandlerWorkMode.STRICT
+                val workModeOptional = getWorkModeOptional()
+                if (workModeOptional.isEmpty()) {
+                    // If empty, log error and return.
+                    logIfOverMinLogLevel("Illegal state detected, tried to CheckAndInstallOnMemberModule() from neither Refit or ExoticaTech screens! Bailing out...", Level.ERROR)
+                    return
                 }
+                val workMode = workModeOptional.get()
 
                 // Carry on
                 val shouldShareEffectToOtherModules = hullmodExotic.shouldShareEffectToOtherModules(null, null)
@@ -828,12 +833,13 @@ object HullmodExoticHandler {
                     onRemoveFromChildModuleCallback: OnRemoveFromChildModuleCallback
             ) {
                 // First things first, figure out whether we're running from Refit or Exotica screen
-                val isFromRefitScreen = runningFromRefitScreen()
-                val workMode = if (isFromRefitScreen) {
-                    HullmodExoticHandlerWorkMode.LENIENT
-                } else {
-                    HullmodExoticHandlerWorkMode.STRICT
+                val workModeOptional = getWorkModeOptional()
+                if (workModeOptional.isEmpty()) {
+                    // If empty, log error and return.
+                    logIfOverMinLogLevel("Illegal state detected, tried to CheckAndRemoveFromAllChildModulesVariants() from neither Refit or ExoticaTech screens! Bailing out...", Level.ERROR)
+                    return
                 }
+                val workMode = workModeOptional.get()
 
                 //Lets go through all 'installed modules' and uninstall from them, instead of these module slots
                 // that were the root cause of the whole problem... damn you 3-5am copypasted code ...
@@ -910,12 +916,13 @@ object HullmodExoticHandler {
                     onRemoveFromMemberModuleCallback: OnRemoveFromMemberCallback
             ) {
                 // First things first, figure out whether we're running from Refit or Exotica screen
-                val isFromRefitScreen = runningFromRefitScreen()
-                val workMode = if (isFromRefitScreen) {
-                    HullmodExoticHandlerWorkMode.LENIENT
-                } else {
-                    HullmodExoticHandlerWorkMode.STRICT
+                val workModeOptional = getWorkModeOptional()
+                if (workModeOptional.isEmpty()) {
+                    // If empty, log error and return.
+                    logIfOverMinLogLevel("Illegal state detected, tried to CheckAndRemoveFromMemberModule() from neither Refit or ExoticaTech screens! Bailing out...", Level.ERROR)
+                    return
                 }
+                val workMode = workModeOptional.get()
 
                 // Carry on
                 val mods = getCorrectMods(fleetMember, fleetMemberVariant)
@@ -983,6 +990,28 @@ object HullmodExoticHandler {
          */
         interface OnRemoveFromMemberCallback {
             fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications)
+        }
+    }
+
+    /**
+     * Method for returning an [Optional] containing the [HullmodExoticHandlerWorkMode] which corresponds
+     * to the current screen we're in.
+     *
+     * For Refit screen - it's going to be [HullmodExoticHandlerWorkMode.LENIENT]
+     *
+     * For Exotica Technologies screen - it's going to be [HullmodExoticHandlerWorkMode.STRICT]
+     *
+     * For any other place - it's going to be [Optional.empty]
+     *
+     * @return the Optional containing the work mode, or nothing
+     */
+    private fun getWorkModeOptional(): Optional<HullmodExoticHandlerWorkMode> {
+        return if (runningFromRefitScreen()) {
+            Optional.of(HullmodExoticHandlerWorkMode.LENIENT)
+        } else if (runningFromExoticaTechnologiesScreen()) {
+            Optional.of(HullmodExoticHandlerWorkMode.STRICT)
+        } else {
+            Optional.empty()
         }
     }
 
