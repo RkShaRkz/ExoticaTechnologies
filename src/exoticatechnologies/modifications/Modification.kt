@@ -238,6 +238,15 @@ abstract class Modification(val key: String, val settings: JSONObject) {
      */
     open fun shouldAffectModulesToShareEffectsToOtherModules() = true
 
+    /**
+     * Due to observed problems with some modifications when they're applied from the Refit screen versus the
+     * Exotica Technologies colony screen, this method is used to signify whether they should show the warning
+     * above the apply button, to make it clear that they **should** instead be installed/uninstalled from Exotica screen
+     *
+     * Defaults to **[false]**
+     */
+    open fun showWarningIfApplyingFromRefitScreen() = false
+
     open fun canApply(member: FleetMemberAPI, mods: ShipModifications?): Boolean {
         return canApply(member, member.variant, mods)
     }

@@ -694,8 +694,14 @@ fun List<String>.asSortedStringList(): List<String> {
  * Method that checks whether we're currently located in the Refit screen or not.
  */
 fun runningFromRefitScreen(): Boolean {
-    val runningFromRefitScreen = Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT
-    return runningFromRefitScreen
+    return StarsectorAPIInteractor.runningFromRefitScreen()
+}
+
+/**
+ * Method that checks whether we're currently located in the "Exotica Technologies" screen or not.
+ */
+fun runningFromExoticaTechnologiesScreen(): Boolean {
+    return StarsectorAPIInteractor.runningFromExoticaTechnologiesScreen()
 }
 
 val <T> T.exhaustive: T

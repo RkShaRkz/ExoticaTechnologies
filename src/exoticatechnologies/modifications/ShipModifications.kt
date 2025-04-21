@@ -161,8 +161,8 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
      *
      * @return whether the [Exotic] was successfully removed or not
      */
-    fun removeExotic(exotic: Exotic) {
-        exotics.removeExotic(exotic)
+    fun removeExotic(exotic: Exotic): Boolean {
+        return exotics.removeExotic(exotic)
     }
 
     fun getExoticData(exotic: Exotic): ExoticData? {
