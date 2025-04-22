@@ -20,7 +20,6 @@ import exoticatechnologies.ui.impl.shop.exotics.methods.ExoticMethod
 import exoticatechnologies.ui.impl.shop.exotics.methods.RecoverMethod
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.runningFromExoticaTechnologiesScreen
-import exoticatechnologies.util.runningFromRefitScreen
 import org.apache.log4j.Logger
 import java.awt.Color
 
@@ -52,8 +51,19 @@ class ExoticMethodsUIPlugin(
         methodsTooltip = tooltip
 
         var prev: UIComponentAPI? = null
+        val shouldExoticWarn = exotic.showWarningIfApplyingFromRefitScreen() && runningFromExoticaTechnologiesScreen().not()
         if (mods.hasExotic(exotic)) {
-            tooltip.addTitle(StringUtils.getString("ExoticsDialog", "InstalledTitle"))
+            // Due to the "warning" thing complicating things a bit, lets make it proper by joining the 'install' and 'warning'
+            if (shouldExoticWarn) {
+                // In case we need to warn, we need to do two things:
+                // concat the "installed" and "warning" string
+                // add them together in red color
+                val joinedInstallWarningString = "${StringUtils.getString("ExoticsDialog", "InstalledTitle")} - ${StringUtils.getString("ExoticsDialog", "DontDoFromRefitScreen")}"
+                tooltip.addTitle(joinedInstallWarningString, Color(200, 50, 0))
+            } else {
+                // Otherwise, we just did what we used to do - show normal 'installed' string
+                tooltip.addTitle(StringUtils.getString("ExoticsDialog", "InstalledTitle"))
+            }
         } else if (!exotic.canApply(member, mods)) {
             if (exotic.conditionsDisjunct) {
                 val titleString = StringUtils
@@ -68,7 +78,7 @@ class ExoticMethodsUIPlugin(
             showCannotApply(mods, tooltip)
 
             prev = tooltip.prev
-        } else if (exotic.showWarningIfApplyingFromRefitScreen() && runningFromExoticaTechnologiesScreen().not()) {
+        } else if (shouldExoticWarn) {
             tooltip.addTitle(StringUtils.getString("ExoticsDialog", "DontDoFromRefitScreen"), Color(200, 50, 0))
             // While it would make sense to set a 'flag' here to prevent removal, this one will be shown only *before*
             // an Exotic has been installed. After it's been installed, the first if() will add a "INSTALLED" tooltip
