@@ -13,6 +13,8 @@ import exoticatechnologies.modifications.conditions.ConditionDict
 import exoticatechnologies.modifications.conditions.toList
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.upgrades.Upgrade
+import exoticatechnologies.ui.impl.shop.exotics.ExoticMethodsUIPlugin
+import exoticatechnologies.ui.impl.shop.exotics.methods.ExoticMethod
 import org.apache.log4j.Logger
 import org.jetbrains.annotations.Nullable
 import org.json.JSONObject
@@ -243,9 +245,26 @@ abstract class Modification(val key: String, val settings: JSONObject) {
      * Exotica Technologies colony screen, this method is used to signify whether they should show the warning
      * above the apply button, to make it clear that they **should** instead be installed/uninstalled from Exotica screen
      *
+     * It will also block "removal" [ExoticMethod]s in [ExoticMethodsUIPlugin] if [blockRemovalFromRefitScreen] is set
+     *
+     *
      * Defaults to **[false]**
+     *
+     * @return whether this modification should show a warning in exotica screen
+     *
+     * @see blockRemovalFromRefitScreen
      */
     open fun showWarningIfApplyingFromRefitScreen() = false
+
+    /**
+     * Highly related to [showWarningIfApplyingFromRefitScreen] - this method is in charge of dictating whether removing
+     * the modification from the refit screen should be blocked or not
+     *
+     * @return whether removing should be blocked from Refit screen
+     *
+     * @see showWarningIfApplyingFromRefitScreen
+     */
+    open fun blockRemovalFromRefitScreen() = false
 
     open fun canApply(member: FleetMemberAPI, mods: ShipModifications?): Boolean {
         return canApply(member, member.variant, mods)

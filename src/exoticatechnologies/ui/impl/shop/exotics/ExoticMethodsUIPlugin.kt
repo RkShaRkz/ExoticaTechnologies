@@ -15,7 +15,9 @@ import exoticatechnologies.modifications.exotics.ExoticsHandler
 import exoticatechnologies.ui.ButtonHandler
 import exoticatechnologies.ui.InteractiveUIPanelPlugin
 import exoticatechnologies.ui.StringTooltip
+import exoticatechnologies.ui.impl.shop.exotics.methods.DestroyMethod
 import exoticatechnologies.ui.impl.shop.exotics.methods.ExoticMethod
+import exoticatechnologies.ui.impl.shop.exotics.methods.RecoverMethod
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.runningFromExoticaTechnologiesScreen
 import exoticatechnologies.util.runningFromRefitScreen
@@ -68,6 +70,9 @@ class ExoticMethodsUIPlugin(
             prev = tooltip.prev
         } else if (exotic.showWarningIfApplyingFromRefitScreen() && runningFromExoticaTechnologiesScreen().not()) {
             tooltip.addTitle(StringUtils.getString("ExoticsDialog", "DontDoFromRefitScreen"), Color(200, 50, 0))
+            // While it would make sense to set a 'flag' here to prevent removal, this one will be shown only *before*
+            // an Exotic has been installed. After it's been installed, the first if() will add a "INSTALLED" tooltip
+            // and we won't even enter here anymore - just in case you get another dumb idea to try it like that.
         } else if (!isUnderExoticLimit(member, mods)) {
             tooltip.addTitle(StringUtils.getString("Conditions", "CannotApplyTitle"), Color(200, 100, 100))
 
@@ -79,7 +84,11 @@ class ExoticMethodsUIPlugin(
             tooltip.addTitle(StringUtils.getString("UpgradeMethods", "UpgradeMethodsTitle"))
         }
 
-        showMethods(tooltip, mods, prev)
+        showMethods(
+            tooltip = tooltip,
+            mods = mods,
+            lastComponent = prev,
+        )
 
         mainPanel!!.addUIElement(tooltip).inTL(0f, 0f)
     }
@@ -158,8 +167,18 @@ class ExoticMethodsUIPlugin(
                     )
                 }
 
+                // Part related to blocking only removal-related ExoticMethods from being enabled
+                val doesExoticaWarn = exotic.showWarningIfApplyingFromRefitScreen() && runningFromExoticaTechnologiesScreen().not()
+                val doesExoticaBlock = exotic.blockRemovalFromRefitScreen()
+                val shouldExoticBeNonRemovableFromRefit = doesExoticaWarn && doesExoticaBlock
+
                 methodButton.isEnabled =
                     (market != null || method.canUseIfMarketIsNull()) && method.canUse(member, mods, exotic, market)
+                // Small hack to prevent "removal" methods, destroying and recovering
+                val forceDisable = shouldExoticBeNonRemovableFromRefit && (method is DestroyMethod || method is RecoverMethod)
+                if (forceDisable) {
+                    methodButton.isEnabled = false
+                }
                 buttons[methodButton] = MethodButtonHandler(method, this)
 
                 if (lastButton == null) {

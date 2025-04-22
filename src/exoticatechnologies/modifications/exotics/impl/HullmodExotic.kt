@@ -49,6 +49,7 @@ open class HullmodExotic(
         }
 
     override fun showWarningIfApplyingFromRefitScreen() = true
+    override fun blockRemovalFromRefitScreen() = true
 
     override fun onInstall(member: FleetMemberAPI) {
         val shouldShareEffectToOtherModules = shouldShareEffectToOtherModules(null, null)
