@@ -24,7 +24,7 @@ object StarsectorAPIInteractor {
      */
     fun runningFromExoticaTechnologiesScreen(): Boolean {
         // This one will just naively rely on the fact that we have options showing in the background
-        val optional = getSectureHasOptionsOptional()
+        val optional = getSectorHasOptionsOptional()
         // If optional is empty, bail out
         if (optional.isEmpty()) return false
         // Proceed otherwise
@@ -45,7 +45,7 @@ object StarsectorAPIInteractor {
 
     private fun actualStarsectorAPIrunningFromRefitScreen(): Boolean {
         // Refit screen is going to be on the REFIT core UI tab and won't have options
-        val optional = getSectureHasOptionsOptional()
+        val optional = getSectorHasOptionsOptional()
         // If empty, bail out
         if (optional.isEmpty()) return false
         // Otherwise proceed
@@ -61,7 +61,7 @@ object StarsectorAPIInteractor {
      * @return if everything is non-null, it returns the [Optional] of final [InteractionDialogAPI]'s [OptionPanelAPI.hasOptions],
      * otherwise it returns [Optional.empty]
      */
-    private fun getSectureHasOptionsOptional(): Optional<Boolean> {
+    private fun getSectorHasOptionsOptional(): Optional<Boolean> {
         return if (Global.getSector().campaignUI != null) {
             if (Global.getSector().campaignUI.currentInteractionDialog != null) {
                 if (Global.getSector().campaignUI.currentInteractionDialog.optionPanel != null) {
