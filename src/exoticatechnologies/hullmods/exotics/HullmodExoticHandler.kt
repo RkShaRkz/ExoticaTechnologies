@@ -857,9 +857,16 @@ object HullmodExoticHandler {
 
                 // Carry on now that we have install data
 
-                // If we have slots, start doing what needs to be done
+                val parentMemberVariant = currentInstallData.parentFleetMemberAPI.variant
+                val parentMemberRefitVariant = currentInstallData.parentFleetMemberAPI.checkRefitVariant()
                 for (installedOnVariant in installedOnVariantsList) {
+                    // If we run into the 'parent variant' just skip it, this one should remove from children only
+                    if (installedOnVariant == parentMemberVariant) continue
+                    if (installedOnVariant == parentMemberRefitVariant) continue
+
+                    // Carry on
                     val mods = getCorrectMods(fleetMember, installedOnVariant)
+
                     mods?.let { nonNullMods ->
                         // Since this can be *any* HullmodExotic referencing their own ExoticHullmods, we should first
                         // check the ExoticHullmodLookup map for any instances of the exotic hullmod.
