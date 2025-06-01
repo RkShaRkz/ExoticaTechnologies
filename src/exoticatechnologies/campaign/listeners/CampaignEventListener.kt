@@ -48,6 +48,7 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
     override fun reportShownInteractionDialog(dialog: InteractionDialogAPI) {
         val interactionTarget = dialog.interactionTarget ?: return
         val dialogPlugin = dialog.plugin
+        val memoryMap = dialog.plugin?.memoryMap ?: return //0.98a fix
         if (dialogPlugin is FleetInteractionDialogPluginImpl) {
             val context = dialogPlugin.context as FleetEncounterContext
 
