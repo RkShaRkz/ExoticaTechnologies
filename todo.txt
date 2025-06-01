@@ -11,3 +11,12 @@ todo: add Advanced Gunnery Control tags to things that deserve them (like missil
 
 todo:
 - cruise drive subsystem
+
+- Addition of a purchase all bandwidth button on the exotica refit menu: 
+If you have a lot of credits and a lot of ships it's annoying to have to click 50 times per ship to increase the bandwidth to the maximum (300). 
+A button that allows to Purchase all the bandwidth in one click will fix this and save a lot of time for players.
+NOTE: if button isn't feasable, add a console command instead
+
+- Allowing to purchase bandwidth with ship components besides the credits that it's te current system: 
+This would increase the value of salvaging enemy fleets when you fight and win over them after combat. 
+You can make it expensive also so it won't break the game or be more cheaper to use ship components instead of the usual credits. Maybe it could be balanced by hullsize also.
