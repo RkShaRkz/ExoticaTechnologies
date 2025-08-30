@@ -1,7 +1,5 @@
 package exoticatechnologies.hullmods.exotics
 
-import com.fs.starfarer.api.Global
-import com.fs.starfarer.api.campaign.CoreUITabId
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
@@ -22,6 +20,9 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 object HullmodExoticHandler {
+    private const val SHOULD_REMOVE_FROM_INSTALLED_LIST_IN_STRICT_MODE = true
+    private const val SHOULD_REMOVE_FROM_EXPECTED_LIST_IN_STRICT_MODE = true
+
     private val logger: Logger = Logger.getLogger(HullmodExoticHandler::class.java)
     private val MIN_LOG_LEVEL: Level = Level.WARN
 
@@ -190,11 +191,18 @@ object HullmodExoticHandler {
                     val mutableInstalledList = alreadyInstalledList.toMutableList()
                     mutableInstalledList.add(variant)
 
-                    val mutableExpectedList = expectedList.toMutableList()
-                    mutableExpectedList.remove(variant)
+                    val expectedListToUse = if (SHOULD_REMOVE_FROM_EXPECTED_LIST_IN_STRICT_MODE) {
+                        val mutableExpectedList = expectedList.toMutableList()
+                        mutableExpectedList.remove(variant)
+
+                        mutableExpectedList.toList()
+                    } else {
+                        expectedList
+                    }
+
                     val newKeyValue = currentInstallData.copy(
                             parentFleetMemberAPI = currentInstallData.parentFleetMemberAPI,
-                            listOfExpectedVariants = mutableExpectedList.toList(),
+                            listOfExpectedVariants = expectedListToUse,
                             listOfVariantsWeInstalledOn = mutableInstalledList.toList()
                     )
                     // Doubly-locked because why?
@@ -202,7 +210,7 @@ object HullmodExoticHandler {
                         lookupMap[hullmodExoticKey] = newKeyValue
                     }
 
-                    logIfOverMinLogLevel("installHullmodExoticToVariant()\t\tnew expected list: ${mutableExpectedList}", Level.INFO)
+                    logIfOverMinLogLevel("installHullmodExoticToVariant()\t\tnew expected list: ${expectedListToUse}", Level.INFO)
                     logIfOverMinLogLevel("installHullmodExoticToVariant()\t\tnew installed list: ${mutableInstalledList}", Level.INFO)
                     logIfOverMinLogLevel("<-- installHullmodExoticToVariant()\t\treturning true", Level.INFO)
 
@@ -364,10 +372,15 @@ object HullmodExoticHandler {
                         // STRICT vs LENIENT - for STRICT we will reduce the 'installed on' list, for LENIENT we will not
                         val installListToUse = if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
                             // STRICT work mode - reduce the 'installed on' list by removing the variant we will remove from
-                            val newInstalledOnList = installedOnVariants.toMutableList()
-                            newInstalledOnList.remove(variant)
+                            if (SHOULD_REMOVE_FROM_INSTALLED_LIST_IN_STRICT_MODE) {
+                                val newInstalledOnList = installedOnVariants.toMutableList()
+                                newInstalledOnList.remove(variant)
 
-                            newInstalledOnList
+                                // And return the reduced list
+                                newInstalledOnList
+                            } else {
+                                installedOnVariants
+                            }
                         } else {
                             // LENIENT work mode - just do nothing
                             installedOnVariants
