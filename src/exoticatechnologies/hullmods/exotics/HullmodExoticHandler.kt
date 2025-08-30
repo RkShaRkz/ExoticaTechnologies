@@ -23,7 +23,7 @@ object HullmodExoticHandler {
     private const val SHOULD_REMOVE_FROM_INSTALLED_LIST_IN_STRICT_MODE = true
     private const val SHOULD_REMOVE_FROM_EXPECTED_LIST_IN_STRICT_MODE = true
     private const val ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT = true
-    private val OUTSIDE_EXOTICA_OR_REFIT_FALLBACK_WORKMODE: HullmodExoticHandlerWorkMode = HullmodExoticHandlerWorkMode.LENIENT
+    private val OUTSIDE_EXOTICA_OR_REFIT_FALLBACK_WORKMODE: HullmodExoticHandlerWorkMode = HullmodExoticHandlerWorkMode.STRICT
 
     private val logger: Logger = Logger.getLogger(HullmodExoticHandler::class.java)
     private val MIN_LOG_LEVEL: Level = Level.WARN
