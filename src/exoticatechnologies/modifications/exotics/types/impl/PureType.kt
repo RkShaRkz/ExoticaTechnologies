@@ -26,7 +26,12 @@ class PureType :
         val baseBandwidth = mods.getBaseBandwidth(member)
         retVal = (currentBandwidth / baseBandwidth).coerceIn(0f..1f)
 
-        return retVal
+        // If we still got NaN somehow, return 0; otherwise return what we calculated above
+        return if (retVal.isNaN()) {
+            0f
+        } else {
+            retVal
+        }
     }
 
     private fun getExoticRatio(member: FleetMemberAPI, mods: ShipModifications): Float {
@@ -35,7 +40,12 @@ class PureType :
         val maxMods = mods.getMaxExotics(member) - 1f
         retVal = (currentMods / maxMods).coerceIn(0f..1f)
 
-        return retVal
+        // If we still got NaN somehow, return 0; otherwise return what we calculated above
+        return if (retVal.isNaN()) {
+            0f
+        } else {
+            retVal
+        }
     }
 
     override fun getChanceMult(context: ShipModFactory.GenerationContext): Float {
