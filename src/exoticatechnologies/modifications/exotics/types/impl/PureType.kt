@@ -11,19 +11,31 @@ import java.awt.Color
 class PureType :
     ExoticType("PURE", colorOverlay = Color(255, 200, 125, 255), sprite = "graphics/icons/overlays/pure.png") {
     override fun getPositiveMult(member: FleetMemberAPI, mods: ShipModifications): Float {
-        return 2.5f - 1.5f * getBandwidthRatio(member, mods) - 0.75f * getExoticRatio(member, mods)
+        val positiveMult = 2.5f - 1.5f * getBandwidthRatio(member, mods) - 0.75f * getExoticRatio(member, mods)
+        return positiveMult
     }
 
     override fun getNegativeMult(member: FleetMemberAPI, mods: ShipModifications): Float {
-        return 1f + 0.5f * getBandwidthRatio(member, mods) + 0.25f * getExoticRatio(member, mods)
+        val negativeMult = 1f + 0.5f * getBandwidthRatio(member, mods) + 0.25f * getExoticRatio(member, mods)
+        return negativeMult
     }
 
     private fun getBandwidthRatio(member: FleetMemberAPI, mods: ShipModifications): Float {
-        return ((mods.getUsedBandwidth() / mods.getBaseBandwidth(member))).coerceIn(0f..1f)
+        val retVal: Float
+        val currentBandwidth = mods.getUsedBandwidth()
+        val baseBandwidth = mods.getBaseBandwidth(member)
+        retVal = (currentBandwidth / baseBandwidth).coerceIn(0f..1f)
+
+        return retVal
     }
 
     private fun getExoticRatio(member: FleetMemberAPI, mods: ShipModifications): Float {
-        return ((mods.getExoticSet().size - 1f) / (mods.getMaxExotics(member) - 1f)).coerceIn(0f..1f)
+        val retVal: Float
+        val currentMods = mods.getExoticSet().size - 1f
+        val maxMods = mods.getMaxExotics(member) - 1f
+        retVal = (currentMods / maxMods).coerceIn(0f..1f)
+
+        return retVal
     }
 
     override fun getChanceMult(context: ShipModFactory.GenerationContext): Float {
