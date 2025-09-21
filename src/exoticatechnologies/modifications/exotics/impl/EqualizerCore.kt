@@ -11,7 +11,6 @@ import com.fs.starfarer.api.ui.UIComponentAPI
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
-import exoticatechnologies.util.AnonymousLogger
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
 import org.json.JSONObject
@@ -40,16 +39,13 @@ class EqualizerCore(key: String, settings: JSONObject) : Exotic(key, settings) {
     ) {
         if (expand) {
             StringUtils.getTranslation(key, "longDescription")
-                .format("recoilReduction", abs(RECOIL_REDUCTION) * getPositiveMult(member, mods, exoticData))
-                .format("weaponTurnBonus", TURN_RATE_BUFF * getPositiveMult(member, mods, exoticData))
+                .format("recoilReduction", abs(getRecoilReduction(member, mods, exoticData)))
+                .format("weaponTurnBonus", getTurnRateBuff(member, mods, exoticData))
                 .format("lowRangeThreshold", getLowerRangeLimit(member, mods, exoticData))
-                .format("rangeBonus", RANGE_BOTTOM_BUFF * getPositiveMult(member, mods, exoticData))
+                .format("rangeBonus", getLowerRangeBuffBonus(member, mods, exoticData))
                 .format("highRangeThreshold", getUpperRangeLimit(member, mods, exoticData))
-                .format("rangeMalus", abs(RANGE_TOP_BUFF) * getNegativeMult(member, mods, exoticData))
-                .format(
-                    "rangeDecreaseDamageIncrease",
-                    getRangeDecreaseDamageIncreasePerHundredRange(member, mods, exoticData)
-                )
+                .format("rangeMalus", abs(getUpperRangePenaltyMalus(member, mods, exoticData)))
+                .format("rangeDecreaseDamageIncrease", getRangeDecreaseDamageIncreasePerHundredRange(member, mods, exoticData))
                 .addToTooltip(tooltip, title)
         }
     }
@@ -58,12 +54,36 @@ class EqualizerCore(key: String, settings: JSONObject) : Exotic(key, settings) {
         return RANGE_DECREASE_DAMAGE_INCREASE_PERCENT_PER_100_RANGE * getPositiveMult(member, mods, exoticData)
     }
 
+    fun getRecoilReduction(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return RECOIL_REDUCTION * getPositiveMult(member, mods, exoticData)
+    }
+
+    /**
+     * Identical to [getRecoilReduction] except it scales the number down by 100 to be used as a multiplier rather
+     * than a constant
+     */
+    fun getRecoilReductionMultiplier(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return getRecoilReduction(member, mods, exoticData) / 100f
+    }
+
+    fun getTurnRateBuff(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return TURN_RATE_BUFF * getPositiveMult(member, mods, exoticData)
+    }
+
     private fun getLowerRangeLimit(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
         return RANGE_LIMIT_BOTTOM + (100 * (1 - getNegativeMult(member, mods, exoticData)))
     }
 
+    private fun getLowerRangeBuffBonus(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return RANGE_BOTTOM_BUFF * getPositiveMult(member, mods, exoticData)
+    }
+
     private fun getUpperRangeLimit(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
         return RANGE_LIMIT_TOP - (100 * (1 - getNegativeMult(member, mods, exoticData)))
+    }
+
+    fun getUpperRangePenaltyMalus(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return RANGE_TOP_BUFF * getNegativeMult(member, mods, exoticData)
     }
 
     override fun applyExoticToStats(
@@ -74,17 +94,17 @@ class EqualizerCore(key: String, settings: JSONObject) : Exotic(key, settings) {
         exoticData: ExoticData
     ) {
         stats.autofireAimAccuracy.modifyPercent(buffId, 1000f)
-        stats.maxRecoilMult.modifyMult(buffId, abs(RECOIL_REDUCTION) / 100f * getPositiveMult(member, mods, exoticData))
+        stats.maxRecoilMult.modifyMult(buffId, abs(getRecoilReductionMultiplier(member, mods, exoticData)))
         stats.recoilDecayMult.modifyMult(
             buffId,
-            abs(RECOIL_REDUCTION) / 100f * getPositiveMult(member, mods, exoticData)
+            abs(getRecoilReductionMultiplier(member, mods, exoticData))
         )
         stats.recoilPerShotMult.modifyMult(
             buffId,
-            abs(RECOIL_REDUCTION) / 100f * getPositiveMult(member, mods, exoticData)
+            abs(getRecoilReductionMultiplier(member, mods, exoticData))
         )
-        stats.weaponTurnRateBonus.modifyPercent(buffId, TURN_RATE_BUFF * getPositiveMult(member, mods, exoticData))
-        stats.beamWeaponTurnRateBonus.modifyPercent(buffId, TURN_RATE_BUFF * getPositiveMult(member, mods, exoticData))
+        stats.weaponTurnRateBonus.modifyPercent(buffId, getTurnRateBuff(member, mods, exoticData))
+        stats.beamWeaponTurnRateBonus.modifyPercent(buffId, getTurnRateBuff(member, mods, exoticData))
     }
 
     override fun advanceInCombatUnpaused(
@@ -116,21 +136,19 @@ class EqualizerCore(key: String, settings: JSONObject) : Exotic(key, settings) {
         }
 
         override fun getWeaponBaseRangeFlatMod(ship: ShipAPI, weapon: WeaponAPI): Float {
-            AnonymousLogger.log("--> getWeaponBaseRangeFlatMod()\tweaponId ${weapon.id} of shipId: ${ship.id} has base maxRange: ${weapon.spec.maxRange}", "EqualizerCore")
-            AnonymousLogger.log("getWeaponBaseRangeFlatMod()\tgetUpperRangeLimit(): ${getUpperRangeLimit(member, mods, exoticData)}\tgetLowerRangeLimit(): ${getLowerRangeLimit(member, mods, exoticData)}", "EqualizerCore")
             if (weapon.type == WeaponAPI.WeaponType.MISSILE) {
                 return 0f
             }
 
             var baseRangeMod = 0f
             if (weapon.spec.maxRange >= getUpperRangeLimit(member, mods, exoticData)) {
-                baseRangeMod =
-                    RANGE_TOP_BUFF * (weapon.spec.maxRange - getUpperRangeLimit(member, mods, exoticData)) / 100
+                val upperRangePenaltyMalus = getUpperRangePenaltyMalus(member, mods, exoticData)
+                val maxRangeDifference = (weapon.spec.maxRange - getUpperRangeLimit(member, mods, exoticData)) / 100
+                baseRangeMod = upperRangePenaltyMalus * maxRangeDifference
             } else if (weapon.spec.maxRange <= getLowerRangeLimit(member, mods, exoticData)) {
-                baseRangeMod = RANGE_BOTTOM_BUFF.toFloat() * getPositiveMult(member, mods, exoticData)
+                baseRangeMod = getLowerRangeBuffBonus(member, mods, exoticData)
             }
 
-            AnonymousLogger.log("<-- getWeaponBaseRangeFlatMod()\tweaponId ${weapon.id} of shipId: ${ship.id} returning modified baseRangeMod ${baseRangeMod}\t\tfor adjusted maxRange: ${weapon.spec.maxRange + baseRangeMod}", "EqualizerCore")
             return baseRangeMod
         }
 
@@ -154,7 +172,6 @@ class EqualizerCore(key: String, settings: JSONObject) : Exotic(key, settings) {
             weapon?.let {
                 if (it.type == WeaponAPI.WeaponType.MISSILE) return null
                 if (it.spec.maxRange > getUpperRangeLimit(member, mods, exoticData)) {
-//                    val buff = (RANGE_DECREASE_DAMAGE_INCREASE / 100f * getPositiveMult(member, mods, exoticData)) * ((it.spec.maxRange - getUpperRangeLimit(member, mods, exoticData)) / 100f).coerceAtLeast(0f)
                     // Calculate the coefficient for damage-increase-per-100-range-lost
                     // This is actually range-agnostic, and consists of only RANGE_DECREASE_DAMAGE_INCREASE * positiveMult()
                     // but it will give us how much damage (percent) we will get for every 100 range lost.
@@ -166,17 +183,7 @@ class EqualizerCore(key: String, settings: JSONObject) : Exotic(key, settings) {
                     // Finally, calculate the buff by
                     val buff = rangeDecreaseDamageIncrease * maxRangeRatio.coerceAtLeast(0f)
                     // Since the 'buff' will only determine the multiplier, e.g. 2.5, and using that with modifyPercent will apply only a 2.5% bonus, we need to scale it up
-//                    val buffScaledForPercents = buff * 100
-//                    AnonymousLogger.log("modifying damage of weapon: ${it.id}\trangeDecreaseDamageIncrease: ${rangeDecreaseDamageIncrease}, maxRange: ${maxRange}, buff: ${buff}, buffScaledForPercents: ${buffScaledForPercents}", "EqualizerCore")
-                    AnonymousLogger.log("modifying damage of weapon: ${it.id}\trangeDecreaseDamageIncrease: ${rangeDecreaseDamageIncrease}, maxRange: ${maxRangeRatio}, buff: ${buff}", "EqualizerCore")
-//                    AnonymousLogger.log("modifying damage of weapon: ${it.id} [modifier.modifyPercent]\tbuffId: ${buffId}, buff: ${buff}", "EqualizerCore")
-//                    AnonymousLogger.log("modifying damage of weapon: ${it.id} [modifier.modifyPercent]\tbuffId: ${buffId}, buffScaledForPercents: ${buffScaledForPercents}\tdamage: ${damage.damage}", "EqualizerCore")
-                    AnonymousLogger.log("modifying damage of weapon: ${it.id} [modifier.modifyPercent]\tbuffId: ${buffId}, buff: ${buff}\tdamage: ${damage.damage} [BEFORE]", "EqualizerCore")
                     damage.modifier.modifyPercent(buffId, buff)
-//                    damage.modifier.modifyPercent(buffId, buffScaledForPercents)
-                    AnonymousLogger.log("modifying damage of weapon: ${it.id}\tmodified damage: ${damage.damage} [AFTER]", "EqualizerCore")
-//                    AnonymousLogger.log("modifying damage of weapon: ${it.id} [modifier.modifyMult]\tbuffId: ${buffId}, buff: ${buff}", "EqualizerCore")
-//                    damage.modifier.modifyMult(buffId, buff)
                 }
 
                 return buffId
