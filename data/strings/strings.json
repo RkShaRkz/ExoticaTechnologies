@@ -388,6 +388,7 @@
 		"ItemTypeText": "This chip is a *${typeName}-type*, which affects the exotic by ${typeDescription}.",
 		"NotInstalledText": "${typeName} - Hover for description",
 		"NORMAL": "${exoticName}",
+		"NormalItemDescription": "not increasing or decreasing its positive and negative effect(s)",
 		"CORRUPTED": "Corrupted ${exoticName}",
 		"CorruptedItemDescription": "multiplying both its positive and negative effects",
 		"PURE": "Pure ${exoticName}",

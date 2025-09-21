@@ -34,11 +34,13 @@ abstract class ExoticType(val nameKey: String, val colorOverlay: Color = Color(2
     }
 
     open fun getItemDescTranslation(): Translation? {
-        return null
+        return StringUtils.getTranslation("ExoticTypes", "NormalItemDescription")
     }
 
     open fun getDescriptionTranslation(member: FleetMemberAPI, mods: ShipModifications): Translation? {
-        return null
+        return StringUtils.getTranslation("ExoticTypes", "TooltipText")
+                .formatFloat("positiveMult", getPositiveMult(member, mods))
+                .formatFloat("negativeMult", getNegativeMult(member, mods))
     }
 
     open fun mutateGenerationContext(context: ShipModFactory.GenerationContext) {
