@@ -1,6 +1,7 @@
 package exoticatechnologies.modifications.exotics.impl
 
 import com.fs.starfarer.api.Global
+import com.fs.starfarer.api.combat.DamagingProjectileAPI
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
@@ -11,12 +12,15 @@ import exoticatechnologies.combat.ExoticaCombatUtils
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
+import exoticatechnologies.util.AnonymousLogger
 import exoticatechnologies.util.StringUtils
+import exoticatechnologies.util.addAfterimage
 import org.json.JSONObject
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
 import kotlin.math.abs
+import kotlin.math.sin
 
 class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) {
     override var color = Color(0xD99836)
@@ -89,11 +93,71 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
                 val damageBoostBonus = getDamageBuffBonus(member, mods, exoticData) / 100f
                 val damageBoostCoef = getDamageBoostCoeficientBonus(member, mods, exoticData)
                 // Don't be fooled, *everything* is always nullable in alex's starsector API ...
-                proj?.let { nonNullProj ->
+                proj?.let projLet@ { nonNullProj ->
                     nonNullProj.damage.modifier.modifyMult(buffId, 1 + damageBoostBonus * damageBoostCoef)
+
+                    if (ADD_AFTERIMAGE_TO_PROJECTILES) {
+                        AnonymousLogger.log("ADD_AFTERIMAGE_TO_PROJECTILES was true, adding afterimage to projectile ${nonNullProj}", "FullMetalSalvo") //TODO delete
+                        addProjectileAfterimage(nonNullProj, member, mods, exoticData)
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Method that adds an afterimage to a projectile, internally dependant on [PROJECTILE_AFTERIMAGE_USE_PULSES]
+     *
+     * @param projectile the projectile to add the afterimage to
+     * @param member the owning FleetMemberAPI of the firing weapon, used to calculate the afterimage duration and pulse speed
+     * @param mods the owning FleetMemberAPI's mods, used same as above
+     * @param exoticData the owning FleetMemberAPI's exotic data, used same as above
+     */
+    fun addProjectileAfterimage(projectile: DamagingProjectileAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData) {
+        val spriteAfterimageAlpha = if (PROJECTILE_AFTERIMAGE_USE_PULSES) {
+            // If we want to pulse, grab the projectileSpec - which might not be there - and then grab the
+            // glowColor from it, which might not also be there. In case the glow color isn't there,
+            // assume a full RGBA white color for the glow - or better, the 'color' parameter we already have
+            // Afterwards grab the alpha, and use it as the pulse alpha
+            val glowColor = projectile.projectileSpec?.let projSpecLet@{ projSpec ->
+                AnonymousLogger.log("projectile ${projectile} sprite name is: ${projSpec.bulletSpriteName}", "FullMetalSalvo") //TODO delete
+                // While this could have been nonNullProj.projectileSpec?.glowColor ?: Color(1,1,1,1)
+                // lets leave the let {} blocks in here
+                return@projSpecLet projSpec.glowColor?.let glowColorLet@{ color ->
+                    color
+                }
+                // In case where we can't get the glow color, assume a full RGBA white color
+            } ?: if (PROJECTILE_AFTERIMAGE_FALLBACK_USES_WHITE) { Color(1.0f, 1.0f, 1.0f, 1.0f) } else { color }
+            val baseAlpha = glowColor.alpha / 255f
+
+            getPulseAlpha(
+                    baseAlpha = baseAlpha,
+                    time = Global.getCombatEngine().getTotalElapsedTime(false),
+                    // Since 'speed' is actually in "cycles per second" and not "seconds per cycle",
+                    // we'll be dividing the speed (5) with the duration, so that we end up with 5 pulses
+                    // over the course of ability duration
+                    speed = PROJECTILE_AFTERIMAGE_PULSE_SPEED / getBoostTimeBonus(member, mods, exoticData)
+            )
+        } else {
+            // If we do not want to use afterimage pulses - which might not even be possible due to sprites becoming
+            // immutable after rendering (being "baked in") - just default to using 1f for the projectile afterimage alpha
+            1f
+        }
+
+        AnonymousLogger.log("--> projectile.addAfterimage()\t\tprojectile specID: ${projectile.projectileSpecId}\tprojectile: ${projectile}", "FullMetalSalvo") //TODO delete
+        projectile.addAfterimage(
+                fadeInTime = 0.2f,
+                fullTime = 1f,
+                fadeOutTime = 0.5f,
+                spriteSize = 2f,
+                spriteAlpha = spriteAfterimageAlpha,
+                spriteOverrideColor = Color(1.0f, 1.0f, 1.0f, 1.0f)
+        )
+        AnonymousLogger.log("<-- projectile.addAfterimage()\t\tprojectile: ${projectile}", "FullMetalSalvo") //TODO delete
+    }
+
+    fun getPulseAlpha(baseAlpha: Float, time: Float, speed: Float = 5f): Float {
+        return baseAlpha * (0.5f + 0.5f * sin(time * speed))
     }
 
     override fun applyToShip(
@@ -195,5 +259,10 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
         private const val RATE_OF_FIRE_DEBUFF = -33f
         private const val COOLDOWN = 8f
         private const val BUFF_DURATION = 2
+
+        private const val ADD_AFTERIMAGE_TO_PROJECTILES = true
+        private const val PROJECTILE_AFTERIMAGE_PULSE_SPEED = 5f
+        private const val PROJECTILE_AFTERIMAGE_USE_PULSES = true // since the SpriteAPI is baked in once rendered, we can't really modify it //TODO change to false
+        private const val PROJECTILE_AFTERIMAGE_FALLBACK_USES_WHITE = false
     }
 }
