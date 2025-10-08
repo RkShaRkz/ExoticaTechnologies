@@ -1,24 +1,27 @@
 package exoticatechnologies.util
 
 import com.fs.starfarer.api.Global
-import com.fs.starfarer.api.campaign.CoreUITabId
+import com.fs.starfarer.api.SpriteId
+import com.fs.starfarer.api.combat.CombatEngineLayers
+import com.fs.starfarer.api.combat.DamagingProjectileAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.combat.WeaponAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
+import com.fs.starfarer.api.graphics.SpriteAPI
 import com.fs.starfarer.api.loading.VariantSource
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.ui.UIPanelAPI
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModifications
-import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.reflect.ReflectionUtils
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.lazywizard.lazylib.VectorUtils
 import org.lwjgl.util.vector.Vector
 import org.lwjgl.util.vector.Vector2f
+import org.magiclib.plugins.MagicRenderPlugin
 import java.awt.Color
 import java.text.DecimalFormat
 import kotlin.math.*
@@ -702,6 +705,64 @@ fun runningFromRefitScreen(): Boolean {
  */
 fun runningFromExoticaTechnologiesScreen(): Boolean {
     return StarsectorAPIInteractor.runningFromExoticaTechnologiesScreen()
+}
+
+fun DamagingProjectileAPI.getSpriteFromGlobalSettings(): SpriteAPI? {
+
+    return this.projectileSpec?.let outerLet@ { projSpec ->
+        projSpec.bulletSpriteName?.let spriteNameLet@ { spriteName ->
+            val sprite = Global.getSettings().getSprite(spriteName)
+            return@outerLet sprite
+        }
+    }
+
+    /*
+    val spritePath = this.projectileSpec.bulletSpriteName
+//    val parts = spritePath.split("/")
+//    val spriteId = SpriteId(parts[0], parts[1])
+//    val sprite = Global.getSettings().getSprite(spriteId)
+    val sprite = Global.getSettings().getSprite(spritePath)
+    return sprite
+     */
+}
+
+fun DamagingProjectileAPI.addAfterimage(
+        fadeInTime: Float = 0f,
+        fullTime: Float = 0f,
+        fadeOutTime: Float = 0f,
+        spriteSize: Float = 1f,
+        spriteAlpha: Float = 1f,
+        spriteOverrideColor: Color? = null
+) {
+    val sprite = this.getSpriteFromGlobalSettings()
+    sprite?.let { nonNullProjectileSprite ->
+        if (spriteSize != 1f) {
+            nonNullProjectileSprite.setSize(nonNullProjectileSprite.width * spriteSize, nonNullProjectileSprite.height * spriteSize)
+        }
+        if (spriteAlpha != 1f) {
+            nonNullProjectileSprite.alphaMult = spriteAlpha
+        }
+        spriteOverrideColor?.let {
+            nonNullProjectileSprite.color = it
+        }
+
+        MagicRenderPlugin.addObjectspace(
+                nonNullProjectileSprite,                            //sprite
+                this,                                        //anchor,
+                this.location,                                      //location,
+                Vector2f(),                                         //offset,
+                this.velocity,                                      //velocity
+                Vector2f(),                                         //growth
+                this.facing,                                        //angle
+                0f,                                            //spin
+                true,                                        //parent
+                fadeInTime,                                         //fadein
+                fullTime,                                           //full
+                fadeOutTime,                                        //fadeout
+                true,                                    //fadeOnDeath
+                CombatEngineLayers.ABOVE_SHIPS_AND_MISSILES_LAYER   //layer
+        )
+    }
 }
 
 val <T> T.exhaustive: T
