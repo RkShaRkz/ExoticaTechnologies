@@ -1,6 +1,7 @@
 package exoticatechnologies.modifications
 
 import com.fs.starfarer.api.Global
+import com.fs.starfarer.api.campaign.SectorAPI
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.Alignment
@@ -9,7 +10,9 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.ETModSettings
+import exoticatechnologies.config.FactionConfig
 import exoticatechnologies.config.FactionConfigLoader
+import exoticatechnologies.hullmods.ExoticaTechHM
 import exoticatechnologies.modifications.bandwidth.Bandwidth
 import exoticatechnologies.modifications.bandwidth.BandwidthUtil
 import exoticatechnologies.modifications.exotics.*
@@ -51,9 +54,11 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         val BANDWIDTH_KEY = "baseBandwidth"
     }
 
+    /**
+     * Identically method to [hasAnyModifications], used in [ExoticaTechHM.addToFleetMember]
+     */
     fun shouldApplyHullmod(): Boolean {
-        return (upgrades.hasUpgrades()
-                || exotics.hasAnyExotic())
+        return (upgrades.hasUpgrades() || exotics.hasAnyExotic())
     }
 
     fun getValue(): Float {
@@ -151,19 +156,67 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         exotics.putExotic(exoticData)
     }
 
-    fun removeExotic(exotic: Exotic) {
-        exotics.removeExotic(exotic)
+    /**
+     * Removes the [exotic]
+     *
+     * @return whether the [Exotic] was successfully removed or not
+     */
+    fun removeExotic(exotic: Exotic): Boolean {
+        return exotics.removeExotic(exotic)
     }
 
     fun getExoticData(exotic: Exotic): ExoticData? {
         return exotics.getData(exotic)
     }
 
+    /**
+     * Returns the maximum number of installable [Exotic]s on the [member], will be increased by 1
+     * if the fleet commander has the "best of the best" skill.
+     *
+     * **NOTE** Because of problems caused by multimodule ships, for player ships we will fetch the maximum number
+     * via [FactionConfigLoader] and the subsequent [FactionConfig.getMaxExotics] call based on the **player faction's**
+     * ID, as obtained by [Global.getSector]'s [SectorAPI.getPlayerFleet]. Non-player ships will simply default to [getMaxExoticsNumber]
+     *
+     * @return the maximum number of installable [Exotic]s
+     *
+     * @see FactionConfig.getMaxExotics
+     * @see getMaxExoticsNumber
+     */
     fun getMaxExotics(member: FleetMemberAPI): Int {
-        if (member.fleetData != null && member.fleetData.fleet != null) {
+        return if (member.fleetData != null && member.fleetData.fleet != null) {
+            // When fleetdata is non-null, just return the max exotics from the faction config (fleetdata's fleet's faction)
             val factionConfig = FactionConfigLoader.getFactionConfig(member.fleetData.fleet.faction.id)
-            return factionConfig.getMaxExotics(member)
+            // return the max exotics from the faction config
+            factionConfig.getMaxExotics(member)
+        } else {
+            // Since child modules have null fleetdata *because reasons*, lets check the owner.
+            // If the owner is PLAYER, then also check the faction and let the factionConfig implementation take over
+            // so that we don't check for skills here too, otherwise just fallback to getMaxExoticsNumber()
+            if (member.owner == Misc.OWNER_PLAYER) {
+                // Grab the playerFleet and the faction ID
+                val playerFleet = Global.getSector().playerFleet
+                if (playerFleet != null) {
+                    val playerFactionId = playerFleet.faction.id
+                    // Now, similarly to above, lets return the max exotics from faction config
+
+                    FactionConfigLoader.getFactionConfig(playerFactionId).getMaxExotics(member)
+                } else {
+                    // Weird edge-case usually happening during game load, fall back to getMaxExoticsNumber()
+
+                    getMaxExoticsNumber()
+                }
+            } else {
+                // For computer players, just return the getMaxExoticsNumber()
+
+                getMaxExoticsNumber()
+            }
         }
+    }
+
+    /**
+     * Returns the maximum number of installable exotics, defaulting to [ETModSettings.MAX_EXOTICS]
+     */
+    private fun getMaxExoticsNumber(): Int {
         return ETModSettings.MAX_EXOTICS
     }
 
@@ -193,8 +246,13 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         return getUpgrade(upgrade.key)
     }
 
-    fun removeUpgrade(upgrade: Upgrade) {
-        upgrades.removeUpgrade(upgrade)
+    /**
+     * Removes the [upgrade]
+     *
+     * @return whether the [Upgrade] was successfully removed or not
+     */
+    fun removeUpgrade(upgrade: Upgrade): Boolean {
+        return upgrades.removeUpgrade(upgrade)
     }
 
     fun hasUpgrade(upgrade: Upgrade): Boolean {
@@ -212,6 +270,35 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
 
     fun isMaxLevel(member: FleetMemberAPI, upgrade: Upgrade): Boolean {
         return this.getUpgrade(upgrade) >= upgrade.maxLevel
+    }
+
+    /**
+     * Whether we have any exotics or upgrades installed, a convenience method for
+     * ```
+     * hasExotics() || hasUpgrades()
+     * ```
+     *
+     * @return whether we have any exotics or upgrades present or not
+     *
+     * @see hasExotics
+     * @see hasUpgrades
+     */
+    fun hasAnyModifications(): Boolean {
+        return hasExotics() || hasUpgrades()
+    }
+
+    /**
+     * Whether we are under the maximum limit of exotics and can install more, or not
+     *
+     * @param member the [FleetMemberAPI] for which we should check max exotics, used only for determining [FleetMemberAPI.getOwner]
+     *
+     * @see getMaxExotics
+     *
+     * @return whether more exotics can be installed or not
+     */
+    fun isUnderExoticLimit(member: FleetMemberAPI): Boolean {
+        val retVal = getMaxExotics(member) > exotics.getCount(member)
+        return retVal
     }
 
     fun getTags(): List<String> {
@@ -233,24 +320,20 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     override fun toString(): String {
-        return "ShipModifications{" +
-                "bandwidth=" + bandwidth +
-                ", modules=" + exotics +
-                ", upgrades=" + upgrades +
-                '}'
+        return "ShipModifications{bandwidth=${bandwidth}, exotics=${exotics}, upgrades=${upgrades}}"
     }
 
     private val tooltipColor = Misc.getTextColor()
     private val infoColor = Misc.getPositiveHighlightColor()
     fun populateTooltip(
-        member: FleetMemberAPI,
-        stats: MutableShipStatsAPI,
-        mainTooltip: TooltipMakerAPI,
-        width: Float,
-        height: Float = 350f,
-        expandUpgrades: Boolean,
-        expandExotics: Boolean,
-        noScroller: Boolean = false
+            member: FleetMemberAPI,
+            stats: MutableShipStatsAPI,
+            mainTooltip: TooltipMakerAPI,
+            width: Float,
+            height: Float = 350f,
+            expandUpgrades: Boolean,
+            expandExotics: Boolean,
+            noScroller: Boolean = false
     ) {
         val bandwidth: Float = this.getBandwidthWithExotics(member)
         val bandwidthString = BandwidthUtil.getFormattedBandwidthWithName(bandwidth)
@@ -308,10 +391,10 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     private fun addUpgradeSection(
-        tooltip: TooltipMakerAPI,
-        stats: MutableShipStatsAPI,
-        member: FleetMemberAPI,
-        expandUpgrades: Boolean
+            tooltip: TooltipMakerAPI,
+            stats: MutableShipStatsAPI,
+            member: FleetMemberAPI,
+            expandUpgrades: Boolean
     ): Boolean {
         var addedUpgradeSection = false
         for (upgrade in UpgradesHandler.UPGRADES_LIST) {
@@ -319,9 +402,9 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
             if (!addedUpgradeSection) {
                 addedUpgradeSection = true
                 tooltip.addSectionHeading(
-                    StringUtils.getString("FleetScanner", "UpgradeHeader"),
-                    Alignment.MID,
-                    6f
+                        StringUtils.getString("FleetScanner", "UpgradeHeader"),
+                        Alignment.MID,
+                        6f
                 )
             }
 
@@ -334,10 +417,10 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     private fun addExoticSection(
-        tooltip: TooltipMakerAPI,
-        width: Float,
-        member: FleetMemberAPI,
-        expandExotics: Boolean
+            tooltip: TooltipMakerAPI,
+            width: Float,
+            member: FleetMemberAPI,
+            expandExotics: Boolean
     ): Boolean {
         var addedExoticSection = false
         var lastThing: UIComponentAPI? = null
@@ -346,9 +429,9 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
             if (!addedExoticSection) {
                 addedExoticSection = true
                 tooltip.addSectionHeading(
-                    StringUtils.getString("FleetScanner", "ExoticHeader"),
-                    Alignment.MID,
-                    6f
+                        StringUtils.getString("FleetScanner", "ExoticHeader"),
+                        Alignment.MID,
+                        6f
                 )
                 lastThing = tooltip.prev
             }
@@ -380,13 +463,13 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     fun populateTooltip(
-        member: FleetMemberAPI,
-        mainTooltip: TooltipMakerAPI,
-        width: Float,
-        height: Float = 350f,
-        expandUpgrades: Boolean,
-        expandExotics: Boolean,
-        noScroller: Boolean = false
+            member: FleetMemberAPI,
+            mainTooltip: TooltipMakerAPI,
+            width: Float,
+            height: Float = 350f,
+            expandUpgrades: Boolean,
+            expandExotics: Boolean,
+            noScroller: Boolean = false
     ) {
         populateTooltip(member, member.stats, mainTooltip, width, height, expandUpgrades, expandExotics, noScroller)
     }

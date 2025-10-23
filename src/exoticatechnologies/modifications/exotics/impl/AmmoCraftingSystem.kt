@@ -58,15 +58,17 @@ class AmmoCraftingSystem(key: String, settings: JSONObject) : Exotic(key, settin
             exoticData: ExoticData,
             expand: Boolean
     ) {
-        StringUtils.getTranslation(key, "longDescription")
-                .format("ammo_regen_percent", getPeriodReloadAmountPercentage(member, mods, exoticData))
-                .format("ammo_regen_period", getPeriodDuration(member, mods, exoticData))
-                .formatFloat("duration", calculateSystemActivationDuration(member, mods, exoticData))
-                .format("ammo_regen_fail_chance", getFailChance(member, mods, exoticData))
-                .formatFloat("fail_min_damage", getFailMinDamage(member, mods, exoticData))
-                .formatFloat("fail_max_damage", getFailMaxDamage(member, mods, exoticData))
-                .formatFloat("cooldown", calculateSystemCooldownDuration(member, mods, exoticData))
-                .addToTooltip(tooltip, title)
+        if (expand) {
+            StringUtils.getTranslation(key, "longDescription")
+                    .format("ammo_regen_percent", getPeriodReloadAmountPercentage(member, mods, exoticData))
+                    .format("ammo_regen_period", getPeriodDuration(member, mods, exoticData))
+                    .formatFloat("duration", calculateSystemActivationDuration(member, mods, exoticData))
+                    .format("ammo_regen_fail_chance", getFailChance(member, mods, exoticData))
+                    .formatFloat("fail_min_damage", getFailMinDamage(member, mods, exoticData))
+                    .formatFloat("fail_max_damage", getFailMaxDamage(member, mods, exoticData))
+                    .formatFloat("cooldown", calculateSystemCooldownDuration(member, mods, exoticData))
+                    .addToTooltip(tooltip, title)
+        }
     }
 
     override fun applyToShip(id: String, member: FleetMemberAPI, ship: ShipAPI, mods: ShipModifications, exoticData: ExoticData) {

@@ -51,8 +51,13 @@ class ETUpgrades {
         return upgrades.isNotEmpty()
     }
 
-    fun removeUpgrade(upgrade: Upgrade) {
-        upgrades.remove(upgrade.key)
+    /**
+     * Removes a particular [Upgrade] from the list of installed upgrades
+     *
+     * @return whether the [upgrade] was successfully removed or not
+     */
+    fun removeUpgrade(upgrade: Upgrade): Boolean {
+        return upgrades.remove(upgrade.key) != null
     }
 
     val totalLevels: Int
@@ -87,9 +92,7 @@ class ETUpgrades {
     }
 
     override fun toString(): String {
-        return "ETUpgrades{" +
-                "upgrades=" + upgrades +
-                '}'
+        return "ETUpgrades{upgrades=${upgrades}}"
     }
 
     fun toJson(): JSONObject {

@@ -17,5 +17,9 @@
             "id": "MagicLib",
             "name": "MagicLib",
         },
+		{
+            "id": "lunalib",
+            "name": "LunaLib",
+        },
     ]
 }

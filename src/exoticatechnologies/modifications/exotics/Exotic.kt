@@ -24,6 +24,10 @@ import org.json.JSONObject
  *
  * Remember to override [color] to change the item's name in the description title.
  *
+ *
+ * **NOTE:** By default, Exotics apply their effects to just the module to which they have been installed
+ * unless [shouldShareEffectToOtherModules] is overriden to return **true**
+ *
  * @see getBasePrice
  */
 abstract class Exotic(key: String, settings: JSONObject) : Modification(key, settings) {

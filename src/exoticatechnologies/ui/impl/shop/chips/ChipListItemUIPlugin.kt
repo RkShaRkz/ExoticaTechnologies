@@ -9,10 +9,11 @@ import exoticatechnologies.ui.lists.ListItemUIPanelPlugin
 import exoticatechnologies.ui.lists.ListUIPanelPlugin
 import java.awt.Color
 
-abstract class ChipListItemUIPlugin(item: CargoStackAPI,
-                           var member: FleetMemberAPI,
-                           val listPanel: ListUIPanelPlugin<CargoStackAPI>
-                        ) : ListItemUIPanelPlugin<CargoStackAPI>(item) {
+abstract class ChipListItemUIPlugin(
+        item: CargoStackAPI,
+        var member: FleetMemberAPI,
+        val listPanel: ListUIPanelPlugin<CargoStackAPI>
+) : ListItemUIPanelPlugin<CargoStackAPI>(item) {
     override var bgColor: Color = Color(200, 200, 200, 0)
     var wasHovered: Boolean = false
     override var panelWidth: Float = 64f
