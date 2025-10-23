@@ -37,6 +37,8 @@ class HyperspecLPC(key: String, settings: JSONObject) : Exotic(key, settings) {
         }
     }
 
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = false
+
     override fun applyExoticToStats(
         id: String,
         stats: MutableShipStatsAPI,

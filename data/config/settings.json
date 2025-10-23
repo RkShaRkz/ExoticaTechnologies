@@ -37,6 +37,7 @@
 	"graphics": {
 		"misc":{
 			"flux_smoke": "graphics/fx/particlealpha_textured.png",
+			"lunasetting_icon": "graphics/icons/icon-lunasettings.png"
 		},
 		"ui": {
 			"shimmer": "graphics/fx/shimmer.png",
@@ -65,7 +66,10 @@
 			"SubsumedAlphaCore": "graphics/icons/exotics/subsumedalphacore.png",
 			"SubsumedBetaCore": "graphics/icons/exotics/subsumedbetacore.png",
 			"SubsumedGammaCore": "graphics/icons/exotics/subsumedgammacore.png",
-			"GuardianShield": "graphics/icons/exotics/guardianshield.png"
+			"GuardianShield": "graphics/icons/exotics/guardianshield.png",
+			"RewindSystem": "graphics/icons/exotics/rewindsystem.png",
+			"MissileSpamSystem": "graphics/icons/exotics/missilespamsystem.png",
+			"AmmoCraftingSystem": "graphics/icons/exotics/ammocraftingsystem.png"
 		},
 		"upgrades": {
 			"AdvancedFluxCoils": "graphics/icons/upgrades/advancedfluxcoils.png",

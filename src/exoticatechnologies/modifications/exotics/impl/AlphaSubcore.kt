@@ -3,10 +3,13 @@ package exoticatechnologies.modifications.exotics.impl
 import com.fs.starfarer.api.campaign.CampaignFleetAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
+import com.fs.starfarer.api.combat.ShipAPI
+import com.fs.starfarer.api.combat.WeaponAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.Misc
+import exoticatechnologies.hullmods.AlphaSubcoreHM
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.StringUtils
@@ -15,7 +18,8 @@ import org.json.JSONObject
 import java.awt.Color
 
 class AlphaSubcore(key: String, settingsObj: JSONObject) :
-    HullmodExotic(key, settingsObj, "et_alphasubcore", "AlphaSubcore", Color.cyan) {
+    HullmodExotic(key, settingsObj, AlphaSubcoreHM.HULLMOD_ID, "AlphaSubcore", Color.cyan) {
+    // Is using "et_alphasubcore" hullmodId
 
     override fun getSalvageChance(chanceMult: Float): Float {
         return 0.05f * chanceMult
@@ -46,16 +50,17 @@ class AlphaSubcore(key: String, settingsObj: JSONObject) :
         if (expand) {
             StringUtils.getTranslation(key, "longDescription")
                 .format("bandwidthIncrease", BANDWIDTH_INCREASE * getPositiveMult(member, mods, exoticData))
-                .format("smallReduction", SMALL_REDUCTION)
-                .format("medReduction", MEDIUM_REDUCTION)
-                .format("largeReduction", LARGE_REDUCTION)
-                .format("fghtrReduction", FIGHTER_REDUCTION)
-                .format("bmberReduction", BOMBER_REDUCTION)
+                .format("smallReduction", AlphaSubcoreHM.WEAPON_REDUCTIONS[WeaponAPI.WeaponSize.SMALL])
+                .format("medReduction", AlphaSubcoreHM.WEAPON_REDUCTIONS[WeaponAPI.WeaponSize.MEDIUM])
+                .format("largeReduction", AlphaSubcoreHM.WEAPON_REDUCTIONS[WeaponAPI.WeaponSize.LARGE])
+                .format("fghtrReduction", AlphaSubcoreHM.FIGHTER_REDUCTION)
+                .format("bmberReduction", AlphaSubcoreHM.BOMBER_REDUCTION)
                 .addToTooltip(tooltip, title)
 
             if(member.variant.hullMods.any { BLOCKED_HULLMODS.contains(it) }) {
-                StringUtils.getTranslation("AlphaSubcore", "conflictDetected")
-                    .addToTooltip(tooltip)
+                StringUtils
+                        .getTranslation("AlphaSubcore", "conflictDetected")
+                        .addToTooltip(tooltip)
             }
         }
     }
@@ -92,14 +97,17 @@ class AlphaSubcore(key: String, settingsObj: JSONObject) :
         return BANDWIDTH_INCREASE * getPositiveMult(member, mods, exoticData)
     }
 
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
+
+    override fun shouldAffectModulesToShareEffectsToOtherModules() = false
+
+    override fun shouldAffectModule(moduleStats: MutableShipStatsAPI) = false
+
+    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
+
     companion object {
         private const val ITEM = "alpha_core"
         private const val BANDWIDTH_INCREASE = 60
-        private const val SMALL_REDUCTION = 1
-        private const val MEDIUM_REDUCTION = 2
-        private const val LARGE_REDUCTION = 4
-        private const val FIGHTER_REDUCTION = 2
-        private const val BOMBER_REDUCTION = 4
 
         val BLOCKED_HULLMODS: MutableSet<String> = HashSet<String>().apply {
             add("specialsphmod_alpha_core_upgrades")

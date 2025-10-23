@@ -9,6 +9,8 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
+import exoticatechnologies.combat.ExoticaEveryFramePlugin
+import exoticatechnologies.combat.ExoticaShipRemovalReason
 import exoticatechnologies.modifications.Modification
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.conditions.toList
@@ -16,8 +18,18 @@ import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.ui.impl.shop.exotics.methods.ExoticMethod
 import exoticatechnologies.util.StringUtils
 import org.json.JSONObject
-import java.util.*
 
+/**
+ * Abstract base class for all Exotic systems in the ExoticaTech mod.
+ *
+ * Remember to override [color] to change the item's name in the description title.
+ *
+ *
+ * **NOTE:** By default, Exotics apply their effects to just the module to which they have been installed
+ * unless [shouldShareEffectToOtherModules] is overriden to return **true**
+ *
+ * @see getBasePrice
+ */
 abstract class Exotic(key: String, settings: JSONObject) : Modification(key, settings) {
     var loreDescription: String? = null
     open val textDescription: String?
@@ -143,6 +155,9 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
     ) {
     }
 
+    /**
+     * Will be called by [ExoticaEveryFramePlugin] while the [ship] is active in combat (present and alive)
+     */
     open fun advanceInCombatAlways(
         ship: ShipAPI,
         member: FleetMemberAPI,
@@ -211,10 +226,47 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
         expand: Boolean
     )
 
+    /**
+     * Called when the ship hosting this [Exotic] leaves or is removed from combat, either by retreating or dying.
+     */
+    open fun onOwnerShipRemovedFromCombat(
+            ship: ShipAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData,
+            reason: ExoticaShipRemovalReason
+    ) {
+
+    }
+
+    /**
+     * Called when the ship hosting this [Exotic] enters combat.
+     * Should be called only once per ship.
+     */
+    open fun onOwnerShipEnteredCombat(
+            ship: ShipAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
+    ) {
+
+    }
+
+    /**
+     * Base price of this exotic system in the Exotica planet/station options.
+     */
+    open fun getBasePrice() = DEFAULT_BASE_PRICE
+
     companion object {
         const val ITEM = "et_exotic"
         operator fun get(exoticKey: String?): Exotic? {
             return ExoticsHandler.EXOTICS[exoticKey]
+        }
+
+        public const val DEFAULT_BASE_PRICE = 250000
+
+        fun getNewSpecialItemData(key:String, exoticType: ExoticType): SpecialItemData {
+            return SpecialItemData(ITEM, String.format("%s,%s", key, exoticType.nameKey))
         }
     }
 }

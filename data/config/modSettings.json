@@ -104,7 +104,10 @@
       "SpooledFeeders",
       "FullMetalSalvo",
       "HyperspecLPC",
-      "GuardianShield"
+      "GuardianShield",
+      "RewindSystem",
+      "MissileSpamSystem",
+      "AmmoCraftingSystem"
     ],
     "rngUpgradeWhitelist": [
       "WeldedArmor",

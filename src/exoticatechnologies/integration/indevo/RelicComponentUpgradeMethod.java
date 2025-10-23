@@ -9,12 +9,12 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
 import exoticatechnologies.hullmods.ExoticaTechHM;
 import exoticatechnologies.modifications.ShipModLoader;
+import exoticatechnologies.modifications.ShipModifications;
 import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.ui.impl.shop.upgrades.methods.DefaultUpgradeMethod;
-import exoticatechnologies.modifications.ShipModifications;
 import exoticatechnologies.util.FleetMemberUtils;
 import exoticatechnologies.util.StringUtils;
-import lombok.Getter;
+import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -22,8 +22,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class RelicComponentUpgradeMethod extends DefaultUpgradeMethod {
-    @Getter
     public String key = "relicComponents";
+    private final Logger logger = Logger.getLogger(RelicComponentUpgradeMethod.class);
     private static final String OPTION = "ETShipExtraUpgradeApplyIndEvoRelics";
 
     @NotNull
@@ -67,20 +67,32 @@ public class RelicComponentUpgradeMethod extends DefaultUpgradeMethod {
             upgradeCost = removeCommodityAndReturnRemainingCost(storageCargo, IndEvoUtil.RELIC_COMPONENT_ITEM_ID, upgradeCost);
         }
 
-        CargoAPI fleetCargo = FleetMemberUtils.INSTANCE.findFleetForVariant(member.getVariant(), member).getCargo();
-        if (upgradeCost > 0) {
-            removeCommodity(fleetCargo, IndEvoUtil.RELIC_COMPONENT_ITEM_ID, upgradeCost);
+        ShipVariantAPI memberVariant = member.getVariant();
+        CampaignFleetAPI variantsFleet = FleetMemberUtils.INSTANCE.findFleetForVariant(memberVariant, member);
+        if (variantsFleet != null) {
+            CargoAPI fleetCargo = variantsFleet.getCargo();
+            if( upgradeCost > 0 ) {
+                removeCommodity(fleetCargo, IndEvoUtil.RELIC_COMPONENT_ITEM_ID, upgradeCost);
+            }
+
+            mods.putUpgrade(upgrade);
+            ShipModLoader.set(member, variant, mods);
+            ExoticaTechHM.addToFleetMember(member, variant);
+
+            Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 1f);
+            return StringUtils
+                    .getTranslation("UpgradesDialog", "UpgradePerformedSuccessfully")
+                    .format("name", upgrade.getName())
+                    .format("level", mods.getUpgrade(upgrade))
+                    .toString();
+        } else {
+            logger.error("Fleet was NULL for (member = "+member+", variant "+memberVariant+") !!!");
+            return StringUtils
+                    .getTranslation("UpgradesDialog", "UpgradeCannotBePerformed")
+                    .format("name", upgrade.getName())
+                    .format("level", mods.getUpgrade(upgrade))
+                    .toString();
         }
-
-        mods.putUpgrade(upgrade);
-        ShipModLoader.set(member, variant, mods);
-        ExoticaTechHM.addToFleetMember(member, variant);
-
-        Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 1f);
-        return StringUtils.getTranslation("UpgradesDialog", "UpgradePerformedSuccessfully")
-                .format("name", upgrade.getName())
-                .format("level", mods.getUpgrade(upgrade))
-                .toString();
     }
 
     @NotNull
@@ -101,13 +113,18 @@ public class RelicComponentUpgradeMethod extends DefaultUpgradeMethod {
     }
 
     private int getComponentsFromFleetForUpgrade(CampaignFleetAPI fleet) {
-        return Math.round(fleet.getCargo().getCommodityQuantity(IndEvoUtil.RELIC_COMPONENT_ITEM_ID));
+        int retVal = 0;
+
+        if (fleet != null && fleet.getCargo() != null) {
+            retVal = Math.round(fleet.getCargo().getCommodityQuantity(IndEvoUtil.RELIC_COMPONENT_ITEM_ID));
+        }
+
+        return retVal;
     }
 
     private int getComponentsFromStorageForUpgrade(MarketAPI market) {
         int result = 0;
 
-        boolean hasStorage = false;
         if (market != null
                 && market.getSubmarket(Submarkets.SUBMARKET_STORAGE) != null
                 && market.getSubmarket(Submarkets.SUBMARKET_STORAGE).getCargo() != null) {
@@ -131,5 +148,11 @@ public class RelicComponentUpgradeMethod extends DefaultUpgradeMethod {
     @Override
     public boolean shouldLoad() {
         return Global.getSettings().getModManager().isModEnabled("IndEvo");
+    }
+
+    @NotNull
+    @Override
+    public String getKey() {
+        return key;
     }
 }

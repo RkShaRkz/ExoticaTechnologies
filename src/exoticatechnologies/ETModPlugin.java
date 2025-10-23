@@ -10,22 +10,28 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import exoticatechnologies.campaign.listeners.CampaignEventListener;
 import exoticatechnologies.campaign.listeners.SalvageListener;
 import exoticatechnologies.campaign.market.MarketManager;
-import exoticatechnologies.cargo.CrateGlobalData;
-import exoticatechnologies.cargo.CrateSpecialData;
 import exoticatechnologies.config.FactionConfigLoader;
 import exoticatechnologies.config.VariantConfigLoader;
 import exoticatechnologies.hullmods.ExoticaTechHM;
+import exoticatechnologies.hullmods.exotics.HullmodExoticHandler;
 import exoticatechnologies.integration.indevo.IndEvoUtil;
 import exoticatechnologies.modifications.ShipModLoader;
+import exoticatechnologies.modifications.bandwidth.Bandwidth;
+import exoticatechnologies.modifications.exotics.ExoticSpecialItemPlugin;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
+import exoticatechnologies.modifications.exotics.GenericExoticItemPlugin;
 import exoticatechnologies.modifications.stats.impl.logistics.CrewSalaryEffect;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
 import exoticatechnologies.refit.RefitButtonAdder;
 import exoticatechnologies.ui.impl.shop.ShopManager;
 import exoticatechnologies.ui.impl.shop.overview.OverviewPanelUIPlugin;
+import exoticatechnologies.util.AnonymousLogger;
 import exoticatechnologies.util.FleetMemberUtils;
 import exoticatechnologies.util.Utilities;
 import lombok.extern.log4j.Log4j;
+import lunalib.lunaSettings.LunaSettings;
+import lunalib.lunaSettings.LunaSettingsListener;
+import org.jetbrains.annotations.NotNull;
 import org.lazywizard.console.Console;
 import org.lazywizard.lazylib.MathUtils;
 
@@ -35,13 +41,28 @@ public class ETModPlugin extends BaseModPlugin {
     private static CampaignEventListener campaignListener = null;
     private static SalvageListener salvageListener = null;
 
+    public static final String MOD_ID = "exoticatechnologies";
+    public static final boolean HAVE_LUNALIB = Global.getSettings().getModManager().isModEnabled("lunalib");
+    private static final MyLunaSettingsListener LunaSettingsListenerInstance = new MyLunaSettingsListener();
+
     @Override
     public void onApplicationLoad() {
         ETModSettings.loadModSettings();
 
+        if (HAVE_LUNALIB) {
+            LunaSettings.addSettingsListener(LunaSettingsListenerInstance);
+
+            // Force a refresh of settings, since some stuff from Game's "Settings" aren't
+            // updated (overwritten) until a change happens and they actually get overwritten
+            // by stuff saved in LunaSettings
+            LunaSettingsListenerInstance.settingsChanged(MOD_ID);
+        }
+
         UpgradesHandler.initialize();
         ExoticsHandler.initialize();
         FactionConfigLoader.load();
+        // And cleanup the HullmodExoticHandler's map
+        HullmodExoticHandler.INSTANCE.reinitialize();
     }
 
     @Override
@@ -64,6 +85,8 @@ public class ETModPlugin extends BaseModPlugin {
         addListeners();
 
         Utilities.mergeChipsIntoCrate(Global.getSector().getPlayerFleet().getCargo());
+        // And cleanup the HullmodExoticHandler's map
+        HullmodExoticHandler.INSTANCE.reinitialize();
     }
 
     public static String getSectorSeedString() {
@@ -181,5 +204,50 @@ public class ETModPlugin extends BaseModPlugin {
 
     public static boolean isDebugUpgradeCosts() {
         return debugUpgradeCosts;
+    }
+
+    /**
+     * The {@link LunaSettingsListener} used for updating the backing settings whenever something is changed
+     * in Luna that has to do with our mod.
+     */
+    private static class MyLunaSettingsListener implements LunaSettingsListener {
+        @Override
+        public void settingsChanged(@NotNull String modId) {
+            if (modId.equalsIgnoreCase(MOD_ID)) {
+                // Max Exotics per ship
+                ETModSettings.MAX_EXOTICS = safeUnboxing(LunaSettings.getInt(MOD_ID, "exoticatechnologies_maxExoticas"));
+
+                // Enable max bandwidth extensions
+                int bandwidthExtensionsLevelsEnabled =
+                        safeUnboxing(LunaSettings.getInt(MOD_ID, "exoticatechnologies_enableMaxBandwidthExtensionLevels"));
+                Bandwidth.enableExtensions(bandwidthExtensionsLevelsEnabled);
+
+                // Should overlay exotic icon over exotic item - looks better without it
+                boolean shouldOverlayIcons = safeUnboxing(LunaSettings.getBoolean(MOD_ID, "exoticatechnologies_exoticIconOverlay"));
+                ExoticSpecialItemPlugin.setShouldOverlayExoticIconOverExoticItemIcon(shouldOverlayIcons);
+            }
+        }
+
+        private int safeUnboxing(Integer object) {
+            int retVal;
+            if (object == null) {
+                retVal = 0;
+            } else {
+                retVal = object;
+            }
+
+            return retVal;
+        }
+
+        private boolean safeUnboxing(Boolean object) {
+            boolean retVal;
+            if (object == null) {
+                retVal = false;
+            } else {
+                retVal = object;
+            }
+
+            return retVal;
+        }
     }
 }

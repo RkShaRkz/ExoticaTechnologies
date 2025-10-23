@@ -15,6 +15,9 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.awt.Color
 
+/**
+ * Class wrapping the data read from the CSV for a particular [Exotic] system, and it's [ExoticSpecialItemPlugin]
+ */
 class ExoticData(key: String, var type: ExoticType = ExoticType.NORMAL) {
     var key = checkUpdateExotic(key)
         get() {

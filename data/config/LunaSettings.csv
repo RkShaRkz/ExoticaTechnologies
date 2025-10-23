@@ -1,0 +1,5 @@
+fieldID,fieldName,fieldType,defaultValue,secondaryValue,fieldDescription,minValue,maxValue,tab
+,,,,,,,,
+exoticatechnologies_maxExoticas,Max Number of Exoticas per Ship,Int,2,,Maximum number of Exoticas per Ship (vanilla value is 2),0,10,General
+exoticatechnologies_enableMaxBandwidthExtensionLevels,Additional Max Bandwidth extension levels,Int,0,,How many new levels should we add? Each extension level adds [50 TB/s] with the exception of the last one adding [100 TB/s] (vanilla value is 0),0,5,General
+exoticatechnologies_exoticIconOverlay,Superposition Exotica's icon in Exotic Item's icon,Boolean,true,,Should Exoticas superposition (overlay) their icon inside the Exotic Item's icon inside the Inventory screen?,,,General

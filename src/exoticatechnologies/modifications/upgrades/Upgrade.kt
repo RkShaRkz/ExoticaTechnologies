@@ -7,6 +7,8 @@ import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
+import exoticatechnologies.combat.ExoticaEveryFramePlugin
+import exoticatechnologies.combat.ExoticaShipRemovalReason
 import exoticatechnologies.modifications.Modification
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.conditions.toList
@@ -20,6 +22,14 @@ import java.awt.Color
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
+/**
+ * Abstract base class for all Upgrade systems in the ExoticaTech mod.
+ *
+ * Remember to override [color] to change the item's name in the description title.
+ *
+ * **NOTE:** By default, Upgrades apply their effects to just the module to which they have been installed
+ * unless [shouldShareEffectToOtherModules] is overriden to return **true**
+ */
 open class Upgrade(key: String, settings: JSONObject) : Modification(key, settings) {
     val resourceRatios: MutableMap<String, Float> = LinkedHashMap()
     val upgradeEffects: MutableList<UpgradeModEffect> = ArrayList()
@@ -140,6 +150,9 @@ open class Upgrade(key: String, settings: JSONObject) : Modification(key, settin
         }
     }
 
+    /**
+     * Will be called by [ExoticaEveryFramePlugin] while the [ship] is active in combat (present and alive)
+     */
     open fun advanceInCombatAlways(ship: ShipAPI, member: FleetMemberAPI, mods: ShipModifications) {
         for (effect in upgradeEffects) {
             effect.advanceInCombatAlways(ship, member, mods, this)
@@ -190,7 +203,7 @@ open class Upgrade(key: String, settings: JSONObject) : Modification(key, settin
             val levelList: MutableList<UpgradeModEffect> = levelToEffectMap.getOrPut(startingLevel) { mutableListOf() }
             levelList.add(effect)
         }
-        for (startingLevel in 0 until maxLevel) {
+        for (startingLevel in 0 .. maxLevel) {
             if (levelToEffectMap.containsKey(startingLevel)) {
                 val levelList: List<UpgradeModEffect> = levelToEffectMap[startingLevel]!!
                 if (startingLevel > 1) {
@@ -247,6 +260,30 @@ open class Upgrade(key: String, settings: JSONObject) : Modification(key, settin
     }
 
     /**
+     * Called when the ship hosting this [Upgrade] leaves or is removed from combat, either by retreating or dying.
+     */
+    open fun onOwnerShipRemovedFromCombat(
+            ship: ShipAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            reason: ExoticaShipRemovalReason
+    ) {
+
+    }
+
+    /**
+     * Called when the ship hosting this [Upgrade] enters combat.
+     * Should be called only once per ship.
+     */
+    open fun onOwnerShipEnteredCombat(
+            ship: ShipAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications
+    ) {
+
+    }
+
+    /**
      * Sums up the floats in the map.
      *
      * @param resourceCosts
@@ -268,6 +305,10 @@ open class Upgrade(key: String, settings: JSONObject) : Modification(key, settin
         const val ITEM = "et_upgrade"
         operator fun get(upgradeKey: String?): Upgrade {
             return UpgradesHandler.UPGRADES[upgradeKey]!!
+        }
+
+        fun getNewSpecialItemData(key: String, level: Int): SpecialItemData {
+            return SpecialItemData(ITEM, String.format("%s,%s", key, level))
         }
     }
 }

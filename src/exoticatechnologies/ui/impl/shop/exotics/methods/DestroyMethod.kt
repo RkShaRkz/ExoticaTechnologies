@@ -40,7 +40,8 @@ open class DestroyMethod : ExoticMethod {
             }
 
             if (extraBandwidth > 0) {
-                return (shipBandwidth - mods.getUsedBandwidth()) > extraBandwidth
+                val shipBandwidthVsModsUsedBandwidthDifference = shipBandwidth - mods.getUsedBandwidth()
+                return shipBandwidthVsModsUsedBandwidthDifference >= extraBandwidth
             }
             return true
         }

@@ -3,7 +3,7 @@
     "name": "Exotica Technologies",
     "author": "President Matt Damon",
     "utility": "false",
-    "version": { "major":"2", "minor": "0", "patch": "3" },
+    "version": { "major":"2", "minor": "1", "patch": "0" },
     "description": "Use and fight against a vast array of technologies installed on ships.",
     "gameVersion": "0.97a",
     "jars":["jars/Exotica-Technologies.jar"],
@@ -16,6 +16,10 @@
         {
             "id": "MagicLib",
             "name": "MagicLib",
+        },
+		{
+            "id": "lunalib",
+            "name": "LunaLib",
         },
     ]
 }

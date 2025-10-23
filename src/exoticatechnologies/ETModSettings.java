@@ -74,11 +74,11 @@ public class ETModSettings {
 
     public static void loadModSettings() {
         try {
-            modSettings = Global.getSettings().loadJSON("data/config/settings.json", "exoticatechnologies");
-            modSettings.put(MARKET_EXOTIC_SCALE, MagicSettings.getFloat("exoticatechnologies", MARKET_EXOTIC_SCALE));
-            modSettings.put(MARKET_UPGRADE_SCALE, MagicSettings.getFloat("exoticatechnologies", MARKET_UPGRADE_SCALE));
+            modSettings = Global.getSettings().loadJSON("data/config/settings.json", ETModPlugin.MOD_ID);
+            modSettings.put(MARKET_EXOTIC_SCALE, MagicSettings.getFloat(ETModPlugin.MOD_ID, MARKET_EXOTIC_SCALE));
+            modSettings.put(MARKET_UPGRADE_SCALE, MagicSettings.getFloat(ETModPlugin.MOD_ID, MARKET_UPGRADE_SCALE));
 
-            MAX_EXOTICS  = MagicSettings.getInteger("exoticatechnologies", MAX_EXOTICS_KEY);
+            MAX_EXOTICS  = MagicSettings.getInteger(ETModPlugin.MOD_ID, MAX_EXOTICS_KEY);
 
             productionBandwidthMults = MagicSettings.getFloatMap("industryBandwidthGenerationMultipliers", INDUSTRY_PRODUCTION_BANDWIDTH_MULT);
         } catch (JSONException | IOException ex) {

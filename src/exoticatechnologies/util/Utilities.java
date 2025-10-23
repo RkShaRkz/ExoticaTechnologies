@@ -7,6 +7,7 @@ import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.combat.ShipVariantAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
+import com.fs.starfarer.api.util.Misc;
 import exoticatechnologies.cargo.CrateGlobalData;
 import exoticatechnologies.cargo.CrateItemPlugin;
 import exoticatechnologies.cargo.CrateSpecialData;
@@ -17,7 +18,6 @@ import exoticatechnologies.modifications.exotics.GenericExoticItemPlugin;
 import exoticatechnologies.modifications.exotics.types.ExoticType;
 import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.modifications.upgrades.UpgradeSpecialItemPlugin;
-import org.jetbrains.annotations.Nullable;
 import org.json.JSONArray;
 import org.json.JSONException;
 
@@ -148,6 +148,10 @@ public class Utilities {
 
     public static boolean hasItem(CargoAPI cargo, String id) {
         return getItemQuantity(cargo, id) > 0f;
+    }
+
+    public static boolean hasItemInFleetCargoOrMarketStorageCargo(CampaignFleetAPI fleet, MarketAPI market, String itemToLookFor) {
+        return Utilities.hasItem(fleet.getCargo(), itemToLookFor) || Utilities.hasItem(Misc.getStorageCargo(market), itemToLookFor);
     }
 
     public static float takeItemQuantity(CargoAPI cargo, String id, float quantity) {
@@ -313,6 +317,15 @@ public class Utilities {
 
     public static boolean hasExoticChip(CargoAPI cargo, String id) {
         return getExoticChip(cargo, id) != null;
+    }
+
+    public static boolean hasExoticChipOrItemInCargo(String chipKey, String itemKey, MarketAPI market) {
+        CampaignFleetAPI playerFleet = Global.getSector().getPlayerFleet();
+        boolean hasExoticChipInCargo = Utilities.hasExoticChip(playerFleet.getCargo(), chipKey);
+        boolean hasExoticChipInMarketCargo = Utilities.hasExoticChip(Misc.getStorageCargo(market), chipKey);
+        boolean hasItemInOwnOrMarketCargo = Utilities.hasItemInFleetCargoOrMarketStorageCargo(playerFleet, market, itemKey);
+
+        return hasExoticChipInCargo || hasExoticChipInMarketCargo || hasItemInOwnOrMarketCargo;
     }
 
     public static void takeItem(CargoStackAPI stack) {
