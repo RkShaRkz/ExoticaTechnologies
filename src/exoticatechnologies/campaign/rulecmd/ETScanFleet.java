@@ -14,6 +14,7 @@ import exoticatechnologies.campaign.ScanUtils;
 import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.ShipModifications;
 import lombok.extern.log4j.Log4j;
+import org.apache.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +22,8 @@ import java.util.Map;
 
 @Log4j
 public class ETScanFleet extends BaseCommandPlugin {
+    private Logger log = Logger.getLogger(ETScanFleet.class);
+
     @Override
     public boolean doesCommandAddOptions() {
         return false;

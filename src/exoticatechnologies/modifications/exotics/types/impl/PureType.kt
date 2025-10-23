@@ -5,25 +5,53 @@ import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.StringUtils
+import org.apache.log4j.Logger
 import org.magiclib.kotlin.setAlpha
 import java.awt.Color
 
-class PureType :
-    ExoticType("PURE", colorOverlay = Color(255, 200, 125, 255), sprite = "graphics/icons/overlays/pure.png") {
+class PureType : ExoticType("PURE", colorOverlay = Color(255, 200, 125, 255), sprite = "graphics/icons/overlays/pure.png") {
+    companion object {
+        private val logger = Logger.getLogger(PureType::class.java)
+    }
+
     override fun getPositiveMult(member: FleetMemberAPI, mods: ShipModifications): Float {
-        return 2.5f - 1.5f * getBandwidthRatio(member, mods) - 0.75f * getExoticRatio(member, mods)
+        val positiveMult = 2.5f - 1.5f * getBandwidthRatio(member, mods) - 0.75f * getExoticRatio(member, mods)
+        return positiveMult
     }
 
     override fun getNegativeMult(member: FleetMemberAPI, mods: ShipModifications): Float {
-        return 1f + 0.5f * getBandwidthRatio(member, mods) + 0.25f * getExoticRatio(member, mods)
+        val negativeMult = 1f + 0.5f * getBandwidthRatio(member, mods) + 0.25f * getExoticRatio(member, mods)
+        return negativeMult
     }
 
     private fun getBandwidthRatio(member: FleetMemberAPI, mods: ShipModifications): Float {
-        return ((mods.getUsedBandwidth() / mods.getBaseBandwidth(member))).coerceIn(0f..1f)
+        val retVal: Float
+        val currentBandwidth = mods.getUsedBandwidth()
+        val baseBandwidth = mods.getBaseBandwidth(member)
+        retVal = (currentBandwidth / baseBandwidth).coerceIn(0f..1f)
+
+        // If we still got NaN somehow, return 0; otherwise return what we calculated above
+        return if (retVal.isNaN()) {
+            logger.error("NaN encountered in getBandwidthRatio()\tcurrentBandwidth: ${currentBandwidth}, baseBandwidth: ${baseBandwidth}, retVal: ${retVal}")
+            handleNaN(currentBandwidth, baseBandwidth)
+        } else {
+            retVal
+        }
     }
 
     private fun getExoticRatio(member: FleetMemberAPI, mods: ShipModifications): Float {
-        return ((mods.getExoticSet().size - 1f) / (mods.getMaxExotics(member) - 1f)).coerceIn(0f..1f)
+        val retVal: Float
+        val currentMods = mods.getExoticSet().size - 1f
+        val maxMods = mods.getMaxExotics(member) - 1f
+        retVal = (currentMods / maxMods).coerceIn(0f..1f)
+
+        // If we still got NaN somehow, return 0; otherwise return what we calculated above
+        return if (retVal.isNaN()) {
+            logger.error("NaN encountered in getExoticRatio()\tcurrentMods: ${currentMods}, maxMods: ${maxMods}, retVal: ${retVal}")
+            handleNaN(currentMods, maxMods)
+        } else {
+            retVal
+        }
     }
 
     override fun getChanceMult(context: ShipModFactory.GenerationContext): Float {
@@ -47,5 +75,25 @@ class PureType :
 
     override fun getItemDescTranslation(): StringUtils.Translation? {
         return StringUtils.getTranslation("ExoticTypes", "PureItemDescription")
+    }
+
+    private fun handleNaN(numerator: Float, denominator: Float): Float {
+        return when {
+            numerator > 0f && denominator == 0f -> {
+                // in case we got 0 for base and more than zero for current, we're surely in a [0,1] range
+                // so err on returning 0
+                0f
+            }
+            numerator == 0f && denominator == 0f -> {
+                // in case both are 0, we had a 0/0 division which is probably still NaN and not 0.
+                // Either way, they're equal, so return 1 here
+                1f
+            }
+            else -> {
+                // It'd make sense to redo the calculation here, but we already got a NaN out of it,
+                // so just return 0f
+                0f
+            }
+        }
     }
 }

@@ -16,6 +16,7 @@ import exoticatechnologies.modifications.stats.impl.flux.VentSpeedEffect
 import exoticatechnologies.modifications.stats.impl.health.*
 import exoticatechnologies.modifications.stats.impl.logistics.*
 import exoticatechnologies.modifications.stats.impl.shield.*
+import exoticatechnologies.modifications.stats.impl.shipmisc.EccmChanceEffect
 import exoticatechnologies.modifications.stats.impl.weapons.*
 import org.apache.log4j.Logger
 import org.json.JSONArray
@@ -98,7 +99,9 @@ abstract class UpgradeModEffectDict {
                         MissileSpeedEffect(),
                         MissileRangeEffect(),
                         DamageToMissilesEffect(),
-                        DamageToFightersEffect()
+                        DamageToFightersEffect(),
+                        //ship misc
+                        EccmChanceEffect()
                     )
                         .forEach {
                             mutableDict!![it.key] = it

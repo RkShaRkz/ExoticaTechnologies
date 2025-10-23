@@ -52,6 +52,8 @@ class PhasefieldEngine(key: String, settings: JSONObject) : Exotic(key, settings
         }
     }
 
+    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
+
     override fun applyExoticToStats(
         id: String,
         stats: MutableShipStatsAPI,

@@ -33,8 +33,10 @@ import java.util.*
 import kotlin.math.abs
 import kotlin.math.sin
 
-class PenanceEngine(key: String, settingsObj: JSONObject) :
-    Exotic(key, settingsObj) {
+class PenanceEngine(key: String, settingsObj: JSONObject) : Exotic(key, settingsObj) {
+    private lateinit var originalShip: ShipAPI
+    private lateinit var originalOwnersShield: ShieldAPI
+
     override var color = Color(0x00000)
         get() = Global.getSector().getFaction(Factions.LUDDIC_PATH).color
 
@@ -42,6 +44,8 @@ class PenanceEngine(key: String, settingsObj: JSONObject) :
         return (Utilities.hasExoticChip(Global.getSector().playerFleet.cargo, key)
                 || Utilities.hasExoticChip(Misc.getStorageCargo(market), key))
     }
+
+    override fun getBasePrice() = PRICE
 
     override fun modifyToolTip(
         tooltip: TooltipMakerAPI,
@@ -84,12 +88,46 @@ class PenanceEngine(key: String, settingsObj: JSONObject) :
         mods: ShipModifications,
         exoticData: ExoticData
     ) {
+        originalShip = ship
+
+        // If ship had a shield, lets save it
+        ship.shield?.let {
+            originalOwnersShield = ship.shield
+        }
+
+        // Disable phase cloak
+        ship.phaseCloak?.let {
+            it.cooldownRemaining = Float.MAX_VALUE
+        }
+
+        // Remove shield
         if (ship.hullSpec.hullId == KADUR_CALIPH_SHIELD_GEN_ID) {
             ship.hitpoints = 0f
         }
 
         if (ship.hullSpec.hullId != KADUR_CALIPH_SHIELD_PART_ID) {
             ship.setShield(ShieldAPI.ShieldType.NONE, 0f, 0f, 0f)
+        }
+    }
+
+    override fun onDestroy(member: FleetMemberAPI) {
+        super.onDestroy(member)
+
+        // Restore the phase cloak
+        if (::originalShip.isInitialized) {
+            originalShip.phaseCloak?.let {
+                it.cooldownRemaining = 0f
+            }
+        }
+
+        // If we had a shield saved, lets restore it
+        if (::originalOwnersShield.isInitialized) {
+            originalShip.setShield(
+                    originalOwnersShield.type,
+                    originalOwnersShield.upkeep,
+                    originalOwnersShield.fluxPerPointOfDamage,
+                    originalOwnersShield.arc
+            )
         }
     }
 
@@ -312,6 +350,8 @@ class PenanceEngine(key: String, settingsObj: JSONObject) :
     }
 
     companion object {
+        private const val PRICE = 750000
+
         private const val BUFF_RANGE = 1200
         private const val WEAPON_REPAIRRATE_BUFF = 60
         private const val SIDE_SPEED_BOOST = 40
@@ -324,8 +364,19 @@ class PenanceEngine(key: String, settingsObj: JSONObject) :
     }
 }
 
-class PenanceEngineParticleData(x: Float, y: Float, xVel: Float, yVel: Float, angle: Float, aVel: Float, ttl: Float, startingSize: Float, endSize: Float, startingColor: Color, endColor: Color)
-    : ParticleData(
+class PenanceEngineParticleData(
+        x: Float,
+        y: Float,
+        xVel: Float,
+        yVel: Float,
+        angle: Float,
+        aVel: Float,
+        ttl: Float,
+        startingSize: Float,
+        endSize: Float,
+        startingColor: Color,
+        endColor: Color
+) : ParticleData(
     sprite = Global.getSettings().getSprite("graphics/fx/cleaner_clouds00.png"),
     x = x,
     y = y,
@@ -340,4 +391,5 @@ class PenanceEngineParticleData(x: Float, y: Float, xVel: Float, yVel: Float, an
     startingColor = startingColor,
     endColor = endColor,
     spritesInRow = 2,
-    spritesInColumn = 2)
+    spritesInColumn = 2
+)

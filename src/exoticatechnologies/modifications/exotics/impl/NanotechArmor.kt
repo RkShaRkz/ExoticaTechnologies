@@ -30,10 +30,13 @@ import org.magiclib.util.MagicUI
 import java.awt.Color
 import java.util.*
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
-class NanotechArmor(key: String, settingsObj: JSONObject) :
-    Exotic(key, settingsObj) {
+class NanotechArmor(key: String, settingsObj: JSONObject) : Exotic(key, settingsObj) {
+    private lateinit var originalShip: ShipAPI
+    private lateinit var originalOwnersShield: ShieldAPI
+
     override var color = Color(0x00000)
         get() = Global.getSector().getFaction(Factions.DERELICT).color
 
@@ -43,45 +46,52 @@ class NanotechArmor(key: String, settingsObj: JSONObject) :
     }
 
     override fun modifyToolTip(
-        tooltip: TooltipMakerAPI,
-        title: UIComponentAPI,
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData,
-        expand: Boolean
+            tooltip: TooltipMakerAPI,
+            title: UIComponentAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData,
+            expand: Boolean
     ) {
         if (expand) {
             StringUtils.getTranslation(key, "longDescription")
-                .format("weaponRepairRate", WEAPON_REPAIRRATE_BUFF * getPositiveMult(member, mods, exoticData))
-                .format("buffRange", getBuffRange(member, mods, exoticData))
-                .formatFloat("armorRegenPerSec", ARMOR_REGEN_PER_SECOND)
-                .format("armorRegenMax", ARMOR_REGEN_MAX)
-                .format("armorRegenPerSecondMax", ARMOR_REGEN_PER_SECOND_MAX)
-                .format("damageThreshold", getDamageThreshold(member, mods, exoticData))
-                .addToTooltip(tooltip, title)
+                    .format("weaponRepairRate", WEAPON_REPAIRRATE_BUFF * getPositiveMult(member, mods, exoticData))
+                    .format("buffRange", getBuffRange(member, mods, exoticData))
+                    .formatFloat("armorRegenPerSec", ARMOR_REGEN_PER_SECOND)
+                    .format("armorRegenMax", ARMOR_REGEN_MAX)
+                    .format("armorRegenPerSecondMax", ARMOR_REGEN_PER_SECOND_MAX)
+                    .format("damageThreshold", getDamageThreshold(member, mods, exoticData))
+                    .addToTooltip(tooltip, title)
         }
     }
 
     override fun applyExoticToStats(
-        id: String,
-        stats: MutableShipStatsAPI,
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData
+            id: String,
+            stats: MutableShipStatsAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
     ) {
         stats.combatWeaponRepairTimeMult.modifyMult(
-            buffId,
-            1 - (WEAPON_REPAIRRATE_BUFF * getPositiveMult(member, mods, exoticData)) / 100f
+                buffId,
+                1 - (WEAPON_REPAIRRATE_BUFF * getPositiveMult(member, mods, exoticData)) / 100f
         )
     }
 
     override fun applyToShip(
-        id: String,
-        member: FleetMemberAPI,
-        ship: ShipAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData
+            id: String,
+            member: FleetMemberAPI,
+            ship: ShipAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
     ) {
+        originalShip = ship
+
+        // If ship had a shield, lets save it
+        ship.shield?.let {
+            originalOwnersShield = ship.shield
+        }
+
         if (ship.hullSpec.hullId == KADUR_CALIPH_SHIELD_GEN_ID) {
             ship.hitpoints = 0f
         }
@@ -89,16 +99,39 @@ class NanotechArmor(key: String, settingsObj: JSONObject) :
         if (ship.hullSpec.hullId != KADUR_CALIPH_SHIELD_PART_ID) {
             ship.setShield(ShieldAPI.ShieldType.NONE, 0f, 0f, 0f)
         }
+
+        ship.phaseCloak?.let {
+            it.cooldownRemaining = Float.MAX_VALUE
+        }
+    }
+
+    override fun onDestroy(member: FleetMemberAPI) {
+        super.onDestroy(member)
+        if (::originalShip.isInitialized) {
+            originalShip.phaseCloak?.let {
+                it.cooldownRemaining = 0f
+            }
+        }
+
+        // If we had a shield saved, lets restore it
+        if (::originalOwnersShield.isInitialized) {
+            originalShip.setShield(
+                    originalOwnersShield.type,
+                    originalOwnersShield.upkeep,
+                    originalOwnersShield.fluxPerPointOfDamage,
+                    originalOwnersShield.arc
+            )
+        }
     }
 
     private val statusBarText: String
         get() = StringUtils.getString(key, "statusBarText")
 
     override fun advanceInCombatAlways(
-        ship: ShipAPI,
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData
+            ship: ShipAPI,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
     ) {
         var color = RenderUtils.getAliveUIColor()
         if (AIUtils.getNearbyEnemies(ship, getBuffRange(member, mods, exoticData)).isNotEmpty()) {
@@ -108,22 +141,22 @@ class NanotechArmor(key: String, settingsObj: JSONObject) :
 
         val damage = getDamageTracker(ship).damage
         MagicUI.drawInterfaceStatusBar(
-            ship,
-            damage / getDamageThreshold(member, mods, exoticData),
-            color,
-            color,
-            0f,
-            statusBarText,
-            -1
+                ship,
+                damage / getDamageThreshold(member, mods, exoticData),
+                color,
+                color,
+                0f,
+                statusBarText,
+                damage.roundToInt()
         )
     }
 
     override fun advanceInCombatUnpaused(
-        ship: ShipAPI,
-        amount: Float,
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData
+            ship: ShipAPI,
+            amount: Float,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
     ) {
         if (ship.fluxTracker.isOverloaded) return
 
@@ -141,18 +174,18 @@ class NanotechArmor(key: String, settingsObj: JSONObject) :
 
             for (i in 0..10) {
                 Global.getCombatEngine().spawnEmpArcPierceShields(
-                    ship,
-                    ship.location,
-                    null,
-                    ship,
-                    DamageType.OTHER,
-                    0f,
-                    1000f,  // emp
-                    10000f,  // max range
-                    null,
-                    20f,  // thickness
-                    Color(100, 165, 255, 255),
-                    Color(255, 255, 255, 255)
+                        ship,
+                        ship.location,
+                        null,
+                        ship,
+                        DamageType.OTHER,
+                        0f,
+                        1000f,  // emp
+                        10000f,  // max range
+                        null,
+                        20f,  // thickness
+                        Color(100, 165, 255, 255),
+                        Color(255, 255, 255, 255)
                 )
             }
 
@@ -177,13 +210,13 @@ class NanotechArmor(key: String, settingsObj: JSONObject) :
                         val armor = grid[x][y]
                         if (armor < shipArmorRating) {
                             val recoverPercentPerSecond = (nearby.size * ARMOR_REGEN_PER_SECOND)
-                                .coerceAtMost(ARMOR_REGEN_MAX) / 100f
+                                    .coerceAtMost(ARMOR_REGEN_MAX) / 100f
                             val recovered = (shipArmorRating * recoverPercentPerSecond * interval.intervalDuration)
-                                .coerceAtMost(maxRegen)
+                                    .coerceAtMost(maxRegen)
                             ship.armorGrid.setArmorValue(
-                                x,
-                                y,
-                                armor + recovered
+                                    x,
+                                    y,
+                                    armor + recovered
                             )
 
                             regened += recovered
@@ -197,19 +230,19 @@ class NanotechArmor(key: String, settingsObj: JSONObject) :
                         val randomX = ship.collisionRadius * MathUtils.getRandomNumberInRange(-0.5f, 0.5f)
                         val randomY = ship.collisionRadius * MathUtils.getRandomNumberInRange(-0.5f, 0.5f)
                         ParticleController.INSTANCE.addParticle(
-                            NanoTechParticleData(
-                                x = ship.location.x + randomX,
-                                y = ship.location.y + randomY,
-                                xVel = ship.velocity.x * MathUtils.getRandomNumberInRange(-0.5f, 0.5f),
-                                yVel = ship.velocity.y * MathUtils.getRandomNumberInRange(-0.5f, 0.5f),
-                                angle = MathUtils.getRandomNumberInRange(0f, 360f),
-                                aVel = MathUtils.getRandomNumberInRange(0f, 100f),
-                                startingSize = 20f,
-                                endSize = 5f,
-                                ttl = 1f,
-                                startingColor = color,
-                                endColor = Color.BLACK.setAlpha(0)
-                            )
+                                NanoTechParticleData(
+                                        x = ship.location.x + randomX,
+                                        y = ship.location.y + randomY,
+                                        xVel = ship.velocity.x * MathUtils.getRandomNumberInRange(-0.5f, 0.5f),
+                                        yVel = ship.velocity.y * MathUtils.getRandomNumberInRange(-0.5f, 0.5f),
+                                        angle = MathUtils.getRandomNumberInRange(0f, 360f),
+                                        aVel = MathUtils.getRandomNumberInRange(0f, 100f),
+                                        startingSize = 20f,
+                                        endSize = 5f,
+                                        ttl = 1f,
+                                        startingColor = color,
+                                        endColor = Color.BLACK.setAlpha(0)
+                                )
                         )
                     }
                 }
@@ -251,17 +284,17 @@ class NanotechArmor(key: String, settingsObj: JSONObject) :
     }
 
     fun getBuffRange(
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
     ): Float {
         return BUFF_RANGE / getNegativeMult(member, mods, exoticData).coerceAtLeast(1f)
     }
 
     fun getDamageThreshold(
-        member: FleetMemberAPI,
-        mods: ShipModifications,
-        exoticData: ExoticData
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
     ): Float {
         val baseHull = member.hullSpec.hitpoints
         val modifiedHull = baseHull + member.stats.hullBonus.computeEffective(member.hullSpec.hitpoints)
@@ -289,20 +322,32 @@ class NanotechArmor(key: String, settingsObj: JSONObject) :
     }
 }
 
-class NanoTechParticleData(x: Float, y: Float, xVel: Float, yVel: Float, angle: Float, aVel: Float, ttl: Float, startingSize: Float, endSize: Float, startingColor: Color, endColor: Color)
-    : ParticleData(
-    sprite = Global.getSettings().getSprite("graphics/fx/cleaner_clouds00.png"),
-    x = x,
-    y = y,
-    xVel = xVel,
-    yVel = yVel,
-    angle = angle,
-    aVel = aVel,
-    startingTime = Global.getCombatEngine().getTotalElapsedTime(false),
-    ttl = ttl,
-    startingSize = startingSize,
-    endSize = endSize,
-    startingColor = startingColor,
-    endColor = endColor,
-    spritesInRow = 2,
-    spritesInColumn = 2)
+class NanoTechParticleData(
+        x: Float,
+        y: Float,
+        xVel: Float,
+        yVel: Float,
+        angle: Float,
+        aVel: Float,
+        ttl: Float,
+        startingSize: Float,
+        endSize: Float,
+        startingColor: Color,
+        endColor: Color
+) : ParticleData(
+        sprite = Global.getSettings().getSprite("graphics/fx/cleaner_clouds00.png"),
+        x = x,
+        y = y,
+        xVel = xVel,
+        yVel = yVel,
+        angle = angle,
+        aVel = aVel,
+        startingTime = Global.getCombatEngine().getTotalElapsedTime(false),
+        ttl = ttl,
+        startingSize = startingSize,
+        endSize = endSize,
+        startingColor = startingColor,
+        endColor = endColor,
+        spritesInRow = 2,
+        spritesInColumn = 2
+)

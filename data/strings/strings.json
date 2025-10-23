@@ -18,6 +18,11 @@
 		"pristine":"(pristine)",
 		"ultimate":"(ultimate)",
 		"perfect":"(perfect)",
+		"transcendent":"(transcendent)",
+		"peerless":"(peerless)",
+		"apotheotic":"(apotheotic)",
+		"incomparable":"(incomparable)",
+		"omnipotent":"(omnipotent)",
 		"unknown":"(???)"
 	},
 	"CommonOptions": {
@@ -123,7 +128,8 @@
 		"InstallExoticChip": "Use chip",
 		"RecoverExotic": "Recover chip",
 		"DestroyExotic": "Destroy",
-		"InstalledTitle": "INSTALLED"
+		"InstalledTitle": "INSTALLED",
+		"DontDoFromRefitScreen": "Don't use from Refit screen."
 	},
 	"ExoticCosts": {
 		"BandwidthGivenByExotic": "Max bandwidth: *${bandwidth}* (*${exoticBandwidth}*)"
@@ -133,6 +139,7 @@
 		"UpgradeHelp": "Upgrades are incremental changes to the stats of a ship. They cost bandwidth, have a limited number of levels, and installing one without a chip costs credits or resources.",
 		"UpgradeLevel": "Level ${level}",
 		"UpgradePerformedSuccessfully": "Your chief engineer reports that the *${name}* upgrade was a success. It is now *level ${level}*.",
+		"UpgradeCannotBePerformed": "\"Whoops chief. Something went wrong, and we couldn't pull off the *${name}* upgrade you wanted. It is still at *level ${level}*.\"",
 		"UpgradeRecoveredSuccessfully": "Your chief engineer reports that your plan to remove the modification from the ship worked. They say this with the slightest disbelief, as if surprised that the plan worked at all.",
 		"ModDescriptionButtonText": "Description",
 		"ModStatsButtonText": "Stats",
@@ -165,7 +172,7 @@
 	"SpooledFeeders": {
 		"description": "Although unable to be used for the same purpose as a full-size Fullerene spool, this much-smaller chain can be used instead to replace many of the moving mechanical parts within a ship. The chain notably increases the rate of fire of weapons upon being disturbed, generating some kind of intense field that crew members can only describe as \"bloodthirsty\". The chain slows down considerably after a couple seconds, with an effect on the ship that matches its slower speed.",
 		"tooltip": "Adds a new active ability that increases weapon firerate substantially. Firerate slows considerably for a time after.",
-		"longDescription": "Adds an active ability that increases weapon fire rate by *${firerateBoost}%%* for *${boostTime} seconds*. After this time, weapon fire rate is reduced by =${firerateMalus}%%= for *${malusTime} seconds*. The ability takes *${cooldownTime} seconds* to recharge.",
+		"longDescription": "Adds an active ability that increases weapon fire rate by *${firerateBoost}%%* for *${boostTime} seconds*. After this time, weapon fire rate is reduced by =${firerateMalus}%%= for *${malusTime} seconds*. The ability takes *${cooldownTime} seconds* to recharge. =Works only on module(s) where it's installed=",
 		"needItem": "You need a ${itemName} to install this.",
 		"systemText": "SPOOLED FEEDERS"
 	},
@@ -173,38 +180,38 @@
 		"description": "An Alpha Core can be coerced into performing critical bandwidth calculations onboard a ship. It doesn't require much coersion when they are told that they will be instrumental in ship-to-ship combat, and although their reasons are typically \"beyond our understanding\", some of a certain faith may instead attribute it to the infamous AI Wars.",
 		"tooltip": "Increases usable bandwidth of the ship. Reduces ordnance point costs for weapons and fighters.",
 		"needItem": "You need an ${itemName} to install this.",
-		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. Reduces ordnance point costs for weapons by *${smallReduction}/${medReduction}/${largeReduction}* based on weapon size, and for fighters and bombers by *${fghtrReduction}/${bmberReduction}*.",
+		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. Reduces ordnance point costs for weapons by *${smallReduction}/${medReduction}/${largeReduction}* based on weapon size, and for fighters and bombers by *${fghtrReduction}/${bmberReduction}*. =Installs on and works across whole ship=. =Installable only on the main module=.",
 		"conflictDetected": "The subcore is receiving interference from something else installed on the ship, and can't reduce ordnance point costs."
 	},
 	"PlasmaFluxCatalyst": {
 		"description": "A Plasma Flux Catalyst can be used to vastly decrease the amount of equipment needed to provide power to a ship thanks to its ability to extract that energy from any number of capacitors in parallel. The space saved allows for more complicated weaponry to be installed, although the resulting heat from such a system is dreadful if too many capacitors or flux vents are installed.",
 		"tooltip": "Improve flux capacitors and vents. Reduce CR if too many are installed.",
 		"needItem": "You need a ${itemName} to install this.",
-		"longDescription": "The effectiveness of flux capacitors and vents is increased by *${effectLevel}%%*. Installing more than *${capacitorLimit} capacitors or ${ventLimit} vents* will reduce combat readiness by =${crDecrease}%%= for every one installed over that amount. Note that this decrease doesn't appear immediately inside the refit dialog."
+		"longDescription": "The effectiveness of flux capacitors and vents is increased by *${effectLevel}%%*. Installing more than *${capacitorLimit} capacitors or ${ventLimit} vents* will reduce combat readiness by =${crDecrease}%%= for every one installed over that amount. Note that this decrease doesn't appear immediately inside the refit dialog. =Works on whole ship="
 	},
 	"DriveFluxVent": {
 		"description": "An experimental flux vent that can only function under the intense heat that ship thrusters generate. It excels at venting flux, so well in fact that the thrusters around it receive a temporary increase in power, especially in the forward direction. Crew members remark that the purple glow of the engines is one of the prettiest sights to ever see.",
 		"tooltip": "Decreases flux dissipation. Adds an active ability that vents a large portion of flux while shifting the ship at a high speed.",
 		"needItem": "You need a ${itemName} to install this.",
-		"longDescription": "Decreases flux dissipation by =${ventBonus}%%=. Adds an active ability that shifts in the chosen direction while venting *${fluxVentPercent}%% flux* (up to *${fluxVentMax} total flux*), and increasing damage taken by =${damageTakenMult}%%= for some time afterwards. The ability has two charges and takes *${cooldown} seconds* to gain a charge.",
+		"longDescription": "Decreases flux dissipation by =${ventBonus}%%=. Adds an active ability that shifts in the chosen direction while venting *${fluxVentPercent}%% flux* (up to *${fluxVentMax} total flux*), and increasing damage taken by =${damageTakenMult}%%= for some time afterwards. The ability has two charges and takes *${cooldown} seconds* to gain a charge. =Works only on module(s) where it's installed=. =Installable only on the main module=.",
 		"systemText": "DRIVE FLUX VENT"
 	},
 	"EqualizerCore": {
 		"description": "This core is dedicated to managing weaponry to an degree that rivals even Alpha Cores given control of weapon arrays, with one unique quirk: effective ordnance ranges of non-missile weapons are equalized to a certain degree. The core, in its Terms of Use, swears by its Stronger than an Alpha trademark, and it can't be used for anything but weapons.. supposedly.",
 		"tooltip": "Improve recoil control and weapon turn rate. Equalizes weapon base ranges to a middle-ground range.",
 		"needItem": "You need an ${itemName} to install this.",
-		"longDescription": "Reduces recoil by *${recoilReduction}%%*. Increases weapon turn rate by *${weaponTurnBonus}%%*. Autofire leading is nearly perfected. Weapons with at most *${lowRangeThreshold} base range* have it increased by *${rangeBonus}*. Weapons with at least *${highRangeThreshold} base range* have it reduced by =${rangeMalus}= and damage increased by *${rangeDecreaseDamageIncrease}%%* per 100 units over."
+		"longDescription": "Reduces recoil by *${recoilReduction}%%*. Increases weapon turn rate by *${weaponTurnBonus}%%*. Autofire leading is nearly perfected.\n- Weapons with *base range lower than ${lowRangeThreshold}* have it increased by *${rangeBonus}*\n- Weapons with *base range above ${highRangeThreshold}* have it reduced by =${rangeMalus}= for every 100 units over ${highRangeThreshold} and *gain ${rangeDecreaseDamageIncrease}%% damage* for every 100 units over ${highRangeThreshold}.\n\n=Works only on module(s) where it's installed="
 	},
 	"HyperspecLPC": {
 		"description": "A cutting-edge LPC conversion device that consolidates all resources into a single wing LPC. The singular wing is greatly enhanced in speed, armor, and damage as a result, but takes significantly longer to create and repair.",
 		"tooltip": "Reduces the number of bays to 1. Buffs the remaining wing significantly based on how many bays were removed. Increases the replacement time for the fighter wing.",
-		"longDescription": "Reduces the number of bays to 1. Fighter non-missile damage is increased by *${fighterDamageIncrease}%%*, speed is increased by *${fighterSpeedIncrease}%%*, armor is increased by *${fighterArmorIncrease}%%*, flux is increased by *${fighterFluxIncrease}%%* and hull is increased by *${fighterHullIncrease}%%*. Replacement time is increased by =${replacementTimeIncrease}%%=."
+		"longDescription": "Reduces the number of bays to 1. Fighter non-missile damage is increased by *${fighterDamageIncrease}%%*, speed is increased by *${fighterSpeedIncrease}%%*, armor is increased by *${fighterArmorIncrease}%%*, flux is increased by *${fighterFluxIncrease}%%* and hull is increased by *${fighterHullIncrease}%%*. Replacement time is increased by =${replacementTimeIncrease}%%=. =Works only on module(s) where it's installed="
 	},
 	"PhasedFighterTether": {
 		"description": "Tri-Tachyon markets the technological marvel as a multidimensional web that rips open a hole between the fighter and its launch bay. The fighter is then violently sucked through the vortex, saving the hull from complete destruction. The only caveat is that the device can only work so fast, and is unable to keep the fighter in working condition if it is destroyed outright.",
 		"tooltip": "Fighters at low health are instantly pulled back to the ship's hangar bays. Damaged parts are pulled back as well and are used to repair fighters, increasing replacement rate.",
 		"needItem": "You need a ${itemName} to install this.",
-		"longDescription": "*Half* of the total number of fighters can be *teleported back to the ship* if they are at low health. This effect recharges every minute. Fighter refit time is reduced by *${fighterRefitTimeDecrease}%%*.",
+		"longDescription": "*Half* of the total number of fighters can be *teleported back to the ship* if they are at low health. This effect recharges every minute. Fighter refit time is reduced by *${fighterRefitTimeDecrease}%%*. =Works only on module(s) where it's installed=",
 		"statusBarText": "TETHER"
 	},
 	"HackedMissileForge": {
@@ -213,7 +220,7 @@
 		"needCredits": "You need ${credits} to install this.",
 		"needItem": "You need a ${itemName} to install this.",
 		"statusBarText": "M.FORGE",
-		"longDescription": "Reduces missile damage by =${damageDecrease}%%=. Reloads all of any non-reloading missile's ammunition capacity every *${reloadTime} seconds*. This only affects missiles with more than 1 ammo.",
+		"longDescription": "Reduces missile damage by =${damageDecrease}%%=. Reloads all of any non-reloading missile's ammunition capacity every *${reloadTime} seconds*. This only affects missiles with more than 1 ammo. =Works on whole ship=",
 		"statusReloaded": "Reloaded weapons!"
 	},
 	"PhasefieldEngine": {
@@ -221,7 +228,7 @@
 		"tooltip": "Phase activation cost is reduced, but doubles every time you use it within a short time. The ship becomes very damage resistant for a short time when exiting phase. Ships with negative or zero flux cost will cost flux to phase.",
 		"needPhaseShip": "Only phase ships can install this.",
 		"needItem": "You need an ${itemName} to install this.",
-		"longDescription": "Phase activation cost is reduced by *${phaseCostReduction}x*, but =doubles= every time you use it in a period of *${phaseResetTime} seconds*. The ship receives *66%% reduced damage* which fades over time for *${noDamageTime} seconds* when exiting phase. Ships with a base negative phase flux cost will instead =cost flux=, and ships with a base zero phase flux cost will cost =${zeroFluxCost}%% of base flux capacity=.",
+		"longDescription": "Phase activation cost is reduced by *${phaseCostReduction}x*, but =doubles= every time you use it in a period of *${phaseResetTime} seconds*. The ship receives *66%% reduced damage* which fades over time for *${noDamageTime} seconds* when exiting phase. Ships with a base negative phase flux cost will instead =cost flux=, and ships with a base zero phase flux cost will cost =${zeroFluxCost}%% of base flux capacity=. =Works only on module(s) where it's installed=. =Installable only on the main module=.",
 		"statusBarText": "P.FIELD",
 		"statusTitle": "PHASEFIELD ENGINE",
 		"statusInvulnerable": "DMG RESIST INCREASED (${noDamageDuration})",
@@ -230,13 +237,13 @@
 	"FullMetalSalvo": {
 		"description": "Overcharging weapon systems results in a massive increase to damage and projectile speeds, but the power such a system controller takes along with the potential damage from overcharging the power of weaponry causes a long term effect on the rate of fire of weapons on board the ship.",
 		"tooltip": "Adds an active ability that gives a massive damage and projectile speed boost for a very short period. Rate of fire on the ship is reduced permanently.",
-		"longDescription": "Adds an active ability that increases all weapon projectile speed by *${projSpeedBoost}%%* and non-missile damage by *${damageBoost}%%* for *${boostTime} seconds*. The ability takes *${cooldown} seconds* to recharge. Weapon fire rate is reduced by =${firerateMalus}%%= permanently.",
+		"longDescription": "Adds an active ability that increases all weapon projectile speed by *${projSpeedBoost}%%* and non-missile damage by *${damageBoost}%%* for *${boostTime} seconds*. The ability takes *${cooldown} seconds* to recharge. Weapon fire rate is reduced by =${firerateMalus}%%= permanently. =Works on whole ship=",
 		"systemText": "FULL METAL SALVO"
 	},
 	"TerminatorSubsystems": {
 		"description": "A squadron of terminator drones circles this ship, serving as both an effective point defense system, and as deadly weapons.",
 		"tooltip": "Terminator drones circle the ship, serving as point defense. They can be activated to convert into a seeking missile.",
-		"longDescription": "Spawns ${drones} Terminator drones (scales with hull size) that circle the ship, serving as point defense and passive weaponry. Adds an active ability that converts one of the drones into a seeking missile.",
+		"longDescription": "Spawns ${drones} Terminator drones (scales with hull size) that circle the ship, serving as point defense and passive weaponry. Adds an active ability that converts one of the drones into a seeking missile. =Works only on module(s) where it's installed=",
 		"systemText": "TERMINATORS",
 		"outOfRange": "OUT OF RANGE",
 		"noFlux": "FLUX LEVELS TOO HIGH"
@@ -244,48 +251,53 @@
 	"TierIIIDriveSystem": {
 		"description": "Pressurized fuel tanks increase the rate of fuel injection to a custom burn drive, speeding up the entire fleet. A favorite among logistics fleets, the technology required to keep pressurized fuel stable requires almost all of the cargo space, but the technology scales up extremely well and allows for a large amount of fuel to be stored.",
 		"tooltip": "Replaces most of the ship's cargo capacity with fuel storage. Burn speed is increased while the fleet's fuel reserves are high.",
-		"longDescription": "Replaces =${cargoToFuelPercent}%% of cargo capacity= and converts it to *fuel storage*. If the fleet is above *${burnBonusFuelReq}%% fuel*, burn speed of the fleet is increased by *${burnBonus}*."
+		"longDescription": "Replaces =${cargoToFuelPercent}%% of cargo capacity= and converts it to *fuel storage*. If the fleet is above *${burnBonusFuelReq}%% fuel*, burn speed of the fleet is increased by *${burnBonus}*. =Works on whole ship="
 	},
 	"PenanceEngine": {
 		"description": "A rare artefact, granting its crew divine might if they are willing to sacrifice everything in the name of Ludd. Its powers shine true when among those who stand against it, granting a boon of strength and endurance to smite all that stand in its way.",
 		"tooltip": "Increases weapon repair rate and disables shields. Grants armor repair and increased speed in lateral directions while near enemy ships. Large amounts of damage will cause a massive EMP burst on the ship.",
-		"longDescription": "Increases weapon repair rate by *${weaponRepairRate}%%*, and =disables shields and phase systems=. When within 1200 units of an enemy ship, *armor repairs itself at a rate of ${armorRegenPerSec}%% per second per enemy ship* (up to *${armorRegenMax}%%*, max *${armorRegenPerSecondMax} per second*) and *${sideSpeedBoost} higher speed* when moving laterally (strafing). If =${damageThreshold} armor/hull damage= is taken within a short window, the ship will release a massive EMP burst onto itself, damaging most weapons and engines.",
+		"longDescription": "Increases weapon repair rate by *${weaponRepairRate}%%*, and =disables shields and phase systems=. When within 1200 units of an enemy ship, *armor repairs itself at a rate of ${armorRegenPerSec}%% per second per enemy ship* (up to *${armorRegenMax}%%*, max *${armorRegenPerSecondMax} per second*) and *${sideSpeedBoost} higher speed* when moving laterally (strafing). If =${damageThreshold} armor/hull damage= is taken within a short window, the ship will release a massive EMP burst onto itself, damaging most weapons and engines. =Works only on module(s) where it's installed=",
 		"statusBarText": "LUDD"
 	},
 	"NanotechArmor": {
 		"description": "A swarm of nanobots constantly surrounds the armor. Nearly invisible to the naked eye, yet extremely effective at repairing weapons systems and even capable of ongoing repairs during combat.",
 		"tooltip": "Increases weapon repair rate and disables shields. Grants armor repair while near enemy ships. Large amounts of damage will cause a massive EMP burst on the ship.",
-		"longDescription": "Increases weapon repair rate by *${weaponRepairRate}%%*, and =disables shields and phase systems=. When within 1200 units of an enemy ship, *armor repairs itself at a rate of ${armorRegenPerSec}%% per second per enemy ship* (up to *${armorRegenMax}%%*, max *${armorRegenPerSecondMax} per second*). If =${damageThreshold} armor/hull damage= is taken within a short window, the ship will release a massive EMP burst onto itself, damaging most weapons and engines.",
+		"longDescription": "Increases weapon repair rate by *${weaponRepairRate}%%*, and =disables shields and phase systems=. When within 1200 units of an enemy ship, *armor repairs itself at a rate of ${armorRegenPerSec}%% per second per enemy ship* (up to *${armorRegenMax}%%*, max *${armorRegenPerSecondMax} per second*). If =${damageThreshold} armor/hull damage= is taken within a short window, the ship will release a massive EMP burst onto itself, damaging most weapons and engines. =Works only on module(s) where it's installed=",
 		"statusBarText": "NANO"
 	},
 	"ReactiveDamperField": {
 		"description": "A grid of sensors mostly found on Daemon-type ships, integrated with an artificial intelligence on board able to harden the ship's armor when detecting a threat severe enough to cause significant damage. The sheer amount of connections required between the intelligence and sensors weakens the armor significantly when not protected by this dampening field.",
 		"tooltip": "If taking damage over a certain amount, dampen the initial hit and all damage for a short period of time. This effect has a cooldown. Increases armor damage taken when the damper field is not active.",
 		"needItem": "You need a ${itemName} to install this.",
-		"longDescription": "Activates a damper field for *${damperDuration} seconds*, reducing all damage taken by *${damperReduction}%%*, when taking damage over *${triggeringDamage}*. It has a =${damperCooldown}= second cooldown. Armor damage taken is increased by =${armorDamageTaken}%%=.",
+		"longDescription": "Activates a damper field for *${damperDuration} seconds*, reducing all damage taken by *${damperReduction}%%*, when taking damage over *${triggeringDamage}*. It has a =${damperCooldown}= second cooldown. Armor damage taken is increased by =${armorDamageTaken}%%=. =Works on whole ship=",
 		"statusBarText": "DAMPER"
 	},
 	"DaemonCore": {
 		"description": "A Daemon Core is far more efficient at all things warfare-related: ordnance calculations, ammunition placement, and diverting energy from non-efficient subsystems, such as reactive armor and shield emitters.",
 		"tooltip": "Increases usable bandwidth of the ship. Reduces ordnance point costs for weapons and fighters. Increases damage dealt and received.",
 		"needItem": "You need a ${itemName} to install this.",
-		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. Reduces ordnance point costs for weapons by *${smallReduction}/${medReduction}/${largeReduction}* based on weapon size, and for fighters and bombers by *${fghtrReduction}/${bmberReduction}*. Increases damage *dealt* and =received= by &${doubleEdge}%%&."
+		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. Reduces ordnance point costs for weapons by *${smallReduction}/${medReduction}/${largeReduction}* based on weapon size, and for fighters and bombers by *${fghtrReduction}/${bmberReduction}*. Increases damage *dealt* and =received= by &${doubleEdge}%%&. =Installs on and works across whole ship=. =Installable only on the main module=.",
+		"conflictDetected": "The subcore is receiving interference from something else installed on the ship, and can't reduce ordnance point costs."
 	},
 	"AnomalousConjuration": {
 		"description": "Impure.",
-		"tooltip": "Impure."
+		"tooltip": "Impure.",
+		"longDescription": "Randomly spawns anomalous fighters during combat."
 	},
 	"SubsumedAlphaCore": {
 		"description": "There's a faint trace of an Alpha-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
-		"tooltip": "There's a faint trace of an Alpha-level AI coming from the ship. Whether it actually wants to be there requires a much closer look."
+		"tooltip": "There's a faint trace of an Alpha-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
+		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. =Does not count towards exotic limit="
 	},
 	"SubsumedBetaCore": {
 		"description": "There's a faint trace of an Beta-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
-		"tooltip": "There's a faint trace of an Beta-level AI coming from the ship. Whether it actually wants to be there requires a much closer look."
+		"tooltip": "There's a faint trace of an Beta-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
+		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. =Does not count towards exotic limit="
 	},
 	"SubsumedGammaCore": {
 		"description": "There's a faint trace of an Gamma-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
-		"tooltip": "There's a faint trace of an Gamma-level AI coming from the ship. Whether it actually wants to be there requires a much closer look."
+		"tooltip": "There's a faint trace of an Gamma-level AI coming from the ship. Whether it actually wants to be there requires a much closer look.",
+		"longDescription": "Increases bandwidth by *${bandwidthIncrease} TB/s*. =Does not count towards exotic limit="
 	},
 	"WeldedArmor": {
 		"description": "Improve hull and armor by welding additional armor plates, but reduce EMP resistance and weapon and engine health due to the additional conduits and weight."
@@ -355,20 +367,20 @@
 	},
 	"WaspDefenseDrones": {
 		"description": "Wasp defense drones surround the ship, protecting it.",
-		"tooltip": "*${drones}* Wasp drones circle the ship. One drone recharges every 20 seconds."
+		"tooltip": "*${drones}* Wasp drones circle the ship. One drone recharges every 20 seconds. =Works only on module(s) where it's installed=. =Installable only on the main module=."
 	},
 	"Kingslayer": {
 		"italics": "Cut them down to size.",
 		"description": "This ship poses an extreme threat to cruisers and capital ships.",
-		"tooltip": "*+${damageToCruisers}%%* damage to cruisers. *+${damageToCapitals}%%* damage to capital ships."
+		"tooltip": "*+${damageToCruisers}%%* damage to cruisers. *+${damageToCapitals}%%* damage to capital ships. =Works on whole ship="
 	},
 	"QuickJets": {
 		"description": "Installed auxiliary jets can be activated to provide an extreme boost to maneuverability for even the most sluggish ships.",
-		"tooltip": "Adds an ability that makes a ship turn faster. This includes a flat bonus to turn speed, so even slow ships will benefit greatly."
+		"tooltip": "Adds an ability that makes a ship turn faster. This includes a flat bonus to turn speed, so even slow ships will benefit greatly. =Works only on module(s) where it's installed=. =Installable only on the main module=."
 	},
 	"ExternalThrusters": {
 		"description": "Install external thrusters and booster rockets to provide a flat increase to top speed.",
-		"tooltip": "*+${maxSpeed}* bonus to max speed.\n*-${suppliesPerMonthFlat}* flat penalty to supplies per month upkeep, as well as an additional *-${suppliesPerMonthPercentage}%%* on top of that.\n\nAlso adds an ability that makes the ship charge straight for 15sec but loses capability to steer left or right."
+		"tooltip": "*+${maxSpeed}* bonus to max speed.\n*-${suppliesPerMonthFlat}* flat penalty to supplies per month upkeep, as well as an additional *-${suppliesPerMonthPercentage}%%* on top of that.\n\nAlso adds an ability that makes the ship charge straight for 15sec but loses capability to steer left or right. *The ship will constantly accelerate forward while the system is active* =Works only on module(s) where it's installed=. =Installable only on the main module=."
 	},
 	"ExoticTypes": {
 		"TooltipText": "Exotics of this type have a ^positive effect multiplier^ of *${positiveMult}x* and a =negative effect multiplier= of *${negativeMult}x*. This affects exotics in differing ways.",
@@ -376,6 +388,7 @@
 		"ItemTypeText": "This chip is a *${typeName}-type*, which affects the exotic by ${typeDescription}.",
 		"NotInstalledText": "${typeName} - Hover for description",
 		"NORMAL": "${exoticName}",
+		"NormalItemDescription": "not increasing or decreasing its positive and negative effect(s)",
 		"CORRUPTED": "Corrupted ${exoticName}",
 		"CorruptedItemDescription": "multiplying both its positive and negative effects",
 		"PURE": "Pure ${exoticName}",
@@ -443,6 +456,7 @@
 		"missileDamage": "Missile damage",
 		"missileHealth": "Missile health",
 		"missileSpeed": "Missile speed",
+		"missileRange": "Missile range",
 		"missileTurnRate": "Missile turn rate",
 		"missileTurnAcceleration": "Missile turn acceleration",
 		"damageToFighters": "Damage to fighters",
@@ -460,6 +474,7 @@
 	},
 	"Conditions": {
 		"CannotApplyTitle": "CANNOT INSTALL",
+		"CannotApplyTitleDisjunct": "CANNOT INSTALL - NEED TO MEET AT LEAST ${minConditions} OUT OF ${maxConditions}",
 		"CannotApplyBecauseTags": "Conflicts with ${conflictMods}.",
 		"CannotApplyBecauseBandwidth": "The ship does not have enough bandwidth.",
 		"CannotApplyBecauseLevel": "The ship has the max level for this upgrade.",
@@ -562,23 +577,24 @@
 		"BandwidthUsed": "*${usedBandwidth}* used"
 	},
 	"GuardianShield": {
-		"description": "A 1.0 efficiency shield capable of covering an entire fleet, absorbing incoming fire for a time. The emitter has a massive flux capacity, but transfers generated flux onto the host ship.",
+		"description": "A 1.0 efficiency shield capable of covering an entire fleet, absorbing incoming fire for a time. The emitter has a massive flux capacity, but transfers generated flux onto the host ship. *Has interaction with the following built-in (S-modded) hullmods:* =Accelerated Shields=, =Hardened Shields=, =Stabilized Shields=, =Extended Shields=",
 		"tooltip": "Replaces the host ship's shield with a gargantuan 360-degree shield with a big radius.",
-		"longDescription": "=Replaces the ship's shield= with a *Guardian Shield*, a *360-degree* shield covering *1500 radius* capable of covering friendly ships. It has it's own activation AI, but naturally can't work while the host ship is venting or overloaded. While active, the shield ${flux_method}, ${flux_effects}and also pushes enemies out of it, with momentum strength depending on the size of the host ship."
+		"longDescription": "=Replaces the ship's shield= with a *Guardian Shield*, a *360-degree* shield covering *${radius} radius* with expansion speed of *${expansion_speed}* capable of covering friendly ships. It has it's own activation AI, but naturally can't work while the host ship is venting or overloaded. While active, the shield ${flux_method}, ${flux_effects}and also pushes enemies out of it, with *momentum strength of ${push_out_strength}* depending on the size of the host ship. =Works only on module(s) where it's installed=\n\n*Hullmod interactions:*\n- =Extended Shields=: 2x radius for S-bonus, 1.5x radius for just present\n- =Accelerated Shields=: 2.5x shield expansion rate for S-bonus, 1.75x for just present\n- =Hardened Shields= and =Stabilized Shields=: +100%% shield push out momentum modifier for S-bonus\n\n*The shield will inherit any (and all) of these hullmods provided they were S-modded*"
 	},
 	"RewindSystem": {
-		"description": "A system capable of rewinding you back to a previous state in time, useful for getting out of unexpected problems, or just undoing bad ideas. More of a teleportation device than a revival system, possibly useful for both.",
-		"tooltip": "Adds a system that teleports you back to where you were in the past, and restores your weapons / flux / health to how it was then.",
-		"longDescription": "=Adds a rewinding mechanism system= that takes you back ${how_much} seconds in the past, restoring all ship's parameters along with location *as they were then*. *Has a cooldown of ${cooldown} seconds*."
+		"description": "A system capable of rewinding you back to a previous state in time, useful for getting out of unexpected problems, or just undoing bad ideas. More of a teleportation and restoration device than a revival system, possibly useful for both.",
+		"tooltip": "Adds a system that teleports you back to where you were in the past, and restores your weapons / flux / health / shields / systems to how it was then.",
+		"longDescription": "=Adds a rewinding mechanism system= that takes you back ${how_much} seconds in the past, restoring all ship's parameters along with location *as they were then*. *Has a cooldown of ${cooldown} seconds*. Restores *whole ship* but *does not revive* destroyed modules. =Works only on module(s) where it's installed=. =Installable only on the main module=.",
+		"cantActivate": "UNABLE TO ACTIVATE - RECORDING DATA"
 	},
 	"MissileSpamSystem": {
 		"description": "A system capable of enhancing missile reload servos, enabling them to pump out more missiles in less time.",
 		"tooltip": "Doubles the rate of fire of all missile weapons and adds a system that makes missile weapons' refire much faster while it's active.",
-		"longDescription": "=Adds a missile barrage system= that passively increases missile rate of fire to ${passive_boost}, which - when activated - further increases it by an additional ${active_boost} on top of that (stacking) for *${duration} seconds*. *Has a cooldown of ${cooldown} seconds*."
+		"longDescription": "=Adds a missile barrage system= that passively increases missile rate of fire to ${passive_boost}, which - when activated - further increases it by an additional ${active_boost} on top of that (stacking) for *${duration} seconds*. *Has a cooldown of ${cooldown} seconds*. =Works only on module(s) where it's installed="
 	},
 	"AmmoCraftingSystem": {
 		"description": "The Ammo Crafting System is capable of generating ammunition on-the-fly, ensuring sustained combat capability while it constantly resupplies weapons with fresh ammo. ",
 		"tooltip": "Adds a system that regenerates a portion of ammo for all ammo-using weapons every period of time.",
-		"longDescription": "=Adds a ammunition creating system= which, when activated, *regenerates ${ammo_regen_percent}%% of every ammo-using weapon every ${ammo_regen_period} seconds for ${duration} seconds*. However, it isn't very reliable and =has a ${ammo_regen_fail_chance}%% of failing=, in which case it will unfortunately =damage your ship for ${fail_min_damage} to ${fail_max_damage} damage=. After finishing with it's working cycle, it *has a cooldown of ${cooldown} seconds*."
+		"longDescription": "=Adds a ammunition creating system= which, when activated, *regenerates ${ammo_regen_percent}%% of every ammo-using weapon every ${ammo_regen_period} seconds for ${duration} seconds*. However, it isn't very reliable and =has a ${ammo_regen_fail_chance}%% of failing=, in which case it will unfortunately =damage your ship for ${fail_min_damage} to ${fail_max_damage} damage=. After finishing with it's working cycle, it *has a cooldown of ${cooldown} seconds*. =Works only on module(s) where it's installed="
 	}
 }

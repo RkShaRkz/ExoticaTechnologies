@@ -3,6 +3,7 @@ package exoticatechnologies.config
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.ids.Stats
+import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.types.ExoticType
@@ -21,6 +22,8 @@ class FactionConfig(var factionId: String, loadFromJson: Boolean) {
 
     companion object {
         private val log: Logger = Logger.getLogger(FactionConfig::class.java)
+
+        private const val SKILL_BEST_OF_THE_BEST = "best_of_the_best"
     }
 
     var exoticChance = 0.1
@@ -112,14 +115,39 @@ class FactionConfig(var factionId: String, loadFromJson: Boolean) {
     }
 
     fun getMaxExotics(member: FleetMemberAPI): Int {
-        if (FactionConfigLoader.useTheMethodThatMakesHartleyverseStronger) {
-            return member.stats.dynamic.getStat(Stats.MAX_PERMANENT_HULLMODS_MOD).modifiedInt
+        return if (FactionConfigLoader.useTheMethodThatMakesHartleyverseStronger) {
+            // If we're making hartleyverse (?!?) stronger, return the number of max permanent hullmods
+            member.stats.dynamic.getStat(Stats.MAX_PERMANENT_HULLMODS_MOD).modifiedInt
         } else {
+            // Otherwise, check the number of max exotics and increment by 1 if the fleet commander has the
+            // "Best of the best" skill learned
+            //
+            // For player owned, just check the player fleet. Otherwise, do like we did before
+            //
+            // This is somewhat plaky and will cause inconsistent results with multimodule ships,
+            // which is the whole reason this bit is being somewhat reworked,
+            // but at the very least it'll fix it for the player and the player's side.
+            // This might also cause problems with "special fleets" the player creates but oh well.
+            //
+            // Multimodule ships are *of course* causing problems, since child modules seem to be limited to just 2
+            // while the main module can have 3 if the player has the "best_of_the_best" skill ... so for player owned
+            // members (main modules and child modules) let's look at the commander of the player fleet rather than
+            // member's fleetCommander
+
             var limit = maxExotics
-            if (member.fleetCommander != null && member.fleetCommander.stats.hasSkill("best_of_the_best")) {
-                limit++
+            if (member.owner == Misc.OWNER_PLAYER) {
+                // For player owned, grab the player's fleet
+                val playerFleet = Global.getSector().playerFleet
+                if (playerFleet != null && playerFleet.commander.stats.hasSkill(SKILL_BEST_OF_THE_BEST)) {
+                    limit++
+                }
+            } else {
+                if (member.fleetCommander != null && member.fleetCommander.stats.hasSkill(SKILL_BEST_OF_THE_BEST)) {
+                    limit++
+                }
             }
-            return limit
+
+            limit
         }
     }
 }

@@ -18,6 +18,8 @@ public class et_listmods implements BaseCommand {
             for (Map.Entry<String, Upgrade> upgrade : UpgradesHandler.UPGRADES.entrySet()) {
                 Console.showMessage(String.format("%s -- %s", upgrade.getKey(), upgrade.getValue().getName()));
             }
+            // For clarity's sake, put a newline between the two lists of condensed text to make it more readable
+            Console.showMessage("\n");
 
             Console.showMessage("Exotics:");
             for (Map.Entry<String, Exotic> exotic : ExoticsHandler.EXOTICS.entrySet()) {

@@ -20,11 +20,18 @@ public enum Bandwidth {
     PRISTINE(200f, "pristine", new Color(150, 100, 200), 8),
     ULTIMATE(250f, "ultimate", new Color(255, 100, 255), 4),
     PERFECT(300f, "perfect", new Color(200, 255, 255), 1),
-    UNKNOWN(400f, "unknown", new Color(255, 153, 0), 0);
+    TRANSCENDENT(350f, "transcendent", new Color(200, 45, 25), 0),
+    PEERLESS(400f, "peerless", new Color(128, 0, 64), 0),
+    APOTHEOTIC(450f, "apotheotic", new Color(255, 165, 0), 0),
+    INCOMPARABLE(500f, "incomparable", new Color(128, 0, 128), 0),
+    OMNIPOTENT(600f, "omnipotent", new Color(0, 255, 0), 0),
+    UNKNOWN(750f, "unknown", new Color(255, 153, 0), 0);
 
     public static final String BANDWIDTH_RESOURCE = "Bandwidth";
     public static final float BANDWIDTH_STEP = 5f;
-    public static final float MAX_BANDWIDTH = PERFECT.bandwidth;
+    public static final float DEFAULT_MAX_BANDWIDTH = PERFECT.bandwidth;
+    public static volatile float MAX_BANDWIDTH = DEFAULT_MAX_BANDWIDTH;
+    private static int extensionsLevelsEnabled = 0;
     private static Map<Float, Bandwidth> BANDWIDTH_MAP = null;
     private static final List<Bandwidth> BANDWIDTH_LIST = Arrays.asList(values());
 
@@ -44,12 +51,33 @@ public enum Bandwidth {
         this.weight = weight;
     }
 
+    public static void enableExtensions(int newValue) {
+        // Set max bandwidth to the extension level we selected, or PERFECT for 0
+        MAX_BANDWIDTH = getExtensionLevel(newValue).bandwidth;
+        extensionsLevelsEnabled = newValue;
+    }
+
+    private static Bandwidth getExtensionLevel(int level) {
+        switch(level) {
+            case 0: return PERFECT;
+            case 1: return TRANSCENDENT;
+            case 2: return PEERLESS;
+            case 3: return APOTHEOTIC;
+            case 4: return INCOMPARABLE;
+            case 5: return OMNIPOTENT;
+            default: throw new IllegalArgumentException("Add support for extension level "+level);
+        }
+    }
+
     public float getRandomInRange() {
-        if (this == PERFECT) {
+        Bandwidth maxLevel = getExtensionLevel(extensionsLevelsEnabled);
+        if (this == maxLevel) {
             return bandwidth;
         }
 
-        if (BANDWIDTH_LIST.indexOf(this) == BANDWIDTH_LIST.size() - 1) {
+        int lastItemAdjustment = 6 - extensionsLevelsEnabled; //for 5 it'll be 1
+
+        if (BANDWIDTH_LIST.indexOf(this) == BANDWIDTH_LIST.size() - lastItemAdjustment) {
             return bandwidth;
         }
 
