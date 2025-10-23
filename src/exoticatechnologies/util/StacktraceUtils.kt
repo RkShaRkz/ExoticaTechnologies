@@ -17,9 +17,6 @@ object StacktraceUtils {
         if (startToEnd) {
             for (i in stacktraceArray.indices) {
                 sb
-//                        .append("Element [")
-//                        .append(i)
-//                        .append("]:")
                         .append(if(useAtLikeNormalStacktrace) { "\tat " } else { "\t\t" } )
                         .append(stacktraceArray[i])
                         .append("\n")
@@ -27,9 +24,6 @@ object StacktraceUtils {
         } else {
             for (i in stacktraceArray.size - 1 downTo 0) {
                 sb
-//                        .append("Element [")
-//                        .append(i)
-//                        .append("]:")
                         .append(if(useAtLikeNormalStacktrace) { "\tat " } else { "\t\t" } )
                         .append(stacktraceArray[i])
                         .append("\n")
