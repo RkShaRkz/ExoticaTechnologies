@@ -12,17 +12,17 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI
 import exoticatechnologies.hullmods.exotics.ExoticHullmod
 import exoticatechnologies.hullmods.exotics.ExoticHullmodLookup
 import exoticatechnologies.modifications.exotics.impl.AlphaSubcore
-import exoticatechnologies.modifications.exotics.impl.DaemonCore
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.exhaustive
 
 /**
- * Exotic Hullmod used by both [AlphaSubcore] and [DaemonCore]
+ * Exotic Hullmod used by [AlphaSubcore]
  */
 class AlphaSubcoreHM : ExoticHullmod() {
     val listener = AlphaSubcoreOPCostListener()
 
-    override val hullModId: String = "et_alphasubcore"
+    // Is using "et_alphasubcore" hullmod ID
+    override val hullModId: String = HULLMOD_ID
 
     init {
         ExoticHullmodLookup.addToLookupMap(this)
@@ -108,5 +108,7 @@ class AlphaSubcoreHM : ExoticHullmod() {
         const val COST_REDUCTION_SM = 1
         const val COST_REDUCTION_FIGHTER = 2
         const val COST_REDUCTION_BOMBER = 4
+
+        const val HULLMOD_ID = "et_alphasubcore"
     }
 }

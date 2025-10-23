@@ -20,7 +20,8 @@ import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
 
 class DaemonCore(key: String, settingsObj: JSONObject) :
-    HullmodExotic(key, settingsObj, "et_daemoncore", "DaemonCore", Color(150, 20, 20)) {
+    HullmodExotic(key, settingsObj, DaemonCoreHM.HULLMOD_ID, "DaemonCore", Color(150, 20, 20)) {
+    // Is using "et_daemoncore" hullmodId
 
     override fun getSalvageChance(chanceMult: Float): Float {
         return 0f

@@ -14,7 +14,6 @@ import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.ui.impl.shop.upgrades.methods.DefaultUpgradeMethod;
 import exoticatechnologies.util.FleetMemberUtils;
 import exoticatechnologies.util.StringUtils;
-import lombok.Getter;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -78,7 +77,6 @@ public class ShipComponentUpgradeMethod extends DefaultUpgradeMethod {
             upgradeCost = removeCommodityAndReturnRemainingCost(storageCargo, IndEvoUtil.SHIP_COMPONENT_ITEM_ID, upgradeCost);
         }
 
-        //FIXME how is this one different from the other 'variant' we have and use below ???
         ShipVariantAPI memberVariant = member.getVariant();
         CampaignFleetAPI variantsFleet = FleetMemberUtils.INSTANCE.findFleetForVariant(memberVariant, member);
         if (variantsFleet != null) {
@@ -99,7 +97,6 @@ public class ShipComponentUpgradeMethod extends DefaultUpgradeMethod {
                     .toString();
         } else {
             logger.error("Fleet was NULL for (member = "+member+", variant "+memberVariant+") !!!");
-//            throw new IllegalStateException("Fleet was NULL for (member = "+member+", variant "+memberVariant+") !!!");
             return StringUtils
                     .getTranslation("UpgradesDialog", "UpgradeCannotBePerformed")
                     .format("name", upgrade.getName())

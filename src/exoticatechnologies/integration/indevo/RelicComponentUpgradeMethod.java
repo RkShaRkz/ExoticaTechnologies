@@ -67,7 +67,6 @@ public class RelicComponentUpgradeMethod extends DefaultUpgradeMethod {
             upgradeCost = removeCommodityAndReturnRemainingCost(storageCargo, IndEvoUtil.RELIC_COMPONENT_ITEM_ID, upgradeCost);
         }
 
-        //FIXME how is this one different from the other 'variant' we have and use below ???
         ShipVariantAPI memberVariant = member.getVariant();
         CampaignFleetAPI variantsFleet = FleetMemberUtils.INSTANCE.findFleetForVariant(memberVariant, member);
         if (variantsFleet != null) {
@@ -88,7 +87,6 @@ public class RelicComponentUpgradeMethod extends DefaultUpgradeMethod {
                     .toString();
         } else {
             logger.error("Fleet was NULL for (member = "+member+", variant "+memberVariant+") !!!");
-//            throw new IllegalStateException("Fleet was NULL for (member = "+member+", variant "+memberVariant+") !!!");
             return StringUtils
                     .getTranslation("UpgradesDialog", "UpgradeCannotBePerformed")
                     .format("name", upgrade.getName())

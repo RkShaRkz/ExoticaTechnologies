@@ -18,7 +18,8 @@ import org.json.JSONObject
 import java.awt.Color
 
 class AlphaSubcore(key: String, settingsObj: JSONObject) :
-    HullmodExotic(key, settingsObj, "et_alphasubcore", "AlphaSubcore", Color.cyan) {
+    HullmodExotic(key, settingsObj, AlphaSubcoreHM.HULLMOD_ID, "AlphaSubcore", Color.cyan) {
+    // Is using "et_alphasubcore" hullmodId
 
     override fun getSalvageChance(chanceMult: Float): Float {
         return 0.05f * chanceMult

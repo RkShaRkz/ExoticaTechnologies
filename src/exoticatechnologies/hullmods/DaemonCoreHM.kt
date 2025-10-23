@@ -21,7 +21,8 @@ import exoticatechnologies.util.exhaustive
 class DaemonCoreHM : ExoticHullmod() {
     val listener = DaemonCoreOPCostListener()
 
-    override val hullModId: String = "et_daemoncore"
+    // Is using "et_daemoncore" hullmod ID
+    override val hullModId: String = HULLMOD_ID
 
     init {
         ExoticHullmodLookup.addToLookupMap(this)
@@ -107,5 +108,7 @@ class DaemonCoreHM : ExoticHullmod() {
         const val COST_REDUCTION_SM = 1
         const val COST_REDUCTION_FIGHTER = 2
         const val COST_REDUCTION_BOMBER = 4
+
+        const val HULLMOD_ID = "et_daemoncore"
     }
 }
