@@ -272,38 +272,14 @@ class ShipHeaderUIPlugin(
 
     private fun doMaxBandwidthUpgrade() {
         // While we have money and bandwidth can be upgraded, just roll this and play the sound at the end
-        // grab initials for initial price and just let it roll
-
-        val initialMarketMult = BandwidthHandler.getMarketBandwidthMult(market)
-        var upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), initialMarketMult)
-
-        //TODO make a BandwidthHandler.isAbleToPayForNextBandwidthUpgrade(member, mods, market)
-        while (BandwidthHandler.isAbleToPayForBandwidthUpgrade(Global.getSector().playerFleet, upgradePrice) && BandwidthHandler.canUpgrade(mods, member)) {
-            var marketMult = BandwidthHandler.getMarketBandwidthMult(market)
-            val increase = Bandwidth.BANDWIDTH_STEP * marketMult
-            upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult)
-
-            Global.getSector().playerFleet.cargo.credits.subtract(upgradePrice)
-
-            val newBandwidth = min(mods.getBaseBandwidth() + increase, Bandwidth.MAX_BANDWIDTH)
-            mods.bandwidth = newBandwidth
-            ShipModLoader.set(member, variant, mods)
+        while (BandwidthHandler.isAbleToPayForNextBandwidthUpgrade(member, mods, market) && BandwidthHandler.canUpgrade(mods, member)) {
+            BandwidthHandler.performNextBandwidthUpgrade(member, mods, market, variant, false)
 
             if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT) {
                 RefitButtonAdder.requiresVariantUpdate = true
             }
 
             Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 0.75f)
-
-            // AVOID OVERCHARGING scenario
-            // asssume we have 8 credits, and the current iteration's cost is 4 credits.
-            // if (can afford 4) passes, price gets recalculated and deducted. We are left
-            // at 4 credits.
-            // another "if (can afford 4) passes, price gets recalculated to e.g. 5 and deducted,
-            // we will be left at -1 credits.
-            // So we should recalculate the cost for the next iteration
-            marketMult = BandwidthHandler.getMarketBandwidthMult(market)
-            upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult)
         }
     }
 
