@@ -114,7 +114,7 @@
 		"BandwidthUpgradeCostCannotAfford": "Ship bandwidth can be increased by &${bonusBandwidth}& but you need *${costCredits}* credits. You have *${credits}* credits.",
 		"BandwidthUpgradePeak": "This ship has reached its maximum bandwidth.",
 		"BandwidthPurchase": "Purchase",
-		"MaxBandwidthPurchase": "Purchase max",
+		"MaxBandwidthPurchase": "Purchase MAX",
 		"BandwidthHelp": "A ship's bandwidth is its capacity for upgrades. Bandwidth can be raised for a price up to ${bandwidthLimit}, and can be raised beyond that by certain exotics."
 	},
 	"ExoticsDialog": {

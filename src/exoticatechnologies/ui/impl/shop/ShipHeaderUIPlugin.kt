@@ -109,20 +109,23 @@ class ShipHeaderUIPlugin(
         )
         maxBandwidthButton = bandwidthTooltip?.addButton(
             StringUtils.getString("BandwidthDialog", "MaxBandwidthPurchase"), "test",
-            Misc.getBasePlayerColor(), Misc.getDarkPlayerColor(), Alignment.MID, CutStyle.C2_MENU, 102F, 22F, 3F
-                // was MID, width 72
+            Misc.getBasePlayerColor(), Misc.getDarkPlayerColor(), Alignment.MID, CutStyle.C2_MENU, 106F, 22F, 3F
         )
-        // Set the "max bandwidth" button to the right of "bandwidth" button
-        maxBandwidthButton?.position?.rightOfMid(bandwidthButton!!, 10f)
 
+        // Add the button handler to the "purchase" button
         bandwidthButton?.let {
             buttons[it] = BandwidthButtonHandler(this)
         } ?: throw IllegalStateException("bandwidthButton should not have been null in ShipHeaderUIPlugin !!!")
-        maxBandwidthButton?.let {
-            buttons[it] = MaxBandwidthButtonHandler(this)
+
+        // Add the button handler to the "purchase max" button
+        maxBandwidthButton?.let { nonNullMaxBandwidth ->
+            // Set the "max bandwidth" button to the right of "bandwidth" button, 10px away
+            bandwidthButton?.let { nonNullBandwidth ->
+                nonNullMaxBandwidth.position?.rightOfMid(nonNullBandwidth, 10f)
+            }
+
+            buttons[nonNullMaxBandwidth] = MaxBandwidthButtonHandler(this)
         } ?: throw IllegalStateException("maxBandwidthButton should not have been null in ShipHeaderUIPlugin !!!")
-//        buttons[bandwidthButton!!] = BandwidthButtonHandler(this)
-//        buttons[maxBandwidthButton!!] = MaxBandwidthButtonHandler(this)
 
         setBandwidthUpgradeLabel()
 
@@ -191,6 +194,7 @@ class ShipHeaderUIPlugin(
                 .setLabelText(bandwidthUpgradeLabel)
             bandwidthUpgradeLabel?.setColor(Misc.getNegativeHighlightColor())
             bandwidthButton?.isEnabled = false
+            maxBandwidthButton?.isEnabled = false
             return
         }
 
@@ -199,6 +203,7 @@ class ShipHeaderUIPlugin(
                 // If can't upgrade anymore, then change the label that we reached max
                 modifyBandwidthUpgradeLabel(it, -1f, -1f, "BandwidthDialog", "BandwidthUpgradePeak")
                 bandwidthButton?.isEnabled = false
+                maxBandwidthButton?.isEnabled = false
             } else {
                 val marketMult = BandwidthHandler.getMarketBandwidthMult(market)
                 val upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult)
@@ -214,6 +219,7 @@ class ShipHeaderUIPlugin(
                         "BandwidthUpgradeCostCannotAfford"
                     )
                     bandwidthButton?.isEnabled = false
+                    maxBandwidthButton?.isEnabled = false
                 } else {
                     // Otherwise, make it state the cost
                     modifyBandwidthUpgradeLabel(
@@ -224,6 +230,7 @@ class ShipHeaderUIPlugin(
                         "BandwidthUpgradeCost"
                     )
                     bandwidthButton?.isEnabled = true
+                    maxBandwidthButton?.isEnabled = true
                 }
             }
         }
@@ -270,8 +277,9 @@ class ShipHeaderUIPlugin(
         val initialMarketMult = BandwidthHandler.getMarketBandwidthMult(market)
         var upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), initialMarketMult)
 
+        //TODO make a BandwidthHandler.isAbleToPayForNextBandwidthUpgrade(member, mods, market)
         while (BandwidthHandler.isAbleToPayForBandwidthUpgrade(Global.getSector().playerFleet, upgradePrice) && BandwidthHandler.canUpgrade(mods, member)) {
-            val marketMult = BandwidthHandler.getMarketBandwidthMult(market)
+            var marketMult = BandwidthHandler.getMarketBandwidthMult(market)
             val increase = Bandwidth.BANDWIDTH_STEP * marketMult
             upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult)
 
@@ -286,6 +294,16 @@ class ShipHeaderUIPlugin(
             }
 
             Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 0.75f)
+
+            // AVOID OVERCHARGING scenario
+            // asssume we have 8 credits, and the current iteration's cost is 4 credits.
+            // if (can afford 4) passes, price gets recalculated and deducted. We are left
+            // at 4 credits.
+            // another "if (can afford 4) passes, price gets recalculated to e.g. 5 and deducted,
+            // we will be left at -1 credits.
+            // So we should recalculate the cost for the next iteration
+            marketMult = BandwidthHandler.getMarketBandwidthMult(market)
+            upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult)
         }
     }
 
