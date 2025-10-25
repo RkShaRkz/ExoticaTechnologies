@@ -48,6 +48,7 @@ class ShipHeaderUIPlugin(
     var bandwidthTooltip: TooltipMakerAPI? = null
     var bandwidthUpgradeLabel: LabelAPI? = null
     var bandwidthButton: ButtonAPI? = null
+    var maxBandwidthButton: ButtonAPI? = null
 
     override fun advancePanel(amount: Float) {
         if (mods.getValue() != lastValue) {
@@ -106,8 +107,22 @@ class ShipHeaderUIPlugin(
             StringUtils.getString("BandwidthDialog", "BandwidthPurchase"), "test",
             Misc.getBasePlayerColor(), Misc.getDarkPlayerColor(), Alignment.MID, CutStyle.C2_MENU, 72F, 22F, 3F
         )
+        maxBandwidthButton = bandwidthTooltip?.addButton(
+            StringUtils.getString("BandwidthDialog", "MaxBandwidthPurchase"), "test",
+            Misc.getBasePlayerColor(), Misc.getDarkPlayerColor(), Alignment.MID, CutStyle.C2_MENU, 102F, 22F, 3F
+                // was MID, width 72
+        )
+        // Set the "max bandwidth" button to the right of "bandwidth" button
+        maxBandwidthButton?.position?.rightOfMid(bandwidthButton!!, 10f)
 
-        buttons[bandwidthButton!!] = BandwidthButtonHandler(this)
+        bandwidthButton?.let {
+            buttons[it] = BandwidthButtonHandler(this)
+        } ?: throw IllegalStateException("bandwidthButton should not have been null in ShipHeaderUIPlugin !!!")
+        maxBandwidthButton?.let {
+            buttons[it] = MaxBandwidthButtonHandler(this)
+        } ?: throw IllegalStateException("maxBandwidthButton should not have been null in ShipHeaderUIPlugin !!!")
+//        buttons[bandwidthButton!!] = BandwidthButtonHandler(this)
+//        buttons[maxBandwidthButton!!] = MaxBandwidthButtonHandler(this)
 
         setBandwidthUpgradeLabel()
 
@@ -248,9 +263,41 @@ class ShipHeaderUIPlugin(
         Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 0.75f)
     }
 
+    private fun doMaxBandwidthUpgrade() {
+        // While we have money and bandwidth can be upgraded, just roll this and play the sound at the end
+        // grab initials for initial price and just let it roll
+
+        val initialMarketMult = BandwidthHandler.getMarketBandwidthMult(market)
+        var upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), initialMarketMult)
+
+        while (BandwidthHandler.isAbleToPayForBandwidthUpgrade(Global.getSector().playerFleet, upgradePrice) && BandwidthHandler.canUpgrade(mods, member)) {
+            val marketMult = BandwidthHandler.getMarketBandwidthMult(market)
+            val increase = Bandwidth.BANDWIDTH_STEP * marketMult
+            upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult)
+
+            Global.getSector().playerFleet.cargo.credits.subtract(upgradePrice)
+
+            val newBandwidth = min(mods.getBaseBandwidth() + increase, Bandwidth.MAX_BANDWIDTH)
+            mods.bandwidth = newBandwidth
+            ShipModLoader.set(member, variant, mods)
+
+            if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT) {
+                RefitButtonAdder.requiresVariantUpdate = true
+            }
+
+            Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 0.75f)
+        }
+    }
+
     fun bandwidthButtonClicked() {
         bandwidthButton?.isChecked = false
         doBandwidthUpgrade()
+        setBandwidthUpgradeLabel()
+    }
+
+    fun maxBandwidthButtonClicked() {
+        maxBandwidthButton?.isChecked = false
+        doMaxBandwidthUpgrade()
         setBandwidthUpgradeLabel()
     }
 }
