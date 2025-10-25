@@ -210,7 +210,7 @@ class ShipHeaderUIPlugin(
                 val newBandwidth = Bandwidth.BANDWIDTH_STEP * marketMult
 
                 if (BandwidthHandler.isAbleToPayForBandwidthUpgrade(Global.getSector().playerFleet, upgradePrice).not()) {
-                    // If can't affor upgrade, change the label to say so
+                    // If can't afford upgrade, change the label to say so
                     modifyBandwidthUpgradeLabel(
                         it,
                         newBandwidth,

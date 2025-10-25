@@ -20,6 +20,8 @@ import exoticatechnologies.modifications.upgrades.ETUpgrades
 import exoticatechnologies.modifications.upgrades.Upgrade
 import exoticatechnologies.modifications.upgrades.UpgradesHandler
 import exoticatechnologies.ui.UIUtils
+import exoticatechnologies.ui.impl.shop.ShipHeaderUIPlugin
+import exoticatechnologies.ui.impl.shop.overview.OverviewPanelUIPlugin
 import exoticatechnologies.util.StringUtils
 import org.apache.log4j.Logger
 import org.json.JSONException
@@ -325,6 +327,13 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
 
     private val tooltipColor = Misc.getTextColor()
     private val infoColor = Misc.getPositiveHighlightColor()
+
+    /**
+     * Method for populating the [mainTooltip] tooltip - which is really the [OverviewPanelUIPlugin] located
+     * right under the [ShipHeaderUIPlugin] - which are constituting the whole "exotica upgrade" screen.
+     *
+     * @return the [bandwidth] number written out in the tooltip
+     */
     fun populateTooltip(
             member: FleetMemberAPI,
             stats: MutableShipStatsAPI,
@@ -334,7 +343,7 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
             expandUpgrades: Boolean,
             expandExotics: Boolean,
             noScroller: Boolean = false
-    ) {
+    ): Float {
         val bandwidth: Float = this.getBandwidthWithExotics(member)
         val bandwidthString = BandwidthUtil.getFormattedBandwidthWithName(bandwidth)
 
@@ -388,6 +397,9 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         customPanelAPI.addUIElement(scrollTooltip).inTL(-8f, 0f)
         mainTooltip.addCustom(customPanelAPI, 0f)
         mainTooltip.setForceProcessInput(true)
+
+        // And finally, return the bandwidth which we wrote out in the panel
+        return bandwidth
     }
 
     private fun addUpgradeSection(
@@ -462,6 +474,12 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         return addedExoticSection
     }
 
+    /**
+     * Method for populating the tooltip.
+     *
+     * @see populateTooltip
+     * @return the amount of bandwidth written out to the tooltip
+     */
     fun populateTooltip(
             member: FleetMemberAPI,
             mainTooltip: TooltipMakerAPI,
@@ -470,8 +488,8 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
             expandUpgrades: Boolean,
             expandExotics: Boolean,
             noScroller: Boolean = false
-    ) {
-        populateTooltip(member, member.stats, mainTooltip, width, height, expandUpgrades, expandExotics, noScroller)
+    ): Float {
+        return populateTooltip(member, member.stats, mainTooltip, width, height, expandUpgrades, expandExotics, noScroller)
     }
 
     fun toJson(member: FleetMemberAPI): JSONObject {

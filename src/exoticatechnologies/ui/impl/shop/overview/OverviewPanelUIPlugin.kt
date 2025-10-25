@@ -31,9 +31,23 @@ class OverviewPanelUIPlugin: ShopMenuUIPlugin() {
     private var expandUpgrades: Boolean = false
     private var expandExotics: Boolean = false
 
+    private var lastBandwidthValue: Float = 0f
 
     override fun getNewTabButtonUIPlugin(): TabButtonUIPlugin {
         return OverviewTabUIPlugin()
+    }
+
+    override fun advancePanel(amount: Float) {
+        super.advancePanel(amount)
+        // Check the mod's bandwidth versus the last value we had stored
+        // If they don't match - redraw the whole mainPanel and update
+        // the lastBandwidthValue
+        if (mods?.bandwidth != lastBandwidthValue) {
+            mainPanel?.let {
+                showPanel(it)
+            }
+            lastBandwidthValue = mods?.bandwidth ?: 0f
+        }
     }
 
     override fun layoutPanel(holdingPanel: CustomPanelAPI, parentPlugin: TabbedPanelUIPlugin): TooltipMakerAPI? {
@@ -101,7 +115,7 @@ class OverviewPanelUIPlugin: ShopMenuUIPlugin() {
         innerPanel!!.addUIElement(buttonTooltip).inTL(0f, 0f)
 
         val statsTooltip = innerPanel!!.createUIElement(panelWidth, panelHeight - 56f, false)
-        mods!!.populateTooltip(member!!, statsTooltip, panelWidth, panelHeight - 56f, expandUpgrades, expandExotics, false)
+        lastBandwidthValue = mods!!.populateTooltip(member!!, statsTooltip, panelWidth, panelHeight - 56f, expandUpgrades, expandExotics, false)
         innerPanel!!.addUIElement(statsTooltip).belowMid(buttonTooltip, -70f)
 
         panel.addComponent(innerPanel).inTL(0f, 0f)
