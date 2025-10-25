@@ -180,7 +180,8 @@ class ShipHeaderUIPlugin(
         }
 
         bandwidthUpgradeLabel?.let {
-            if (mods.getBaseBandwidth() >= Bandwidth.MAX_BANDWIDTH) {
+            if (BandwidthHandler.canUpgrade(mods, member).not()) {
+                // If can't upgrade anymore, then change the label that we reached max
                 modifyBandwidthUpgradeLabel(it, -1f, -1f, "BandwidthDialog", "BandwidthUpgradePeak")
                 bandwidthButton?.isEnabled = false
             } else {
@@ -188,7 +189,8 @@ class ShipHeaderUIPlugin(
                 val upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult)
                 val newBandwidth = Bandwidth.BANDWIDTH_STEP * marketMult
 
-                if (Global.getSector().playerFleet.cargo.credits.get() < upgradePrice) {
+                if (BandwidthHandler.isAbleToPayForBandwidthUpgrade(Global.getSector().playerFleet, upgradePrice).not()) {
+                    // If can't affor upgrade, change the label to say so
                     modifyBandwidthUpgradeLabel(
                         it,
                         newBandwidth,
@@ -198,6 +200,7 @@ class ShipHeaderUIPlugin(
                     )
                     bandwidthButton?.isEnabled = false
                 } else {
+                    // Otherwise, make it state the cost
                     modifyBandwidthUpgradeLabel(
                         it,
                         newBandwidth,
