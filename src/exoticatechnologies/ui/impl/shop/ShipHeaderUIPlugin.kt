@@ -253,15 +253,7 @@ class ShipHeaderUIPlugin(
     }
 
     private fun doBandwidthUpgrade() {
-        val marketMult = BandwidthHandler.getMarketBandwidthMult(market)
-        val increase = Bandwidth.BANDWIDTH_STEP * marketMult
-        val upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult)
-
-        Global.getSector().playerFleet.cargo.credits.subtract(upgradePrice)
-
-        val newBandwidth = min(mods.getBaseBandwidth() + increase, Bandwidth.MAX_BANDWIDTH)
-        mods.bandwidth = newBandwidth
-        ShipModLoader.set(member, variant, mods)
+        BandwidthHandler.performNextBandwidthUpgrade(member, mods, market, variant, false)
 
         if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT) {
             RefitButtonAdder.requiresVariantUpdate = true
