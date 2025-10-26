@@ -8,8 +8,11 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import exoticatechnologies.ETModPlugin;
 import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.ShipModifications;
+import exoticatechnologies.util.AnonymousLogger;
+import exoticatechnologies.util.StarsectorAPIInteractor;
 import org.magiclib.util.MagicSettings;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +73,17 @@ public class BandwidthHandler {
         CampaignFleetAPI membersFleet = member.getFleetData().getFleet();
         if (isAbleToPayForBandwidthUpgrade(membersFleet, upgradePrice) || forceUpgrade) {
             // If we can afford, deduce the money and perform the upgrade
-            membersFleet.getCargo().getCredits().subtract(upgradePrice);
+            float beforeCredits = StarsectorAPIInteractor.INSTANCE.getMembersFleetCredits(member).get(); //membersFleet.getCargo().getCredits().get();
+            synchronized (BandwidthHandler.class) {
+                StarsectorAPIInteractor.INSTANCE.getMembersFleetCredits(member).subtract(upgradePrice);
+            }
+            float afterCredits = StarsectorAPIInteractor.INSTANCE.getMembersFleetCredits(member).get(); //membersFleet.getCargo().getCredits().get();
+            float actualCost = beforeCredits - afterCredits;
+//            AnonymousLogger.INSTANCE.log("performNextBandwidthUpgrade() BEFORE: "+format(beforeCredits), "CHARGING");
+//            AnonymousLogger.INSTANCE.log("performNextBandwidthUpgrade() AFTER: "+format(afterCredits), "CHARGING");
+            AnonymousLogger.INSTANCE.log("performNextBandwidthUpgrade()   UPG PRICE: "+format(upgradePrice), "CHARGING");
+            AnonymousLogger.INSTANCE.log("performNextBandwidthUpgrade() ACTUAL COST: "+format(actualCost), "CHARGING");
+
 
             float newBandwidth = Math.min(mods.getBaseBandwidth() + increase, Bandwidth.MAX_BANDWIDTH);
             mods.setBandwidth(newBandwidth);
@@ -86,19 +99,26 @@ public class BandwidthHandler {
         return retVal;
     }
 
+    //TODO delete this
+    private static String format(float value) {
+        DecimalFormat decimalFormat = new DecimalFormat("#,###");
+        return decimalFormat.format(value);
+    }
+
 //    public static float getCostPrognosisToMaxBandwidth(FleetMemberAPI member, ShipModifications mods, MarketAPI market) {
     public static synchronized float getCostPrognosisToMaxBandwidth(FleetMemberAPI member, MarketAPI market) {
         //TODO the mods aren't necessary, use ShipModLoader to get them from the FMAPI
         // the ship i'm testing with should return 14,221,032
         // the projected cost returned 14,221,023
+        // after price rounding - 14,221,024
 
         // The idea is - we are going to grab the bandwidth from the ship,
         // then we're going to run an accumulator on the price and fake upgrading it and store that in the bandwidth accumulator
         // once it reaches max, the returned value should be the one we're expecting with the test ship
         ShipModifications mods = ShipModLoader.get(member, member.getVariant());
         float bandwidthAccumulator = mods.getBaseBandwidth();
-        float priceAccumulator = 0;
-        List<Float> priceList = new ArrayList<>();
+        float prognosedPriceAccumulator = 0;
+        List<Float> priceList = new ArrayList<>();  //TODO delete
 
         // Due to the fact that the actual upgrading actually does min(currentBandwidth + increase, MAX_BANDWIDTH)
         // we will not care if it goes over the limit
@@ -106,15 +126,30 @@ public class BandwidthHandler {
             // Now just fake upgrading until we hit max
             float marketMult = BandwidthHandler.getMarketBandwidthMult(market);
             float increase = Bandwidth.BANDWIDTH_STEP * marketMult;
-            float upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, bandwidthAccumulator, marketMult);
+            synchronized (BandwidthHandler.class) {
+                float upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, bandwidthAccumulator, marketMult);
 
-            bandwidthAccumulator = bandwidthAccumulator + increase;
-            priceAccumulator = priceAccumulator + upgradePrice;
-            priceList.add(upgradePrice);
+                bandwidthAccumulator = bandwidthAccumulator + increase;
+                prognosedPriceAccumulator = prognosedPriceAccumulator + upgradePrice;
+                priceList.add(upgradePrice);
+            }
         }
 
         // Finally, return the accumulated price
-        return priceAccumulator;
+        float priceListSum = sumList(priceList);
+        AnonymousLogger.INSTANCE.log("getCostPrognosisToMaxBandwidth() priceListSum: "+format(priceListSum), "PROGNOSIS");
+        AnonymousLogger.INSTANCE.log("getCostPrognosisToMaxBandwidth() priceAccumulator: "+format(prognosedPriceAccumulator), "PROGNOSIS");
+        return prognosedPriceAccumulator;
+    }
+
+    //TODO delete
+    public static synchronized float sumList(List<Float> numberList) {
+        float retVal = 0;
+        for (Float f : numberList) {
+            retVal = retVal+f;
+        }
+
+        return retVal;
     }
 
     public static synchronized float getMarketBandwidthMult(MarketAPI currMarket) {
@@ -142,7 +177,7 @@ public class BandwidthHandler {
 
         retVal = Math.round(shipBaseValue * (float) Math.pow(shipBandwidth / 70f, 2) / (2f + 6f * bandwidthMultFactor) * 100f) / 100f;
 
-        return retVal;
+        return Math.round(retVal);
     }
 
     public static class BandwidthUpgradeResult {
