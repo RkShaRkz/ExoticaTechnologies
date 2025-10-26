@@ -8,7 +8,6 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.*
 import com.fs.starfarer.api.util.Misc
-import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.bandwidth.Bandwidth
 import exoticatechnologies.modifications.bandwidth.BandwidthHandler
@@ -18,7 +17,6 @@ import exoticatechnologies.ui.InteractiveUIPanelPlugin
 import exoticatechnologies.ui.StringTooltip
 import exoticatechnologies.util.StringUtils
 import kotlin.math.max
-import kotlin.math.min
 
 class ShipHeaderUIPlugin(
     dialog: InteractionDialogAPI?,
@@ -262,6 +260,7 @@ class ShipHeaderUIPlugin(
         Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 0.75f)
     }
 
+    @Synchronized
     private fun doMaxBandwidthUpgrade() {
         // While we have money and bandwidth can be upgraded, just roll this and play the sound at the end
         while (BandwidthHandler.isAbleToPayForNextBandwidthUpgrade(member, mods, market) && BandwidthHandler.canUpgrade(mods, member)) {

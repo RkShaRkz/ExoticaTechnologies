@@ -8,6 +8,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import exoticatechnologies.ETModPlugin;
 import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.ShipModifications;
+import exoticatechnologies.util.StarsectorAPIInteractor;
 import org.magiclib.util.MagicSettings;
 
 import java.util.Map;
@@ -15,7 +16,7 @@ import java.util.Map;
 public class BandwidthHandler {
     private static final int UPGRADE_OPTION_ORDER = 0;
 
-    public static boolean canUpgrade(ShipModifications buff, FleetMemberAPI selectedShip) {
+    public static synchronized boolean canUpgrade(ShipModifications buff, FleetMemberAPI selectedShip) {
         return buff == null || buff.canUpgradeBandwidth(selectedShip);
     }
 
@@ -26,7 +27,7 @@ public class BandwidthHandler {
      * @param cost the cost that has to be covered
      * @return whether the fleet has enough credits in cargo to cover the cost or not
      */
-    public static boolean isAbleToPayForBandwidthUpgrade(CampaignFleetAPI fleet, float cost) {
+    public static synchronized boolean isAbleToPayForBandwidthUpgrade(CampaignFleetAPI fleet, float cost) {
         return cost <= fleet.getCargo().getCredits().get() || ETModPlugin.isDebugUpgradeCosts();
     }
 
@@ -38,7 +39,7 @@ public class BandwidthHandler {
      * @param market the {@link MarketAPI} hosting the upgrading. See {@link #getMarketBandwidthMult(MarketAPI)}
      * @return whether the member's fleet has enough money to afford the next bandwidth upgrade
      */
-    public static boolean isAbleToPayForNextBandwidthUpgrade(FleetMemberAPI member, ShipModifications mods, MarketAPI market) {
+    public static synchronized boolean isAbleToPayForNextBandwidthUpgrade(FleetMemberAPI member, ShipModifications mods, MarketAPI market) {
         float marketMult = BandwidthHandler.getMarketBandwidthMult(market);
         float upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult);
 
@@ -57,7 +58,7 @@ public class BandwidthHandler {
      * @param forceUpgrade whether we should force the upgrade regardless of whether the fleet can afford it or not. See {@link #isAbleToPayForBandwidthUpgrade(CampaignFleetAPI, float)}
      * @return whether the upgrade was performed successfully or not
      */
-    public static boolean performNextBandwidthUpgrade(FleetMemberAPI member, ShipModifications mods, MarketAPI market, ShipVariantAPI variant, boolean forceUpgrade) {
+    public static synchronized boolean performNextBandwidthUpgrade(FleetMemberAPI member, ShipModifications mods, MarketAPI market, ShipVariantAPI variant, boolean forceUpgrade) {
         boolean retVal;
 
         float marketMult = BandwidthHandler.getMarketBandwidthMult(market);
@@ -67,7 +68,9 @@ public class BandwidthHandler {
         CampaignFleetAPI membersFleet = member.getFleetData().getFleet();
         if (isAbleToPayForBandwidthUpgrade(membersFleet, upgradePrice) || forceUpgrade) {
             // If we can afford, deduce the money and perform the upgrade
-            membersFleet.getCargo().getCredits().subtract(upgradePrice);
+            synchronized (BandwidthHandler.class) {
+                StarsectorAPIInteractor.INSTANCE.getMembersFleetCredits(member).subtract(upgradePrice);
+            }
 
             float newBandwidth = Math.min(mods.getBaseBandwidth() + increase, Bandwidth.MAX_BANDWIDTH);
             mods.setBandwidth(newBandwidth);
@@ -82,7 +85,32 @@ public class BandwidthHandler {
         return retVal;
     }
 
-    public static float getMarketBandwidthMult(MarketAPI currMarket) {
+    public static synchronized float getCostPrognosisToMaxBandwidth(FleetMemberAPI member, ShipModifications mods, MarketAPI market) {
+        // The idea is - we are going to grab the bandwidth from the ship,
+        // then we're going to run an accumulator on the price and fake upgrading it and store that in the bandwidth accumulator
+        // once it reaches max, the returned value should be the one we're expecting with the test ship
+        float bandwidthAccumulator = mods.getBaseBandwidth();
+        float prognosedPriceAccumulator = 0;
+
+        // Due to the fact that the actual upgrading actually does min(currentBandwidth + increase, MAX_BANDWIDTH)
+        // we will not care if it goes over the limit
+        while (bandwidthAccumulator < Bandwidth.MAX_BANDWIDTH) {
+            // Now just fake upgrading until we hit max
+            float marketMult = BandwidthHandler.getMarketBandwidthMult(market);
+            float increase = Bandwidth.BANDWIDTH_STEP * marketMult;
+            synchronized (BandwidthHandler.class) {
+                float upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, bandwidthAccumulator, marketMult);
+
+                bandwidthAccumulator = bandwidthAccumulator + increase;
+                prognosedPriceAccumulator = prognosedPriceAccumulator + upgradePrice;
+            }
+        }
+
+        // Finally, return the accumulated price
+        return prognosedPriceAccumulator;
+    }
+
+    public static synchronized float getMarketBandwidthMult(MarketAPI currMarket) {
         Map<String, Float> marketBonuses = MagicSettings.getFloatMap("exoticatechnologies", "industryBandwidthPurchaseBonuses");
 
         float bandwidthMult = 1;
@@ -94,7 +122,8 @@ public class BandwidthHandler {
         return bandwidthMult;
     }
 
-    public static float getBandwidthUpgradePrice(FleetMemberAPI selectedShip, float shipBandwidth, float upgradeBandwidthMult) {
+    public static synchronized float getBandwidthUpgradePrice(FleetMemberAPI selectedShip, float shipBandwidth, float upgradeBandwidthMult) {
+        float retVal;
         float deployCost = selectedShip.getBaseDeployCost();
         float shipBaseValue = selectedShip.getBaseValue();
         if (shipBaseValue > 450000) {
@@ -104,6 +133,8 @@ public class BandwidthHandler {
         }
         float bandwidthMultFactor = 1 - (upgradeBandwidthMult / (upgradeBandwidthMult + 10));
 
-        return Math.round(shipBaseValue * (float) Math.pow(shipBandwidth / 70f, 2) / (2f + 6f * bandwidthMultFactor) * 100f) / 100f;
+        retVal = Math.round(shipBaseValue * (float) Math.pow(shipBandwidth / 70f, 2) / (2f + 6f * bandwidthMultFactor) * 100f) / 100f;
+
+        return Math.round(retVal);
     }
 }
