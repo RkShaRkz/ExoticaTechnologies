@@ -132,9 +132,15 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
 
             // Go through each member, and attempt upgrading. Note their upgrade result
             for (member in memberList) {
-                val didMemberSuccessfullyUpgrade = BandwidthHandler.performNextBandwidthUpgrade(
-                        member, member.getMods(), interactionMarket, member.variant, false
-                )
+                val didMemberSuccessfullyUpgrade = if (BandwidthHandler.canUpgrade(member.getMods(), member)) {
+                    // Can upgrade, return whether we can afford and upgrade was successful
+                    BandwidthHandler.performNextBandwidthUpgrade(
+                            member, member.getMods(), interactionMarket, member.variant, false
+                    )
+                } else {
+                    // Can't upgrade, was not successful
+                    false
+                }
                 if (didMemberSuccessfullyUpgrade) { successfulUpgrades++; successfullyUpgradedMembers.add(member) } //TODO remove
                 // now perform an OR operation so that one 'true' can keep on carrying the do/while
                 shouldProceed = shouldProceed or didMemberSuccessfullyUpgrade
