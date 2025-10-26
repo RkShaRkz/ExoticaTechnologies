@@ -11,6 +11,7 @@ import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.ui.UIPanelAPI
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModFactory
+import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.reflect.ReflectionUtils
@@ -23,6 +24,30 @@ import java.awt.Color
 import java.text.DecimalFormat
 import kotlin.math.*
 
+/**
+ * Returns mods similar to [ShipModLoader.get] if they exist, or creates and initializes new random mods
+ * and sets them on the member by using [ShipModFactory.generateForFleetMember]
+ *
+ * @return existing or new [ShipModifications]. Should never return new if something already exists for the
+ * member,variant,mods triple. See snippet
+ * ```
+ *         var mods = ShipModLoader.get(member, member.variant)
+ *         if (mods != null) {
+ *             return mods
+ *         }
+ * ```
+ *
+ * If nothing exists, method will do this before returning
+ * ```
+ *     random.setSeed(member.id.hashCode().toLong())
+ *     mods = ShipModifications()
+ *     mods.bandwidth = generateBandwidth(member)
+ *     ShipModLoader.set(member, member.variant, mods)
+ * ```
+ *
+ *
+ * @see ShipModFactory.generateForFleetMember
+ */
 fun FleetMemberAPI.getMods(): ShipModifications = ShipModFactory.generateForFleetMember(this)
 
 fun ShipVariantAPI.getRefitVariant(): ShipVariantAPI {
