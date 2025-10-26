@@ -8,13 +8,9 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import exoticatechnologies.ETModPlugin;
 import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.ShipModifications;
-import exoticatechnologies.util.AnonymousLogger;
 import exoticatechnologies.util.StarsectorAPIInteractor;
 import org.magiclib.util.MagicSettings;
 
-import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 public class BandwidthHandler {
@@ -62,9 +58,9 @@ public class BandwidthHandler {
      * @param forceUpgrade whether we should force the upgrade regardless of whether the fleet can afford it or not. See {@link #isAbleToPayForBandwidthUpgrade(CampaignFleetAPI, float)}
      * @return whether the upgrade was performed successfully or not
      */
-//    public static synchronized boolean performNextBandwidthUpgrade(FleetMemberAPI member, ShipModifications mods, MarketAPI market, ShipVariantAPI variant, boolean forceUpgrade) {
-    public static synchronized BandwidthUpgradeResult performNextBandwidthUpgrade(FleetMemberAPI member, ShipModifications mods, MarketAPI market, ShipVariantAPI variant, boolean forceUpgrade) {
-        BandwidthUpgradeResult retVal;
+    public static synchronized boolean performNextBandwidthUpgrade(FleetMemberAPI member, ShipModifications mods, MarketAPI market, ShipVariantAPI variant, boolean forceUpgrade) {
+//    public static synchronized BandwidthUpgradeResult performNextBandwidthUpgrade(FleetMemberAPI member, ShipModifications mods, MarketAPI market, ShipVariantAPI variant, boolean forceUpgrade) {
+        boolean retVal;
 
         float marketMult = BandwidthHandler.getMarketBandwidthMult(market);
         float increase = Bandwidth.BANDWIDTH_STEP * marketMult;
@@ -73,52 +69,29 @@ public class BandwidthHandler {
         CampaignFleetAPI membersFleet = member.getFleetData().getFleet();
         if (isAbleToPayForBandwidthUpgrade(membersFleet, upgradePrice) || forceUpgrade) {
             // If we can afford, deduce the money and perform the upgrade
-            float beforeCredits = StarsectorAPIInteractor.INSTANCE.getMembersFleetCredits(member).get(); //membersFleet.getCargo().getCredits().get();
             synchronized (BandwidthHandler.class) {
                 StarsectorAPIInteractor.INSTANCE.getMembersFleetCredits(member).subtract(upgradePrice);
             }
-            float afterCredits = StarsectorAPIInteractor.INSTANCE.getMembersFleetCredits(member).get(); //membersFleet.getCargo().getCredits().get();
-            float actualCost = beforeCredits - afterCredits;
-//            AnonymousLogger.INSTANCE.log("performNextBandwidthUpgrade() BEFORE: "+format(beforeCredits), "CHARGING");
-//            AnonymousLogger.INSTANCE.log("performNextBandwidthUpgrade() AFTER: "+format(afterCredits), "CHARGING");
-            AnonymousLogger.INSTANCE.log("performNextBandwidthUpgrade()   UPG PRICE: "+format(upgradePrice), "CHARGING");
-            AnonymousLogger.INSTANCE.log("performNextBandwidthUpgrade() ACTUAL COST: "+format(actualCost), "CHARGING");
-
 
             float newBandwidth = Math.min(mods.getBaseBandwidth() + increase, Bandwidth.MAX_BANDWIDTH);
             mods.setBandwidth(newBandwidth);
             ShipModLoader.set(member, variant, mods);
 
-//            retVal = true;
-            retVal = new BandwidthUpgradeResult(true, upgradePrice);
+            retVal = true;
         } else {
             // If we can't afford, do nothing and return false
-            retVal = new BandwidthUpgradeResult(false, -1);
+            retVal = false;
         }
 
         return retVal;
     }
 
-    //TODO delete this
-    private static String format(float value) {
-        DecimalFormat decimalFormat = new DecimalFormat("#,###");
-        return decimalFormat.format(value);
-    }
-
-//    public static float getCostPrognosisToMaxBandwidth(FleetMemberAPI member, ShipModifications mods, MarketAPI market) {
-    public static synchronized float getCostPrognosisToMaxBandwidth(FleetMemberAPI member, MarketAPI market) {
-        //TODO the mods aren't necessary, use ShipModLoader to get them from the FMAPI
-        // the ship i'm testing with should return 14,221,032
-        // the projected cost returned 14,221,023
-        // after price rounding - 14,221,024
-
+    public static synchronized float getCostPrognosisToMaxBandwidth(FleetMemberAPI member, ShipModifications mods, MarketAPI market) {
         // The idea is - we are going to grab the bandwidth from the ship,
         // then we're going to run an accumulator on the price and fake upgrading it and store that in the bandwidth accumulator
         // once it reaches max, the returned value should be the one we're expecting with the test ship
-        ShipModifications mods = ShipModLoader.get(member, member.getVariant());
         float bandwidthAccumulator = mods.getBaseBandwidth();
         float prognosedPriceAccumulator = 0;
-        List<Float> priceList = new ArrayList<>();  //TODO delete
 
         // Due to the fact that the actual upgrading actually does min(currentBandwidth + increase, MAX_BANDWIDTH)
         // we will not care if it goes over the limit
@@ -131,25 +104,11 @@ public class BandwidthHandler {
 
                 bandwidthAccumulator = bandwidthAccumulator + increase;
                 prognosedPriceAccumulator = prognosedPriceAccumulator + upgradePrice;
-                priceList.add(upgradePrice);
             }
         }
 
         // Finally, return the accumulated price
-        float priceListSum = sumList(priceList);
-        AnonymousLogger.INSTANCE.log("getCostPrognosisToMaxBandwidth() priceListSum: "+format(priceListSum), "PROGNOSIS");
-        AnonymousLogger.INSTANCE.log("getCostPrognosisToMaxBandwidth() priceAccumulator: "+format(prognosedPriceAccumulator), "PROGNOSIS");
         return prognosedPriceAccumulator;
-    }
-
-    //TODO delete
-    public static synchronized float sumList(List<Float> numberList) {
-        float retVal = 0;
-        for (Float f : numberList) {
-            retVal = retVal+f;
-        }
-
-        return retVal;
     }
 
     public static synchronized float getMarketBandwidthMult(MarketAPI currMarket) {

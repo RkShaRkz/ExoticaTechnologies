@@ -8,21 +8,15 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.*
 import com.fs.starfarer.api.util.Misc
-import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.bandwidth.Bandwidth
 import exoticatechnologies.modifications.bandwidth.BandwidthHandler
-import exoticatechnologies.modifications.bandwidth.BandwidthHandler.BandwidthUpgradeResult
 import exoticatechnologies.modifications.bandwidth.BandwidthUtil
 import exoticatechnologies.refit.RefitButtonAdder
 import exoticatechnologies.ui.InteractiveUIPanelPlugin
 import exoticatechnologies.ui.StringTooltip
-import exoticatechnologies.util.AnonymousLogger
-import exoticatechnologies.util.StarsectorAPIInteractor
 import exoticatechnologies.util.StringUtils
-import exoticatechnologies.util.toFormattedString
 import kotlin.math.max
-import kotlin.math.min
 
 class ShipHeaderUIPlugin(
     dialog: InteractionDialogAPI?,
@@ -268,16 +262,9 @@ class ShipHeaderUIPlugin(
 
     @Synchronized
     private fun doMaxBandwidthUpgrade() {
-        // TODO get rid of this - just log prognosed value
-        val prognosedMaxPrice = BandwidthHandler.getCostPrognosisToMaxBandwidth(member, market)         //TODO delete
-        AnonymousLogger.log("cost prognis to max out member ${member.shipName} is: ${prognosedMaxPrice.toFormattedString()}")   //TODO delete
-        val resultList = mutableListOf<BandwidthUpgradeResult>();   //TODO delete
-        val startingMoney = StarsectorAPIInteractor.getMembersFleetCredits(member).get() //member.fleetData.fleet.cargo.credits.get()
-
         // While we have money and bandwidth can be upgraded, just roll this and play the sound at the end
         while (BandwidthHandler.isAbleToPayForNextBandwidthUpgrade(member, mods, market) && BandwidthHandler.canUpgrade(mods, member)) {
-            val upgradeResult = BandwidthHandler.performNextBandwidthUpgrade(member, mods, market, variant, false)
-            resultList.add(upgradeResult)   //TODO delete
+            BandwidthHandler.performNextBandwidthUpgrade(member, mods, market, variant, false)
 
             if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT) {
                 RefitButtonAdder.requiresVariantUpdate = true
@@ -285,11 +272,6 @@ class ShipHeaderUIPlugin(
 
             Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 0.75f)
         }
-        val priceList = resultList.map { item -> item.upgradeCost } //TODO delete
-        val paidPrice = priceList.sum()
-        val endMoney = StarsectorAPIInteractor.getMembersFleetCredits(member).get() //member.fleetData.fleet.cargo.credits.get()
-        val actualMoneyDifference = startingMoney - endMoney
-        AnonymousLogger.log("paid price to max out member ${member.shipName} is: ${paidPrice.toFormattedString()}\t\tactual money difference: ${actualMoneyDifference.toFormattedString()}")   //TODO delete
     }
 
     fun bandwidthButtonClicked() {
