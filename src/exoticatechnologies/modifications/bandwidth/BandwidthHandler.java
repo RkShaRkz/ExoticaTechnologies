@@ -59,7 +59,6 @@ public class BandwidthHandler {
      * @return whether the upgrade was performed successfully or not
      */
     public static synchronized boolean performNextBandwidthUpgrade(FleetMemberAPI member, ShipModifications mods, MarketAPI market, ShipVariantAPI variant, boolean forceUpgrade) {
-//    public static synchronized BandwidthUpgradeResult performNextBandwidthUpgrade(FleetMemberAPI member, ShipModifications mods, MarketAPI market, ShipVariantAPI variant, boolean forceUpgrade) {
         boolean retVal;
 
         float marketMult = BandwidthHandler.getMarketBandwidthMult(market);
@@ -137,18 +136,5 @@ public class BandwidthHandler {
         retVal = Math.round(shipBaseValue * (float) Math.pow(shipBandwidth / 70f, 2) / (2f + 6f * bandwidthMultFactor) * 100f) / 100f;
 
         return Math.round(retVal);
-    }
-
-    public static class BandwidthUpgradeResult {
-        private boolean success;
-        private float upgradeCost;
-
-        public BandwidthUpgradeResult(boolean isSuccess, float cost) {
-            this.success = isSuccess;
-            this.upgradeCost = cost;
-        }
-
-        public boolean isSuccess() { return success; }
-        public float getUpgradeCost() { return upgradeCost; }
     }
 }
