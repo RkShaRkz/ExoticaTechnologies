@@ -15,6 +15,7 @@ import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.refit.checkRefitVariant
+import exoticatechnologies.util.StarsectorAPIInteractor
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.runningFromRefitScreen
@@ -184,6 +185,7 @@ open class HullmodExotic(
         )
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
+        StarsectorAPIInteractor.updateVariantIfOnRefitScreen()
         logIfOverMinLogLevel("<-- onDestroy()\tStill has hullmod: ${check}", Level.INFO)
     }
 
@@ -256,6 +258,7 @@ open class HullmodExotic(
     private fun unapplyExoticHullmodFromVariant(variant: ShipVariantAPI, stats: MutableShipStatsAPI) {
         val variantHullSize = variant.hullSpec.hullSize
         exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, stats, exoticHullmod.hullModId)
+        StarsectorAPIInteractor.updateVariantIfOnRefitScreen()
     }
 
     override fun applyExoticToStats(
@@ -327,6 +330,8 @@ open class HullmodExotic(
             moduleVariantMods.putExotic(ExoticData(this@HullmodExotic.key))
 
             ShipModLoader.set(member, moduleVariant, moduleVariantMods)
+
+            StarsectorAPIInteractor.updateVariantIfOnRefitScreen()
         } else {
             logIfOverMinLogLevel("Bailing out - not installing HullmodExotic ${this} on module variant ${moduleVariant} due to already being at Max Exoticas Limit !!!", Level.ERROR)
         }

@@ -6,6 +6,7 @@ import com.fs.starfarer.api.campaign.InteractionDialogAPI
 import com.fs.starfarer.api.campaign.OptionPanelAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.util.MutableValue
+import exoticatechnologies.refit.RefitButtonAdder
 import exoticatechnologies.util.datastructures.Optional
 import org.jetbrains.annotations.TestOnly
 import org.jetbrains.annotations.VisibleForTesting
@@ -97,6 +98,12 @@ object StarsectorAPIInteractor {
     fun getMembersFleetCredits(member: FleetMemberAPI): MutableValue {
         return synchronized(StarsectorAPIInteractor.javaClass) {
             member.fleetData.fleet.cargo.credits
+        }
+    }
+
+    fun updateVariantIfOnRefitScreen() {
+        if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT) {
+            RefitButtonAdder.requiresVariantUpdate = true
         }
     }
 }
