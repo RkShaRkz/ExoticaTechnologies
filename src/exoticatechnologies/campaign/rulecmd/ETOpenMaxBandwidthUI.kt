@@ -11,7 +11,6 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.BaseCommandPlugin
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.bandwidth.BandwidthHandler
-import exoticatechnologies.util.AnonymousLogger
 import exoticatechnologies.util.getMods
 import exoticatechnologies.util.toFormattedString
 
@@ -56,7 +55,6 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
     }
 
     override fun pickedFleetMembers(members: MutableList<FleetMemberAPI>?) {
-        AnonymousLogger.log("Picked fleet members: ${members}", "FleetPickerDialogListener")
         selectedMembers = members
         val membersPrices = members?.let {
             return@let it.map { item ->
@@ -67,22 +65,24 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
                 )
             }.sum()
         }
-        interactionDialog?.optionPanel?.clearOptions()
-        interactionDialog?.optionPanel?.addOption(CONFIRMATION_BUTTON_YES, CONFIRM_YES_OPTION)
-        interactionDialog?.optionPanel?.addOption(CONFIRMATION_BUTTON_NO, CONFIRM_NO_OPTION)
-        interactionDialog?.optionPanel?.addOptionConfirmation(
-                CONFIRM_YES_OPTION,
-                "Estimated price for maxing out these ships is: ${membersPrices?.toFormattedString()}",
-                CONFIRMATION_BUTTON_YES,
-                CONFIRMATION_BUTTON_NO
-        )
-//        originalInteractionPlugin = interactionDialog?.plugin //TODO remove
-        interactionDialog?.plugin = this
+        if (members.isNullOrEmpty().not()) {
+            interactionDialog?.optionPanel?.clearOptions()
+            interactionDialog?.optionPanel?.addOption(CONFIRMATION_BUTTON_YES, CONFIRM_YES_OPTION)
+            interactionDialog?.optionPanel?.addOption(CONFIRMATION_BUTTON_NO, CONFIRM_NO_OPTION)
+            interactionDialog?.optionPanel?.addOptionConfirmation(
+                    CONFIRM_YES_OPTION,
+                    "Estimated price for maxing out these ships is: ${membersPrices?.toFormattedString()}",
+                    CONFIRMATION_BUTTON_YES,
+                    CONFIRMATION_BUTTON_NO
+            )
+            interactionDialog?.plugin = this
+        } else {
+            dismiss(true)
+        }
     }
 
     override fun cancelledFleetMemberPicking() {
         // Do nothing
-        AnonymousLogger.log("Cancelled fleet picker dialog", "FleetPickerDialogListener")
         dismiss(true)
     }
 
@@ -91,14 +91,12 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
     override fun optionSelected(optionText: String?, optionData: Any?) {
         when (optionData) {
             CONFIRM_YES_OPTION -> {
-                AnonymousLogger.log("'CONFIRM' HEARD IN optionSelected()!\tthis is CONFIRM_YES")
                 selectedMembers?.let {
                     performBFSUpgradeToMax(it)
                 }
                 dismiss()
             }
             CONFIRM_NO_OPTION -> {
-                AnonymousLogger.log("'CANCEL' HEARD IN optionSelected()!\tthis is CONFIRM_NO")
                 dismiss(true)
             }
         }
