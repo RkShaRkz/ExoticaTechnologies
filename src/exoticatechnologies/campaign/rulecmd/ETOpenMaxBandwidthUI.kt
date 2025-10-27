@@ -77,16 +77,12 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
             )
             interactionDialog?.plugin = this
         } else {
-//            dismiss(true)
-//            goBackToInitialPlanetDialog()
             goBackToExoticaTechMenu()
         }
     }
 
     override fun cancelledFleetMemberPicking() {
-        // Do nothing
-//        dismiss(true)
-//        goBackToInitialPlanetDialog()
+        // Just go back to exotica tech menu
         goBackToExoticaTechMenu()
     }
 
@@ -98,34 +94,27 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
                 selectedMembers?.let {
                     performBFSUpgradeToMax(it)
                 }
-//                dismiss()
-//                goBackToInitialPlanetDialog()
                 goBackToExoticaTechMenu()
             }
             CONFIRM_NO_OPTION -> {
-//                dismiss(true)
-//                goBackToInitialPlanetDialog()
                 goBackToExoticaTechMenu()
             }
         }
     }
 
-//    private fun dismiss(cancel: Boolean = false) {
-//        interactionDialog?.let {
-//            it.plugin = originalInteractionPlugin
-//            if (cancel) {
-//                it.dismissAsCancel()
-//            } else {
-//                it.dismiss()
-//            }
-//        }
-//    }
-
+    /**
+     * Goes back to the "initial" planetside dialog menu
+     */
     private fun goBackToInitialPlanetDialog() {
+        // Programatically invoke the "back" option
         programaticallyInvokeOption("ETDialogBack")
     }
 
+    /**
+     * Goes back to the "exotica technologies" dialog menu
+     */
     private fun goBackToExoticaTechMenu() {
+        // Programatically invoke the "exotica technologies" option
         programaticallyInvokeOption("ETMainMenu")
     }
 
@@ -133,8 +122,6 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
         interactionDialog?.let { dialog ->
             originalInteractionPlugin?.let { originalPlugin ->
                 dialog.plugin = originalPlugin
-                // And programatically invoke the "back" option
-//                originalPlugin.optionSelected("Back", "ETDialogBack")
                 originalPlugin.optionSelected("", optionData)
             }
         }
