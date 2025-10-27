@@ -24,6 +24,7 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
 
     override fun execute(ruleId: String?, dialog: InteractionDialogAPI?, params: MutableList<Misc.Token>?, memoryMap: MutableMap<String, MemoryAPI>?): Boolean {
         interactionDialog = dialog
+        originalInteractionPlugin = interactionDialog?.plugin
 
         val market = dialog?.interactionTarget?.market
 
@@ -75,7 +76,7 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
                 CONFIRMATION_BUTTON_YES,
                 CONFIRMATION_BUTTON_NO
         )
-        originalInteractionPlugin = interactionDialog?.plugin
+//        originalInteractionPlugin = interactionDialog?.plugin //TODO remove
         interactionDialog?.plugin = this
     }
 
@@ -85,9 +86,7 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
         dismiss(true)
     }
 
-    override fun init(dialog: InteractionDialogAPI?) {
-        AnonymousLogger.log("--> init()")
-    }
+    override fun init(dialog: InteractionDialogAPI?) { /* no op */ }
 
     override fun optionSelected(optionText: String?, optionData: Any?) {
         when (optionData) {
@@ -117,12 +116,6 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
     }
 
     private fun performBFSUpgradeToMax(memberList: List<FleetMemberAPI>) {
-        //TODO BFS-improve all ships until:
-        // 1) you either run out of money by all of them not being able to afford next upgrade
-        // 2) all of them are already upgraded
-        var successfulUpgrades = 0  //TODO remove
-        val successfullyUpgradedMembers = mutableSetOf<FleetMemberAPI>()
-
         // Assume we can't afford any ships
         var shouldProceed: Boolean
         do {
@@ -141,36 +134,21 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
                     // Can't upgrade, was not successful
                     false
                 }
-                if (didMemberSuccessfullyUpgrade) { successfulUpgrades++; successfullyUpgradedMembers.add(member) } //TODO remove
                 // now perform an OR operation so that one 'true' can keep on carrying the do/while
                 shouldProceed = shouldProceed or didMemberSuccessfullyUpgrade
             }
         } while (shouldProceed)
-
-        AnonymousLogger.log("Successfully upgraded bandwidth levels: ${successfulUpgrades} on successfully upgraded members: ${successfullyUpgradedMembers.size}")//TODO remove
     }
 
-    override fun optionMousedOver(optionText: String?, optionData: Any?) {
-//        TODO("Not yet implemented")
-    }
+    override fun optionMousedOver(optionText: String?, optionData: Any?) { /* no op */ }
 
-    override fun advance(amount: Float) {
-//        TODO("Not yet implemented")
-    }
+    override fun advance(amount: Float) { /* no op */ }
 
-    override fun backFromEngagement(battleResult: EngagementResultAPI?) {
-//        TODO("Not yet implemented")
-    }
+    override fun backFromEngagement(battleResult: EngagementResultAPI?) { /* no op */ }
 
-    override fun getContext(): Any {
-//        TODO("Not yet implemented")
-        return this
-    }
+    override fun getContext(): Any { return this }
 
-    override fun getMemoryMap(): MutableMap<String, MemoryAPI> {
-//        TODO("Not yet implemented")
-        return mutableMapOf()
-    }
+    override fun getMemoryMap(): MutableMap<String, MemoryAPI> { return mutableMapOf() }
 
     companion object {
         private const val CONFIRMATION_BUTTON_YES = "Do it!"
