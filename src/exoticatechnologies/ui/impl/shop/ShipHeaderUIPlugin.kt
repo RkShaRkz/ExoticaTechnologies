@@ -8,7 +8,6 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.*
 import com.fs.starfarer.api.util.Misc
-import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.bandwidth.Bandwidth
 import exoticatechnologies.modifications.bandwidth.BandwidthHandler
@@ -18,7 +17,6 @@ import exoticatechnologies.ui.InteractiveUIPanelPlugin
 import exoticatechnologies.ui.StringTooltip
 import exoticatechnologies.util.StringUtils
 import kotlin.math.max
-import kotlin.math.min
 
 class ShipHeaderUIPlugin(
     dialog: InteractionDialogAPI?,
@@ -48,6 +46,7 @@ class ShipHeaderUIPlugin(
     var bandwidthTooltip: TooltipMakerAPI? = null
     var bandwidthUpgradeLabel: LabelAPI? = null
     var bandwidthButton: ButtonAPI? = null
+    var maxBandwidthButton: ButtonAPI? = null
 
     override fun advancePanel(amount: Float) {
         if (mods.getValue() != lastValue) {
@@ -106,8 +105,25 @@ class ShipHeaderUIPlugin(
             StringUtils.getString("BandwidthDialog", "BandwidthPurchase"), "test",
             Misc.getBasePlayerColor(), Misc.getDarkPlayerColor(), Alignment.MID, CutStyle.C2_MENU, 72F, 22F, 3F
         )
+        maxBandwidthButton = bandwidthTooltip?.addButton(
+            StringUtils.getString("BandwidthDialog", "MaxBandwidthPurchase"), "test",
+            Misc.getBasePlayerColor(), Misc.getDarkPlayerColor(), Alignment.MID, CutStyle.C2_MENU, 106F, 22F, 3F
+        )
 
-        buttons[bandwidthButton!!] = BandwidthButtonHandler(this)
+        // Add the button handler to the "purchase" button
+        bandwidthButton?.let {
+            buttons[it] = BandwidthButtonHandler(this)
+        } ?: throw IllegalStateException("bandwidthButton should not have been null in ShipHeaderUIPlugin !!!")
+
+        // Add the button handler to the "purchase max" button
+        maxBandwidthButton?.let { nonNullMaxBandwidth ->
+            // Set the "max bandwidth" button to the right of "bandwidth" button, 10px away
+            bandwidthButton?.let { nonNullBandwidth ->
+                nonNullMaxBandwidth.position?.rightOfMid(nonNullBandwidth, 10f)
+            }
+
+            buttons[nonNullMaxBandwidth] = MaxBandwidthButtonHandler(this)
+        } ?: throw IllegalStateException("maxBandwidthButton should not have been null in ShipHeaderUIPlugin !!!")
 
         setBandwidthUpgradeLabel()
 
@@ -176,19 +192,23 @@ class ShipHeaderUIPlugin(
                 .setLabelText(bandwidthUpgradeLabel)
             bandwidthUpgradeLabel?.setColor(Misc.getNegativeHighlightColor())
             bandwidthButton?.isEnabled = false
+            maxBandwidthButton?.isEnabled = false
             return
         }
 
         bandwidthUpgradeLabel?.let {
-            if (mods.getBaseBandwidth() >= Bandwidth.MAX_BANDWIDTH) {
+            if (BandwidthHandler.canUpgrade(mods, member).not()) {
+                // If can't upgrade anymore, then change the label that we reached max
                 modifyBandwidthUpgradeLabel(it, -1f, -1f, "BandwidthDialog", "BandwidthUpgradePeak")
                 bandwidthButton?.isEnabled = false
+                maxBandwidthButton?.isEnabled = false
             } else {
                 val marketMult = BandwidthHandler.getMarketBandwidthMult(market)
                 val upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult)
                 val newBandwidth = Bandwidth.BANDWIDTH_STEP * marketMult
 
-                if (Global.getSector().playerFleet.cargo.credits.get() < upgradePrice) {
+                if (BandwidthHandler.isAbleToPayForBandwidthUpgrade(Global.getSector().playerFleet, upgradePrice).not()) {
+                    // If can't afford upgrade, change the label to say so
                     modifyBandwidthUpgradeLabel(
                         it,
                         newBandwidth,
@@ -197,7 +217,9 @@ class ShipHeaderUIPlugin(
                         "BandwidthUpgradeCostCannotAfford"
                     )
                     bandwidthButton?.isEnabled = false
+                    maxBandwidthButton?.isEnabled = false
                 } else {
+                    // Otherwise, make it state the cost
                     modifyBandwidthUpgradeLabel(
                         it,
                         newBandwidth,
@@ -206,6 +228,7 @@ class ShipHeaderUIPlugin(
                         "BandwidthUpgradeCost"
                     )
                     bandwidthButton?.isEnabled = true
+                    maxBandwidthButton?.isEnabled = true
                 }
             }
         }
@@ -228,15 +251,7 @@ class ShipHeaderUIPlugin(
     }
 
     private fun doBandwidthUpgrade() {
-        val marketMult = BandwidthHandler.getMarketBandwidthMult(market)
-        val increase = Bandwidth.BANDWIDTH_STEP * marketMult
-        val upgradePrice = BandwidthHandler.getBandwidthUpgradePrice(member, mods.getBaseBandwidth(), marketMult)
-
-        Global.getSector().playerFleet.cargo.credits.subtract(upgradePrice)
-
-        val newBandwidth = min(mods.getBaseBandwidth() + increase, Bandwidth.MAX_BANDWIDTH)
-        mods.bandwidth = newBandwidth
-        ShipModLoader.set(member, variant, mods)
+        BandwidthHandler.performNextBandwidthUpgrade(member, mods, market, variant, false)
 
         if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT) {
             RefitButtonAdder.requiresVariantUpdate = true
@@ -245,9 +260,29 @@ class ShipHeaderUIPlugin(
         Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 0.75f)
     }
 
+    @Synchronized
+    private fun doMaxBandwidthUpgrade() {
+        // While we have money and bandwidth can be upgraded, just roll this and play the sound at the end
+        while (BandwidthHandler.isAbleToPayForNextBandwidthUpgrade(member, mods, market) && BandwidthHandler.canUpgrade(mods, member)) {
+            BandwidthHandler.performNextBandwidthUpgrade(member, mods, market, variant, false)
+
+            if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT) {
+                RefitButtonAdder.requiresVariantUpdate = true
+            }
+
+            Global.getSoundPlayer().playUISound("ui_char_increase_skill_new", 1f, 0.75f)
+        }
+    }
+
     fun bandwidthButtonClicked() {
         bandwidthButton?.isChecked = false
         doBandwidthUpgrade()
+        setBandwidthUpgradeLabel()
+    }
+
+    fun maxBandwidthButtonClicked() {
+        maxBandwidthButton?.isChecked = false
+        doMaxBandwidthUpgrade()
         setBandwidthUpgradeLabel()
     }
 }

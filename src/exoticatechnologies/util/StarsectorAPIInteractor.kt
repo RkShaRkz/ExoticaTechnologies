@@ -4,6 +4,8 @@ import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.campaign.CoreUITabId
 import com.fs.starfarer.api.campaign.InteractionDialogAPI
 import com.fs.starfarer.api.campaign.OptionPanelAPI
+import com.fs.starfarer.api.fleet.FleetMemberAPI
+import com.fs.starfarer.api.util.MutableValue
 import exoticatechnologies.util.datastructures.Optional
 import org.jetbrains.annotations.TestOnly
 import org.jetbrains.annotations.VisibleForTesting
@@ -89,5 +91,12 @@ object StarsectorAPIInteractor {
     fun setWorkingInTestMode(workingInTestMode: Boolean, isInRefitScreen: Boolean) {
         IS_IN_TEST_MODE = workingInTestMode
         TEST_MODE_VALUE = isInRefitScreen
+    }
+
+    @Synchronized
+    fun getMembersFleetCredits(member: FleetMemberAPI): MutableValue {
+        return synchronized(StarsectorAPIInteractor.javaClass) {
+            member.fleetData.fleet.cargo.credits
+        }
     }
 }
