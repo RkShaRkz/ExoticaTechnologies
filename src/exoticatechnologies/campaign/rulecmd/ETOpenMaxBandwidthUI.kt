@@ -11,6 +11,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.BaseCommandPlugin
 import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.bandwidth.BandwidthHandler
+import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.getMods
 import exoticatechnologies.util.toFormattedString
 
@@ -38,9 +39,9 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
                     .filter { fmapi -> fmapi.isFighterWing.not() }
 
             dialog.showFleetMemberPickerDialog(
-                    "Select members whose Bandwidth should be maxed",
-                    "Max these",
-                    "No thanks",
+                    StringUtils.getTranslation(STRING_PARENT_KEY, "Title").toString(),
+                    StringUtils.getTranslation(STRING_PARENT_KEY, "FleetPickerOKText").toString(),
+                    StringUtils.getTranslation(STRING_PARENT_KEY, "FleetPickerCancelText").toString(),
                     6,
                     6,
                     64f,
@@ -67,13 +68,21 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
         }
         if (members.isNullOrEmpty().not()) {
             interactionDialog?.optionPanel?.clearOptions()
-            interactionDialog?.optionPanel?.addOption(CONFIRMATION_BUTTON_YES, CONFIRM_YES_OPTION)
-            interactionDialog?.optionPanel?.addOption(CONFIRMATION_BUTTON_NO, CONFIRM_NO_OPTION)
+            interactionDialog?.optionPanel?.addOption(
+                    StringUtils.getTranslation(STRING_PARENT_KEY, "ConfirmationButtonYesText").toString(),
+                    CONFIRM_YES_OPTION
+            )
+            interactionDialog?.optionPanel?.addOption(
+                    StringUtils.getTranslation(STRING_PARENT_KEY, "ConfirmationButtonNoText").toString(),
+                    CONFIRM_NO_OPTION
+            )
             interactionDialog?.optionPanel?.addOptionConfirmation(
                     CONFIRM_YES_OPTION,
-                    "Estimated price for maxing out these ships is: ${membersPrices?.toFormattedString()}",
-                    CONFIRMATION_BUTTON_YES,
-                    CONFIRMATION_BUTTON_NO
+                    StringUtils.getTranslation(STRING_PARENT_KEY, "EstimatedCostText")
+                            .format("price",membersPrices?.toFormattedString())
+                            .toString(),
+                    StringUtils.getTranslation(STRING_PARENT_KEY, "ConfirmationButtonYesText").toString(),
+                    StringUtils.getTranslation(STRING_PARENT_KEY, "ConfirmationButtonNoText").toString(),
             )
             interactionDialog?.plugin = this
         } else {
@@ -107,7 +116,7 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
      */
     private fun goBackToInitialPlanetDialog() {
         // Programatically invoke the "back" option
-        programaticallyInvokeOption("ETDialogBack")
+        programaticallyInvokeOption(PLANETSIDE_ROOT_MAINMENU_KEY)
     }
 
     /**
@@ -115,7 +124,7 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
      */
     private fun goBackToExoticaTechMenu() {
         // Programatically invoke the "exotica technologies" option
-        programaticallyInvokeOption("ETMainMenu")
+        programaticallyInvokeOption(EXOTICA_TECH_MAINMENU_KEY)
     }
 
     private fun programaticallyInvokeOption(optionData: String) {
@@ -163,10 +172,11 @@ class ETOpenMaxBandwidthUI: BaseCommandPlugin(), FleetMemberPickerListener, Inte
     override fun getMemoryMap(): MutableMap<String, MemoryAPI> { return mutableMapOf() }
 
     companion object {
-        private const val CONFIRMATION_BUTTON_YES = "Do it!"
-        private const val CONFIRMATION_BUTTON_NO = "NOPE!"
-
         private const val CONFIRM_YES_OPTION = "CONFIRM"
         private const val CONFIRM_NO_OPTION = "CANCEL"
+
+        private const val STRING_PARENT_KEY = "MaxBandwidthDialog"
+        private const val EXOTICA_TECH_MAINMENU_KEY = "ETMainMenu"
+        private const val PLANETSIDE_ROOT_MAINMENU_KEY = "ETDialogBack"
     }
 }

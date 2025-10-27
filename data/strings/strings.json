@@ -117,6 +117,14 @@
 		"MaxBandwidthPurchase": "Purchase MAX",
 		"BandwidthHelp": "A ship's bandwidth is its capacity for upgrades. Bandwidth can be raised for a price up to ${bandwidthLimit}, and can be raised beyond that by certain exotics."
 	},
+	"MaxBandwidthDialog": {
+		"Title": "Select members whose Bandwidth should be maxed",
+		"FleetPickerOKText": "Max these",
+		"FleetPickerCancelText": "No thanks",
+		"EstimatedCostText": "Estimated price for maxing out these ships is: *${price}*",
+		"ConfirmationButtonYesText": "Do it!",
+		"ConfirmationButtonNoText": "NOPE!"
+	},
 	"ExoticsDialog": {
 		"OpenExoticOptions": "Exotics",
 		"ChipsHeader": "Chips - Hover to preview",
