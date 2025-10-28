@@ -6,6 +6,8 @@ import com.fs.starfarer.api.campaign.InteractionDialogAPI
 import com.fs.starfarer.api.campaign.OptionPanelAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.util.MutableValue
+import com.fs.starfarer.campaign.fleet.FleetData
+import com.fs.starfarer.campaign.fleet.FleetMember
 import exoticatechnologies.util.datastructures.Optional
 import org.jetbrains.annotations.TestOnly
 import org.jetbrains.annotations.VisibleForTesting
@@ -97,6 +99,35 @@ object StarsectorAPIInteractor {
     fun getMembersFleetCredits(member: FleetMemberAPI): MutableValue {
         return synchronized(StarsectorAPIInteractor.javaClass) {
             member.fleetData.fleet.cargo.credits
+        }
+    }
+
+    fun promoteFleetDatasOnPlayerShipsIfNotAlreadyPromoted() {
+        // get player's fleet
+//        val originalFleetData = Global.getSector().playerFleet.fleetData
+        // promote each fleetmember's fleetdata if it's not already promoted
+        for (member in Global.getSector().playerFleet.membersWithFightersCopy) {
+            AnonymousLogger.log("member.fleetData !is ETFleetData ? ${member.fleetData !is ETFleetData}")
+            AnonymousLogger.log("member.fleetData is ETFleetData ? ${member.fleetData is ETFleetData}")
+            AnonymousLogger.log("member.fleetData is FleetData ? ${member.fleetData is FleetData}")
+            if (member.fleetData !is ETFleetData) {
+                // Only promote vanilla (non-ETFleetData) fleet datas
+                AnonymousLogger.log("Promoting ${member.shipName} fleet data to ETFleetData")
+                val fm = member as FleetMember
+                if (member.fleetData != null) {
+                    val originalFleetMembersFleetData = fm.fleetData
+                    fm.fleetData = ETFleetData(member.fleetData)
+                    val newFleetMembersFleetData = fm.fleetData
+                    AnonymousLogger.log("originalFleetData: ${originalFleetMembersFleetData}, newFleetData: ${newFleetMembersFleetData}")
+                } else {
+                    AnonymousLogger.log("Encountered member with NULL fleetdata! member: "+member)
+                }
+                AnonymousLogger.log("Promoted ${member.shipName} fleet data to ETFleetData")
+//                member.fleetData?.let { fleetData ->
+//                    fm.fleetData = ETFleetData(fleetData)
+//                }
+
+            }
         }
     }
 }
