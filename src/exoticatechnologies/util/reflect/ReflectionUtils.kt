@@ -221,12 +221,17 @@ object ReflectionUtils {
         var currentClass: Class<*>? = instance.javaClass
 
         while (currentClass != null && currentClass != Any::class.java) {
-            currentClass.declaredFields.forEach { field ->
-                fieldMap[field.name] = ReflectedField(field)
+//            currentClass.declaredFields.forEach { field: Any ->
+//                val fieldName = 
+//                fieldMap[field.name] = ReflectedField(field)
+//            }
+            val instancesOfFields: Array<out Any> = currentClass.getDeclaredFields()
+            for (i in instancesOfFields.indices) {
+                val fieldName = getFieldNameHandle.invoke(instancesOfFields[i]).toString()
+                fieldMap[fieldName] = ReflectedField(instancesOfFields[i])
             }
             currentClass = currentClass.superclass
         }
-
         return fieldMap
     }
 
@@ -236,8 +241,13 @@ object ReflectionUtils {
         var currentClass: Class<*>? = clazz
 
         while (currentClass != null && currentClass != Any::class.java) {
-            currentClass.declaredFields.forEach { field ->
-                fieldMap[field.name] = ReflectedField(field)
+//            currentClass.declaredFields.forEach { field ->
+//                fieldMap[field.name] = ReflectedField(field)
+//            }
+            val instancesOfFields: Array<out Any> = currentClass.getDeclaredFields()
+            for (i in instancesOfFields.indices) {
+                val fieldName = getFieldNameHandle.invoke(instancesOfFields[i]).toString()
+                fieldMap[fieldName] = ReflectedField(instancesOfFields[i])
             }
             currentClass = currentClass.superclass
         }
