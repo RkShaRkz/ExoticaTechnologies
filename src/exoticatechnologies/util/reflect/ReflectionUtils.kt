@@ -203,6 +203,105 @@ object ReflectionUtils {
         return ReflectedMethod(method)
     }
 
+    fun getAllFields(instance: Any): List<ReflectedField> {
+        val fields = mutableListOf<ReflectedField>()
+        var currentClass: Class<*>? = instance.javaClass
+
+        while (currentClass != null && currentClass != Any::class.java) {
+            val instancesOfFields: Array<out Any> = currentClass.declaredFields
+            instancesOfFields.mapTo(fields) { ReflectedField(it) }
+            currentClass = currentClass.superclass
+        }
+
+        return fields
+    }
+
+    fun getAllFieldsMap(instance: Any): Map<String, ReflectedField> {
+        val fieldMap = mutableMapOf<String, ReflectedField>()
+        var currentClass: Class<*>? = instance.javaClass
+
+        while (currentClass != null && currentClass != Any::class.java) {
+            currentClass.declaredFields.forEach { field ->
+                fieldMap[field.name] = ReflectedField(field)
+            }
+            currentClass = currentClass.superclass
+        }
+
+        return fieldMap
+    }
+
+    /**
+     * A practical, generic "copy constructor" kind of method that takes all field values from [source] and copies
+     * them into [destination]. Source and destination should be of the same type and contain the same fields.
+     */
+    fun copyAllFields(source: Any, destination: Any) {
+        val sourceFields = getAllFields(source)
+
+        for (sourceField in sourceFields) {
+            try {
+                // Get the field name to find the corresponding field in destination
+                val fieldName = getFieldNameHandle.invoke(sourceField.field) as String
+
+                // Try to find the same field in destination
+                val destField = findFieldByName(destination, fieldName)
+                if (destField != null) {
+                    // Get value from source and set it in destination
+                    val value = sourceField.get(source)
+                    destField.set(destination, value)
+                }
+            } catch (e: Exception) {
+                // Ignore fields that can't be copied (final fields, access issues, etc.)
+                // You might want to log this in practice
+            }
+        }
+    }
+
+    /**
+     * Copies all fields of the same name and type from [source] to [destinaton]
+     *
+     * @see copyAllFields
+     */
+    fun copyAllFieldsWithTypeCheck(source: Any, destination: Any) {
+        val sourceFields = getAllFields(source)
+
+        for (sourceField in sourceFields) {
+            try {
+                val fieldName = getFieldNameHandle.invoke(sourceField.field) as String
+                val destField = findFieldByName(destination, fieldName)
+
+                if (destField != null) {
+                    // Get field types for type checking
+                    val sourceType = getFieldTypeHandle.invoke(sourceField.field) as Class<*>
+                    val destType = getFieldTypeHandle.invoke(destField.field) as Class<*>
+
+                    // Only copy if types are compatible
+                    if (destType.isAssignableFrom(sourceType)) {
+                        val value = sourceField.get(source)
+                        destField.set(destination, value)
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore fields that can't be copied
+            }
+        }
+    }
+
+    // Helper method to find a field by name in an object (including superclasses)
+    private fun findFieldByName(instance: Any, fieldName: String): ReflectedField? {
+        var currentClass: Class<*>? = instance.javaClass
+
+        while (currentClass != null && currentClass != Any::class.java) {
+            try {
+                val field = currentClass.getDeclaredField(fieldName)
+                return ReflectedField(field)
+            } catch (e: NoSuchFieldException) {
+                // Try superclass
+                currentClass = currentClass.superclass
+            }
+        }
+        return null
+    }
+
     fun createClassThroughCustomLoader(claz: Class<*>): MethodHandle {
         var loader = this::class.java.classLoader
         val urls: Array<URL> = (loader as URLClassLoader).urLs
