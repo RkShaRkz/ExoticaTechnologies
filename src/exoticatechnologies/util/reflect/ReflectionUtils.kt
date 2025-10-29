@@ -1,5 +1,6 @@
 package exoticatechnologies.util.reflect
 
+import exoticatechnologies.util.AnonymousLogger
 import java.lang.invoke.MethodHandle
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
@@ -298,6 +299,7 @@ object ReflectionUtils {
                 }
             } catch (e: Exception) {
                 // Ignore fields that can't be copied
+                AnonymousLogger.log("Encountered exception ${e} during copyAllFields()")
             }
         }
     }

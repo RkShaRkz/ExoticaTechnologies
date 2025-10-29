@@ -12,12 +12,18 @@ class ETFleetData(@Transient val originalFleetData: FleetData): FleetData(
         ReflectionUtils.get("namePrefix", originalFleetData).toString(),
         ReflectionUtils.get("nameSourceFactionId", originalFleetData).toString(),
 ) {
+
+//    init {
+//        ReflectionUtils.copyAllFields(originalFleetData, this)
+//    }
+
     override fun scuttle(p0: FleetMemberAPI?) {
         scuttleListener?.onPreScuttle(p0)
         super.scuttle(p0)
         originalFleetData.scuttle(p0)
         scuttleListener?.onPostScuttle(p0)
     }
+
 
     companion object {
         var scuttleListener: OnScuttleListener? = null
