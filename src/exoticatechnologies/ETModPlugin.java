@@ -26,6 +26,7 @@ import exoticatechnologies.refit.RefitButtonAdder;
 import exoticatechnologies.ui.impl.shop.ShopManager;
 import exoticatechnologies.ui.impl.shop.overview.OverviewPanelUIPlugin;
 import exoticatechnologies.util.AnonymousLogger;
+import exoticatechnologies.util.ETFleetData;
 import exoticatechnologies.util.FleetMemberUtils;
 import exoticatechnologies.util.Utilities;
 import lombok.extern.log4j.Log4j;
@@ -63,6 +64,17 @@ public class ETModPlugin extends BaseModPlugin {
         FactionConfigLoader.load();
         // And cleanup the HullmodExoticHandler's map
         HullmodExoticHandler.INSTANCE.reinitialize();
+        ETFleetData.setOnScuttleListener(new ETFleetData.OnScuttleListener() {
+            @Override
+            public void onPreScuttle(FleetMemberAPI fleetMember) {
+                AnonymousLogger.INSTANCE.log("--> onPreScuttle() fired for "+fleetMember.getShipName());
+            }
+
+            @Override
+            public void onPostScuttle(FleetMemberAPI fleetMember) {
+                AnonymousLogger.INSTANCE.log("--> onPostScuttle() fired "+fleetMember.getShipName());
+            }
+        });
     }
 
     @Override

@@ -1,5 +1,6 @@
 package exoticatechnologies.util.reflect
 
+import exoticatechnologies.util.AnonymousLogger
 import java.lang.invoke.MethodHandle
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
@@ -201,6 +202,182 @@ object ReflectionUtils {
 
         if (method == null) return null
         return ReflectedMethod(method)
+    }
+
+    fun getAllFields(instance: Any): List<ReflectedField> {
+        val fields = mutableListOf<ReflectedField>()
+        var currentClass: Class<*>? = instance.javaClass
+
+        while (currentClass != null && currentClass != Any::class.java) {
+            val instancesOfFields: Array<out Any> = currentClass.declaredFields
+            instancesOfFields.mapTo(fields) { ReflectedField(it) }
+            currentClass = currentClass.superclass
+        }
+
+        return fields
+    }
+
+    fun getAllFieldsMap(instance: Any): Map<String, ReflectedField> {
+        val fieldMap = mutableMapOf<String, ReflectedField>()
+        var currentClass: Class<*>? = instance.javaClass
+
+        while (currentClass != null && currentClass != Any::class.java) {
+//            currentClass.declaredFields.forEach { field: Any ->
+//                val fieldName = 
+//                fieldMap[field.name] = ReflectedField(field)
+//            }
+            val instancesOfFields: Array<out Any> = currentClass.getDeclaredFields()
+            for (i in instancesOfFields.indices) {
+                val fieldName = getFieldNameHandle.invoke(instancesOfFields[i]).toString()
+                fieldMap[fieldName] = ReflectedField(instancesOfFields[i])
+            }
+            currentClass = currentClass.superclass
+        }
+        return fieldMap
+    }
+
+    // Get field map for a specific class (useful when you don't have an instance)
+    fun getAllFieldsMap(clazz: Class<*>): Map<String, ReflectedField> {
+        val fieldMap = mutableMapOf<String, ReflectedField>()
+        var currentClass: Class<*>? = clazz
+
+        while (currentClass != null && currentClass != Any::class.java) {
+//            currentClass.declaredFields.forEach { field ->
+//                fieldMap[field.name] = ReflectedField(field)
+//            }
+            val instancesOfFields: Array<out Any> = currentClass.getDeclaredFields()
+            for (i in instancesOfFields.indices) {
+                val fieldName = getFieldNameHandle.invoke(instancesOfFields[i]).toString()
+                fieldMap[fieldName] = ReflectedField(instancesOfFields[i])
+            }
+            currentClass = currentClass.superclass
+        }
+
+        return fieldMap
+    }
+
+    // Copy only specific fields
+    fun copySelectedFields(source: Any, destination: Any, fieldNames: Set<String>) {
+        val sourceFields = getAllFieldsMap(source)
+        val destFields = getAllFieldsMap(destination)
+
+        for (fieldName in fieldNames) {
+            try {
+                val sourceField = sourceFields[fieldName]
+                val destField = destFields[fieldName]
+                if (sourceField != null && destField != null) {
+                    val value = sourceField.get(source)
+                    destField.set(destination, value)
+                }
+            } catch (e: Exception) {
+                // Ignore fields that can't be copied
+            }
+        }
+    }
+
+    // Check if two objects have compatible field structures
+    fun haveCompatibleFields(obj1: Any, obj2: Any): Boolean {
+        val fields1 = getAllFieldsMap(obj1).keys
+        val fields2 = getAllFieldsMap(obj2).keys
+        return fields1 == fields2
+    }
+
+    /**
+     * A practical, generic "copy constructor" kind of method that takes all field values from [source] and copies
+     * them into [destination]. Source and destination should be of the same type and contain the same fields.
+     */
+    fun copyAllFields(source: Any, destination: Any) {
+        val sourceFields = getAllFieldsMap(source)
+        val destFields = getAllFieldsMap(destination)
+
+        for ((fieldName, sourceField) in sourceFields) {
+            try {
+                val destField = destFields[fieldName]
+                if (destField != null) {
+                    val value = sourceField.get(source)
+                    destField.set(destination, value)
+                }
+            } catch (e: Exception) {
+                // Ignore fields that can't be copied
+                AnonymousLogger.log("Encountered exception ${e} during copyAllFields()")
+            }
+        }
+    }
+
+    /**
+     * Copies all fields of the same name and type from [source] to [destinaton]
+     *
+     * @see copyAllFields
+     */
+    fun copyAllFieldsWithTypeCheck(source: Any, destination: Any) {
+        val sourceFields = getAllFieldsMap(source)
+        val destFields = getAllFieldsMap(destination)
+
+        for ((fieldName, sourceField) in sourceFields) {
+            try {
+                val destField = destFields[fieldName]
+                if (destField != null) {
+                    // Get field types for type checking
+                    val sourceType = getFieldTypeHandle.invoke(sourceField.field) as Class<*>
+                    val destType = getFieldTypeHandle.invoke(destField.field) as Class<*>
+
+                    // Check if types are compatible
+                    if (isAssignableFrom(destType, sourceType)) {
+                        val value = sourceField.get(source)
+                        destField.set(destination, value)
+                    }
+                    // Optional: log or handle incompatible types
+                }
+            } catch (e: Exception) {
+                // Ignore fields that can't be copied (final fields, access issues, etc.)
+            }
+        }
+    }
+
+    // Helper method to handle type compatibility checking
+    private fun isAssignableFrom(destType: Class<*>, sourceType: Class<*>): Boolean {
+        // Handle primitive type compatibility
+        if (destType.isPrimitive && sourceType.isPrimitive) {
+            return destType == sourceType
+        } else if (destType.isPrimitive) {
+            // Check if source type is wrapper for dest primitive
+            return primitiveToWrapperMap[destType] == sourceType
+        } else if (sourceType.isPrimitive) {
+            // Check if dest type is wrapper for source primitive
+            return primitiveToWrapperMap[sourceType] == destType
+        } else {
+            // Regular class hierarchy check
+            return destType.isAssignableFrom(sourceType)
+        }
+    }
+
+    // Map for primitive to wrapper class conversions
+    private val primitiveToWrapperMap: Map<Class<out Any>?, Class<out Any>> = mapOf(
+            Boolean::class.javaPrimitiveType to Boolean::class.java,
+            Byte::class.javaPrimitiveType to Byte::class.java,
+            Char::class.javaPrimitiveType to Char::class.java,
+            Short::class.javaPrimitiveType to Short::class.java,
+            Int::class.javaPrimitiveType to Int::class.java,
+            Long::class.javaPrimitiveType to Long::class.java,
+            Float::class.javaPrimitiveType to Float::class.java,
+            Double::class.javaPrimitiveType to Double::class.java,
+            Void::class.javaPrimitiveType to Void::class.java
+    )
+
+    // Helper method to find a field by name in an object (including superclasses)
+    private fun findFieldByName(instance: Any, fieldName: String): ReflectedField? {
+        var currentClass: Class<*>? = instance.javaClass
+
+        while (currentClass != null && currentClass != Any::class.java) {
+            try {
+                val field = currentClass.getDeclaredField(fieldName)
+                return ReflectedField(field)
+            } catch (e: NoSuchFieldException) {
+                // Try superclass
+                currentClass = currentClass.superclass
+            }
+        }
+        return null
     }
 
     fun createClassThroughCustomLoader(claz: Class<*>): MethodHandle {
