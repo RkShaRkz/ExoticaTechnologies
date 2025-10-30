@@ -6,7 +6,10 @@
     "version": { "major":"2", "minor": "1", "patch": "0" },
     "description": "Use and fight against a vast array of technologies installed on ships.",
     "gameVersion": "0.97a",
-    "jars":["jars/Exotica-Technologies.jar"],
+    "jars":[
+        "jars/Exotica-Technologies.jar",
+        "libs/javassist-3.30.2-GA.jar"
+    ],
     "modPlugin":"exoticatechnologies.ETModPlugin",
     "dependencies": [
         {
