@@ -20,8 +20,11 @@ object FleetDataScuttleInterceptor {
             // Get the scuttle method that takes FleetMemberAPI parameter
             val scuttleMethod: CtMethod = fleetDataClass.getDeclaredMethod(
                     "scuttle",
-                    arrayOf(pool.get("com.fs.starfarer.api.fleet.FleetMemberAPI"))
+//                    arrayOf(pool.get("com.fs.starfarer.api.fleet.FleetMemberAPI"))
+                    arrayOf(pool.get("com.fs.starfarer.campaign.fleet.FleetData"))
             )
+
+            log("scuttleMethod: ${scuttleMethod}", log, Level.DEBUG)
 
             // Insert our custom logic at the beginning of the scuttle method
             // $1 refers to the first parameter (FleetMemberAPI)
