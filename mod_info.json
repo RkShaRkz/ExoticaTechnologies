@@ -8,7 +8,7 @@
     "gameVersion": "0.97a",
     "jars":[
         "jars/Exotica-Technologies.jar",
-        "libs/javassist-3.30.2-GA.jar"
+        "libs/javassist-3.18.1-GA.jar"
     ],
     "modPlugin":"exoticatechnologies.ETModPlugin",
     "dependencies": [

@@ -10,7 +10,6 @@ import exoticatechnologies.util.StarsectorAPIInteractor
 class ETOnDockedListener : BaseCommandPlugin() {
     override fun execute(ruleId: String?, dialog: InteractionDialogAPI?, params: MutableList<Misc.Token>?, memoryMap: MutableMap<String, MemoryAPI>?): Boolean {
         AnonymousLogger.log("ETOnDockedListener::execute() called, reacting to player landing!", "ETOnDockedListener")
-        StarsectorAPIInteractor.promoteFleetDatasOnPlayerShipsIfNotAlreadyPromoted()
 
         return false
     }

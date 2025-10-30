@@ -29,7 +29,6 @@ object FleetDataScuttleInterceptor {
                     """
                 {
                     try {
-                        //exoticatechnologies.util.ScuttleHandler.handleScuttle(this, $1);
                         exoticatechnologies.util.ScuttleHandler.INSTANCE.onPreScuttle($1);
                     } catch (Exception e) {
                         // Don't let our code break the game
@@ -43,7 +42,6 @@ object FleetDataScuttleInterceptor {
                     """
                 {
                     try {
-                        //exoticatechnologies.util.ScuttleHandler.handleScuttle(this, $1);
                         exoticatechnologies.util.ScuttleHandler.INSTANCE.onPostScuttle($1);
                     } catch (Exception e) {
                         // Don't let our code break the game
@@ -60,7 +58,7 @@ object FleetDataScuttleInterceptor {
 
         } catch (e: Exception) {
             log("Failed to setup scuttle interceptor: ${e.message}", e, log, Level.ERROR)
-//            e.printStackTrace()
+            e.printStackTrace()
         }
     }
 }
