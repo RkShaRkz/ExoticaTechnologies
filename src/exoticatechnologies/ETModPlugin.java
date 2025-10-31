@@ -46,7 +46,7 @@ public class ETModPlugin extends BaseModPlugin {
 
     @Override
     public void onApplicationLoad() {
-        FleetDataScuttleInterceptor.INSTANCE.setupInterceptor();
+//        FleetDataScuttleInterceptor.INSTANCE.setupInterceptor();
         ETModSettings.loadModSettings();
 
         if (HAVE_LUNALIB) {
@@ -100,6 +100,8 @@ public class ETModPlugin extends BaseModPlugin {
         Utilities.mergeChipsIntoCrate(Global.getSector().getPlayerFleet().getCargo());
         // And cleanup the HullmodExoticHandler's map
         HullmodExoticHandler.INSTANCE.reinitialize();
+
+        FleetDataScuttleInterceptor.INSTANCE.setupInterceptor();
     }
 
     public static String getSectorSeedString() {
