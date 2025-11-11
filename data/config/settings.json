@@ -69,7 +69,8 @@
 			"GuardianShield": "graphics/icons/exotics/guardianshield.png",
 			"RewindSystem": "graphics/icons/exotics/rewindsystem.png",
 			"MissileSpamSystem": "graphics/icons/exotics/missilespamsystem.png",
-			"AmmoCraftingSystem": "graphics/icons/exotics/ammocraftingsystem.png"
+			"AmmoCraftingSystem": "graphics/icons/exotics/ammocraftingsystem.png",
+			"ShipRepellantSystem": "graphics/icons/exotics/shiprepellantsystem.png"
 		},
 		"upgrades": {
 			"AdvancedFluxCoils": "graphics/icons/upgrades/advancedfluxcoils.png",

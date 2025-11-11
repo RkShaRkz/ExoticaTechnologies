@@ -605,5 +605,10 @@
 		"description": "The Ammo Crafting System is capable of generating ammunition on-the-fly, ensuring sustained combat capability while it constantly resupplies weapons with fresh ammo. ",
 		"tooltip": "Adds a system that regenerates a portion of ammo for all ammo-using weapons every period of time.",
 		"longDescription": "=Adds a ammunition creating system= which, when activated, *regenerates ${ammo_regen_percent}%% of every ammo-using weapon every ${ammo_regen_period} seconds for ${duration} seconds*. However, it isn't very reliable and =has a ${ammo_regen_fail_chance}%% of failing=, in which case it will unfortunately =damage your ship for ${fail_min_damage} to ${fail_max_damage} damage=. After finishing with it's working cycle, it *has a cooldown of ${cooldown} seconds*. =Works only on module(s) where it's installed="
+	},
+	"ShipRepellantSystem": {
+		"description": "A sudden burst of repulsive energy erupts from the vessel, creating a shimmering wave of force that violently thrusts away all nearby objects. The very fabric of space seems to ripple outward from the epicenter, accompanied by cascading arcs of disruptive energy that form a perfect defensive sphere before dissipating into the void.",
+		"tooltip": "Activates a powerful repulsion field that instantly pushes all enemy ships within radius away from the user with consistent force.",
+		"longDescription": "When activated, the system generates an instantaneous spherical pulse of repulsive energy extending up to *${radius} radius* from the vessel. All enemy ships within this radius are violently pushed away from the center with *${push_out_strength} momentum strength*."
 	}
 }
