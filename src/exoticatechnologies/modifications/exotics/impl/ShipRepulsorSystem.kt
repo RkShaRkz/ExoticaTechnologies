@@ -138,6 +138,10 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         return baseRadiusBasedOnShipSize * getPositiveMult(member, mods, exoticData)
     }
 
+    private fun getScaledDuration(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return 30f * getNegativeMult(member, mods, exoticData)
+    }
+
     inner class RepulsorPushOutSystem(
             ship: ShipAPI,
             val member: FleetMemberAPI,
@@ -147,7 +151,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         override fun getBaseActiveDuration() = 1f
 
-        override fun getBaseCooldownDuration() = 30f
+        override fun getBaseCooldownDuration() = getScaledDuration(member, mods, exoticData)
 
         override fun shouldActivateAI(amount: Float): Boolean {
             //TODO i dont know what to do here so just say 'no' for now
@@ -157,16 +161,20 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         override fun getDisplayText() = "Ship Repulsor System"
 
         override fun onActivate() {
+            logger.info("--> onActivate()")
             super.onActivate()
 
             showVisualFlair()
             pushOutShipsWithinRadius()
+            logger.info("<-- onActivate()")
         }
 
         private fun showVisualFlair() {
             // generate dots
             val center = ship.location
-            val stage1distance = 50f
+            val fullRange = getRadiusAmount(member, mods, exoticData)
+            // Lets draw the first ring at 1.5x collision radius so it's more visible, 1x is kinda "too close"
+            val stage1distance = ship.collisionRadius * 1.5f
             val stage1DotsPair = generateDots(center, stage1distance)
 
             val stage1left = stage1DotsPair.first
@@ -203,8 +211,8 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                         )
             }
             // end of stage1
-
-            val stage2dotsPair = generateDots(center, 200f)
+            val stage2distance = fullRange / 2
+            val stage2dotsPair = generateDots(center, stage2distance)
 
             val stage2left = stage2dotsPair.first
             val stage2LeftReversed = stage2left.asReversed()
@@ -263,7 +271,8 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             // end of stage2
 
             // stage3 will just do CCW arcs between stage2ccw and stage3ccw
-            val stage3dotsPair = generateDots(center, getRadiusAmount(member, mods, exoticData))
+            val stage3distance = fullRange
+            val stage3dotsPair = generateDots(center, stage3distance)
             val stage3CCW = stage3dotsPair.second + stage3dotsPair.first.asReversed()
             for (index in 0 until stage3CCW.size) {
                 val from = stage2CCW[index]
@@ -315,6 +324,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         }
 
         private fun pushOutShipsWithinRadius() {
+            logger.info("--> pushOutShipsWithinRadius()")
             // Look through all ships within radius, and apply momentum
             val momentumFactor: Float = getPushOutEffectMomentumFactor(member)
             val momentumStrength: Float = getPushOutStrength(member, ship)
@@ -322,6 +332,10 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
             //TODO depending on negativeMult, affect only enemies, enemies+friendlies, friendlies
             val potentiallyAffectedShips = AIUtils.getNearbyEnemies(ship, radius)
+                    // make sure it only contains enemies and not enemies and neutrals
+                    .filter { filterShip -> ship.owner != filterShip.owner && filterShip.owner != 100 }
+                    // and make sure we're not targetting our own submodule, or submodules in general
+                    .filter { module -> module.parentStation != ship || module.parentStation != null }
 
             for (nearbyShip in potentiallyAffectedShips) {
                 val distanceToShip = MathUtils.getDistance(nearbyShip.location, ship.location)
@@ -363,11 +377,19 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             val ourShipTotalMass = getAllShipSections(ship).map { module -> module.mass }.sum()
                             val differenceInMassRatio = enemyShipTotalMass / ourShipTotalMass
                             val rotationalDirection = if (Math.random() < 0.5) { 1 } else { -1 }
+                            // Once we have the rotational momentum calculated, we need to 'clamp' it between -1mil and 1mil so we can scale it further
                             val rotationalMomentum = momentumFactor * (momentumStrength / differenceInMassRatio) * rotationalDirection
-                            val scaledRotationalMomentum = rotationalMomentum * getPositiveMult(member, mods, exoticData)
+//                            val scaledRotationalMomentum = (rotationalMomentum * getPositiveMult(member, mods, exoticData)).coerceIn(Int.MIN_VALUE.toFloat(), Int.MAX_VALUE.toFloat())    //TODO delete
+                            val scaledRotationalMomentum = (rotationalMomentum * getPositiveMult(member, mods, exoticData)).coerceIn(MIN_MOMENTUM_CLAMP, MAX_MOMENTUM_CLAMP)
+                            // once it has been clamped, we will apply the scaling factor of 0.0216 to bring it into [-360*60, 360*60] range
+                            val finalRotationalMomentum = scaledRotationalMomentum * SCALING_FACTOR
+                            logger.info("Before applying angular velocity")
+                            logger.info("enemyShip name: ${nearbyShip.name}, enemyShip total mass: ${enemyShipTotalMass}, our ship total mass: ${ourShipTotalMass}, differenceInMassRatio: ${differenceInMassRatio}")
+                            logger.info("rotationalMomentum: ${rotationalMomentum}, scaledRotationalMomentum: ${scaledRotationalMomentum}, finalRotationalMomentum: ${finalRotationalMomentum}")
 
                             // And finally, apply the scaled rotational momentum to the enemy ship
-                            nearbyShip.angularVelocity += scaledRotationalMomentum
+                            nearbyShip.angularVelocity += finalRotationalMomentum
+//                            nearbyShip.angularVelocity += rotationalDirection * (360 * 60)
                         } else {
                             // This is the "inverse" case, when we try pushing out an immovable object - so we should push ourselves back a bit
                             // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
@@ -426,11 +448,16 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 }
             }
              */
+            logger.info("<-- pushOutShipsWithinRadius()")
         }
     }
 
     companion object {
         private const val COST_CREDITS: Float = 300000f
         private const val ITEM = "et_repulsorcrystal"
+
+        private const val MIN_MOMENTUM_CLAMP = -1000000f
+        private const val MAX_MOMENTUM_CLAMP = 1000000f
+        private const val SCALING_FACTOR = 0.0216f
     }
 }
