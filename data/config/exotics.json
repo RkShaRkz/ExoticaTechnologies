@@ -191,8 +191,8 @@
       {"id": "reloadableAmmoUsingWeapons", "operator": ">=", "expected": 2, "cannotApplyReason": "The ship must have more than two ammo-based weapons.", "weight": 0.5, "maxWeight": 3}
     ]
   },
-  "ShipRepellantSystem": {
-    "name": "Ship Repellant System",
-    "exoticClass": "exoticatechnologies.modifications.exotics.impl.ShipRepellantSystem"
+  "ShipRepulsorSystem": {
+    "name": "Ship Repulsor System",
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.ShipRepulsorSystem"
   }
 }

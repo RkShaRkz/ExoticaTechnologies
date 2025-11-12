@@ -2,12 +2,16 @@ package exoticatechnologies.modifications.exotics.misc
 
 import com.fs.starfarer.api.combat.CombatEntityAPI
 import com.fs.starfarer.api.combat.ShipAPI
+import org.apache.log4j.Logger
 import org.lazywizard.lazylib.VectorUtils
 import org.lwjgl.util.vector.Vector2f
 import kotlin.math.max
 
 object ForceApplier {
+    private val logger = Logger.getLogger(ForceApplier::class.java)
+
     fun applyMomentum(entity: CombatEntityAPI?, pointOfImpact: Vector2f?, direction: Vector2f, momentum: Float, elasticCollision: Boolean) {
+        logger.info("--> applyMomentum()")
         // This whole thing is weird, but necessary since arguments are being reassigned for some reason
         var entity = entity
         var direction = direction
@@ -35,6 +39,7 @@ object ForceApplier {
             }
             // Momentum is far too weak otherwise
             momentum *= 100f
+            logger.info("Actual momentum ${momentum}")
             // Doing some vector calculate
             val BPtoMC = entity?.let { Vector2f.sub(it.location, pointOfImpact, null) }
                     ?: throw RuntimeException("entity was null while assigning to BPtoMC -- this should not be happening. Look into GuardianShield -> ForceApplier::applyMomentum()")
@@ -64,5 +69,6 @@ object ForceApplier {
                 entity.angularVelocity = entity.angularVelocity - angularAcc
             }
         }
+        logger.info("<-- applyMomentum()")
     }
 }

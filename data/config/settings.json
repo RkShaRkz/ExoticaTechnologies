@@ -70,7 +70,7 @@
 			"RewindSystem": "graphics/icons/exotics/rewindsystem.png",
 			"MissileSpamSystem": "graphics/icons/exotics/missilespamsystem.png",
 			"AmmoCraftingSystem": "graphics/icons/exotics/ammocraftingsystem.png",
-			"ShipRepellantSystem": "graphics/icons/exotics/shiprepellantsystem.png"
+			"ShipRepulsorSystem": "graphics/icons/exotics/shiprepulsorsystem.png"
 		},
 		"upgrades": {
 			"AdvancedFluxCoils": "graphics/icons/upgrades/advancedfluxcoils.png",

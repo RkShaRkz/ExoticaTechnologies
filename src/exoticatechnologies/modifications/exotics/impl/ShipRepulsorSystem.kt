@@ -25,10 +25,10 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-class ShipRepellantSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
-    private val logger: Logger = Logger.getLogger(ShipRepellantSystem::class.java)
+class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
+    private val logger: Logger = Logger.getLogger(ShipRepulsorSystem::class.java)
     private lateinit var originalShip: ShipAPI
-    private lateinit var subsystem: ShipRepellantPushOutSystem
+    private lateinit var subsystem: RepulsorPushOutSystem
 
 
     override var color: Color = Color(0xFFFFFF7F.toInt(), true)
@@ -57,7 +57,7 @@ class ShipRepellantSystem(key: String, settings: JSONObject) : Exotic(key, setti
         super.applyToShip(id, member, ship, mods, exoticData)
 
         originalShip = ship
-        subsystem = ShipRepellantPushOutSystem(ship, member, mods, exoticData)
+        subsystem = RepulsorPushOutSystem(ship, member, mods, exoticData)
         MagicSubsystemsManager.addSubsystemToShip(ship, subsystem)
     }
 
@@ -138,7 +138,7 @@ class ShipRepellantSystem(key: String, settings: JSONObject) : Exotic(key, setti
         return baseRadiusBasedOnShipSize * getPositiveMult(member, mods, exoticData)
     }
 
-    inner class ShipRepellantPushOutSystem(
+    inner class RepulsorPushOutSystem(
             ship: ShipAPI,
             val member: FleetMemberAPI,
             val mods: ShipModifications,
@@ -154,7 +154,7 @@ class ShipRepellantSystem(key: String, settings: JSONObject) : Exotic(key, setti
             return false
         }
 
-        override fun getDisplayText() = "Ship Repellant System"
+        override fun getDisplayText() = "Ship Repulsor System"
 
         override fun onActivate() {
             super.onActivate()
@@ -324,27 +324,90 @@ class ShipRepellantSystem(key: String, settings: JSONObject) : Exotic(key, setti
             val potentiallyAffectedShips = AIUtils.getNearbyEnemies(ship, radius)
 
             for (nearbyShip in potentiallyAffectedShips) {
-                if (MathUtils.getDistance(nearbyShip.location, ship.location) < nearbyShip.collisionRadius + radius) {
-                    val pointToTest = VectorUtils.clampLength(Vector2f.sub(ship.getLocation(), nearbyShip.location, null), radius)
-                    val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(ship.getLocation(), pointToTest, nearbyShip)
+                val distanceToShip = MathUtils.getDistance(nearbyShip.location, ship.location)
+                val collisionRadius = nearbyShip.collisionRadius + radius
+                if (distanceToShip < collisionRadius) {
+                    // Calculate direction from ship to nearbyShip
+                    val direction = Vector2f.sub(nearbyShip.location, ship.location, null)
+                    val segmentLength = radius + nearbyShip.collisionRadius
+                    direction.normalise()
+                    direction.scale(segmentLength)
+                    val endPoint = Vector2f(ship.location.x + direction.x, ship.location.y + direction.y)
+
+                    val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(ship.location, endPoint, nearbyShip)
+                    collisionPoint?.let { collision ->
+                        if (!nearbyShip.isStation && !(nearbyShip.isStationModule && nearbyShip.parentStation.isStation)) {
+                            // This is the normal case, when we push everyone away from our ship, scaled with positive effect mult
+                            logger.info("normal case, pushing ship ${nearbyShip}")
+                            nearbyShip.velocity.set(ship.velocity)
+                            val momentum = getScaledPushOutEffectMomentumStrength(member, mods, exoticData)
+                            logger.info("applying momentum: ${momentum}")
+                            ForceApplier.applyMomentum(
+                                    entity = nearbyShip,
+                                    pointOfImpact = collision,
+//                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),   //this attracts
+                                    direction = Vector2f.sub(nearbyShip.location, ship.location, null),
+                                    momentum = momentum,
+                                    elasticCollision = true
+                            )
+                        } else {
+                            // This is the "inverse" case, when we try pushing out an immovable object - so we should push ourselves back a bit
+                            // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
+                            // And finally, we will scale the strength * factor with negative effect mult
+                            logger.info("the *other* case, pushing ship ${nearbyShip}")
+                            val momentum = (-momentumStrength / 2f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
+                            logger.info("applying momentum: ${momentum}")
+                            ForceApplier.applyMomentum(
+                                    entity = ship.parentStation,
+                                    pointOfImpact = collision,
+//                                    direction = Vector2f.sub(nearbyShip.location, ship.location, null),  //this probably repulses?
+                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),   //this attracts
+                                    momentum = momentum,
+                                    elasticCollision = true
+                            )
+                        }
+                    }
+                }
+            }
+            /*
+            for (nearbyShip in potentiallyAffectedShips) {
+                val distanceToShip = MathUtils.getDistance(nearbyShip.location, ship.location)
+                val collisionRadius = nearbyShip.collisionRadius + radius
+                if ( distanceToShip < collisionRadius ) {
+                    val pointToTest = VectorUtils.clampLength(Vector2f.sub(ship.location, nearbyShip.location, null), radius)
+                    val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(ship.location, pointToTest, nearbyShip)
                     collisionPoint?.let { collision ->
                         if (!nearbyShip.isStation && !(nearbyShip.isStationModule && nearbyShip.parentStation.isStation)) {
                             // This is the normal case, when we push everyone away from our ship, scaled with positive effect mult
                             nearbyShip.velocity.set(ship.getVelocity())
 //                            val momentum = amount * 10f * momentumFactor
                             val momentum = getScaledPushOutEffectMomentumStrength(member, mods, exoticData)
-                            ForceApplier.applyMomentum(nearbyShip, collision, Vector2f.sub(ship.getLocation(), nearbyShip.location, null), momentum, true)
+                            ForceApplier.applyMomentum(
+                                    entity = nearbyShip,
+                                    pointOfImpact = collision,
+                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),
+                                    momentum = momentum,
+                                    elasticCollision = true
+                            )
                         } else {
                             // This is the "inverse" case, when we try pushing out an immovable object - so we should push ourselves back a bit
                             // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
                             // And finally, we will scale the strength * factor with negative effect mult
 //                            val momentum = amount * -0.5f * 1 / momentumFactor
-                            val momentum = (-momentumStrength / 20f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
-                            ForceApplier.applyMomentum(ship.getParentStation(), collision, Vector2f.sub(nearbyShip.location, ship.getLocation(), null), momentum, true)
+//                            val momentum = (-momentumStrength / 20f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
+                            val momentum = (-momentumStrength / 2f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
+                            ForceApplier.applyMomentum(
+                                    entity = ship.parentStation,
+                                    pointOfImpact = collision,
+                                    direction = Vector2f.sub(nearbyShip.location, ship.location, null),
+                                    momentum = momentum,
+                                    elasticCollision = true
+                            )
                         }
                     }
                 }
             }
+             */
         }
     }
 

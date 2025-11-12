@@ -24,8 +24,8 @@ object CollisionUtil {
         // Check hit point when shield is off.
         if (shield == null || shield.isOff) {
             return CollisionUtils.getCollisionPoint(segStart, segEnd, ship)
-        } // If ship's shield is on, thing goes complicated...
-        else {
+        } else {
+            // If ship's shield is on, thing goes complicated...
             val circleCenter = shield.location
             val circleRadius = shield.radius
             // calculate the shield collision point
