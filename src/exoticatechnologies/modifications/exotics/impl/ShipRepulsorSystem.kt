@@ -379,17 +379,18 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             val rotationalDirection = if (Math.random() < 0.5) { 1 } else { -1 }
                             // Once we have the rotational momentum calculated, we need to 'clamp' it between -1mil and 1mil so we can scale it further
                             val rotationalMomentum = momentumFactor * (momentumStrength / differenceInMassRatio) * rotationalDirection
-//                            val scaledRotationalMomentum = (rotationalMomentum * getPositiveMult(member, mods, exoticData)).coerceIn(Int.MIN_VALUE.toFloat(), Int.MAX_VALUE.toFloat())    //TODO delete
                             val scaledRotationalMomentum = (rotationalMomentum * getPositiveMult(member, mods, exoticData)).coerceIn(MIN_MOMENTUM_CLAMP, MAX_MOMENTUM_CLAMP)
-                            // once it has been clamped, we will apply the scaling factor of 0.0216 to bring it into [-360*60, 360*60] range
+                            // once it has been clamped, we will apply the scaling factor of 0.00216 to bring it into [-360*6, 360*6] range
                             val finalRotationalMomentum = scaledRotationalMomentum * SCALING_FACTOR
                             logger.info("Before applying angular velocity")
                             logger.info("enemyShip name: ${nearbyShip.name}, enemyShip total mass: ${enemyShipTotalMass}, our ship total mass: ${ourShipTotalMass}, differenceInMassRatio: ${differenceInMassRatio}")
+                            logger.info("enemyShip.isFighter: ${nearbyShip.isFighter}, enemyShip.parentStation: ${nearbyShip.parentStation}")
                             logger.info("rotationalMomentum: ${rotationalMomentum}, scaledRotationalMomentum: ${scaledRotationalMomentum}, finalRotationalMomentum: ${finalRotationalMomentum}")
 
                             // And finally, apply the scaled rotational momentum to the enemy ship
+                            logger.info("[BEFORE] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
                             nearbyShip.angularVelocity += finalRotationalMomentum
-//                            nearbyShip.angularVelocity += rotationalDirection * (360 * 60)
+                            logger.info("[AFTER] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
                         } else {
                             // This is the "inverse" case, when we try pushing out an immovable object - so we should push ourselves back a bit
                             // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
@@ -458,6 +459,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         private const val MIN_MOMENTUM_CLAMP = -1000000f
         private const val MAX_MOMENTUM_CLAMP = 1000000f
-        private const val SCALING_FACTOR = 0.0216f
+        private const val SCALING_FACTOR = 0.00216f
     }
 }
