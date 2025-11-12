@@ -350,6 +350,24 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                     momentum = momentum,
                                     elasticCollision = true
                             )
+
+                            // Add the "paralyzing"/debilitating effect as well - effect being just also spinning the target
+                            // besides just launching it straight away from us along the vector direction between the two of us
+
+                            // Calculate the "difference in mass ratio" by taking the enemy ship's total mass divided by
+                            // our ship's total mass - we do it this way because we will be dividing the momentumStrength
+                            // with it; so lighter ships should end up increasing the momentumStrength while heavier ships
+                            // will end up decreasing it
+                            // NOTE: we will not be using "ShipAPI.massWithModules()" because it literally does the exact same thing
+                            val enemyShipTotalMass = getAllShipSections(nearbyShip).map { module -> module.mass }.sum()
+                            val ourShipTotalMass = getAllShipSections(ship).map { module -> module.mass }.sum()
+                            val differenceInMassRatio = enemyShipTotalMass / ourShipTotalMass
+                            val rotationalDirection = if (Math.random() < 0.5) { 1 } else { -1 }
+                            val rotationalMomentum = momentumFactor * (momentumStrength / differenceInMassRatio) * rotationalDirection
+                            val scaledRotationalMomentum = rotationalMomentum * getPositiveMult(member, mods, exoticData)
+
+                            // And finally, apply the scaled rotational momentum to the enemy ship
+                            nearbyShip.angularVelocity += scaledRotationalMomentum
                         } else {
                             // This is the "inverse" case, when we try pushing out an immovable object - so we should push ourselves back a bit
                             // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
