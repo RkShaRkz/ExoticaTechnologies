@@ -335,7 +335,11 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     // make sure it only contains enemies and not enemies and neutrals
                     .filter { filterShip -> ship.owner != filterShip.owner && filterShip.owner != 100 }
                     // and make sure we're not targetting our own submodule, or submodules in general
-                    .filter { module -> module.parentStation != ship || module.parentStation != null }
+//                    .filter { module -> module.parentStation != ship || module.parentStation != null }
+                    // make sure we're not targetting ourselves
+                    .filter { module -> module.fleetMember != member || module.parentStation != ship}
+                    // make sure we're not targetting child modules
+                    .filter { module -> module.parentStation == null }
 
             for (nearbyShip in potentiallyAffectedShips) {
                 val distanceToShip = MathUtils.getDistance(nearbyShip.location, ship.location)
@@ -375,16 +379,19 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             // NOTE: we will not be using "ShipAPI.massWithModules()" because it literally does the exact same thing
                             val enemyShipTotalMass = getAllShipSections(nearbyShip).map { module -> module.mass }.sum()
                             val ourShipTotalMass = getAllShipSections(ship).map { module -> module.mass }.sum()
+                            val enemyShipTotalHitpoints = getAllShipSections(nearbyShip).map { module -> module.maxHitpoints}.sum()
                             val differenceInMassRatio = enemyShipTotalMass / ourShipTotalMass
                             val rotationalDirection = if (Math.random() < 0.5) { 1 } else { -1 }
                             // Once we have the rotational momentum calculated, we need to 'clamp' it between -1mil and 1mil so we can scale it further
-                            val rotationalMomentum = momentumFactor * (momentumStrength / differenceInMassRatio) * rotationalDirection
+//                            val rotationalMomentum = momentumFactor * (momentumStrength / differenceInMassRatio) * rotationalDirection    //TODO good, but doesn't work for equal ships
+                            val rotationalMomentum = momentumFactor * ((momentumStrength - enemyShipTotalHitpoints) / differenceInMassRatio) * rotationalDirection
                             val scaledRotationalMomentum = (rotationalMomentum * getPositiveMult(member, mods, exoticData)).coerceIn(MIN_MOMENTUM_CLAMP, MAX_MOMENTUM_CLAMP)
                             // once it has been clamped, we will apply the scaling factor of 0.00216 to bring it into [-360*6, 360*6] range
                             val finalRotationalMomentum = scaledRotationalMomentum * SCALING_FACTOR
                             logger.info("Before applying angular velocity")
                             logger.info("enemyShip name: ${nearbyShip.name}, enemyShip total mass: ${enemyShipTotalMass}, our ship total mass: ${ourShipTotalMass}, differenceInMassRatio: ${differenceInMassRatio}")
-                            logger.info("enemyShip.isFighter: ${nearbyShip.isFighter}, enemyShip.parentStation: ${nearbyShip.parentStation}")
+                            logger.info("enemyShip.hullId: ${nearbyShip.fleetMember.hullId}, enemyShip.isFighter: ${nearbyShip.isFighter}, enemyShip.parentStation: ${nearbyShip.parentStation}")
+                            logger.info("enemyShip.maxHP.sum(): ${enemyShipTotalHitpoints}, our ship total hitpoints (momentumStrength): ${momentumStrength}, the calculation: ${((momentumStrength - enemyShipTotalHitpoints) / differenceInMassRatio)}")
                             logger.info("rotationalMomentum: ${rotationalMomentum}, scaledRotationalMomentum: ${scaledRotationalMomentum}, finalRotationalMomentum: ${finalRotationalMomentum}")
 
                             // And finally, apply the scaled rotational momentum to the enemy ship
