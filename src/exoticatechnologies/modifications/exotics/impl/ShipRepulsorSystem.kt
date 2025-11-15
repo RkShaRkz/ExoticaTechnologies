@@ -21,6 +21,7 @@ import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -137,8 +138,12 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         return baseRadiusBasedOnShipSize * getPositiveMult(member, mods, exoticData)
     }
 
-    private fun getScaledDuration(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
-        return 30f * getNegativeMult(member, mods, exoticData)
+    private fun getScaledCooldownDuration(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return COOLDOWN_DURATION * getNegativeMult(member, mods, exoticData)
+    }
+
+    private fun getScaledAllowCoefficient(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return ALLOW_COEF * getNegativeMult(member, mods, exoticData)
     }
 
     inner class RepulsorPushOutSystem(
@@ -150,7 +155,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         override fun getBaseActiveDuration() = 1f
 
-        override fun getBaseCooldownDuration() = getScaledDuration(member, mods, exoticData)
+        override fun getBaseCooldownDuration() = getScaledCooldownDuration(member, mods, exoticData)
 
         override fun shouldActivateAI(amount: Float): Boolean {
             //TODO i dont know what to do here so just say 'no' for now
@@ -390,8 +395,21 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             // Lets try (sum(myMass) * sum(myMaxHitpoints)) - (sum(enemyMass) * sum(enemyMaxHitpoints))
                             val myMassHitpoints = (myShipTotalHitpoints * myShipTotalMass)
                             val enemyMassHitpoints = (enemyShipTotalHitpoints * enemyShipTotalMass)
-                            val diffMassHitpoints = (myMassHitpoints - enemyMassHitpoints).coerceAtLeast(0f)
-                            val rotationalMomentum = momentumFactor * (diffMassHitpoints / differenceInMassRatio) * rotationalDirection
+                            val diffMassHitpoints = myMassHitpoints - enemyMassHitpoints
+                            val rotationalMomentum = if(diffMassHitpoints > 0) {
+                                momentumFactor * (diffMassHitpoints / differenceInMassRatio) * rotationalDirection
+                            } else {
+                                // If we're in the ALLOW_COEF, let it go, otherwise just return 0 os we can't spin up ships far out of our league.
+                                // We need to abs() it because it's already negative, so whatever the ratio comes out, it's certainly going
+                                // to be less than a small positive number ...
+                                val diffMassHitpointRatio = abs(diffMassHitpoints / myMassHitpoints)
+                                if (diffMassHitpointRatio <= getScaledAllowCoefficient(member, mods, exoticData)) {
+                                    logger.info("[ALLOW CASE] allowing because diffMassHitpointRatio ${diffMassHitpointRatio} is less than ${getScaledAllowCoefficient(member, mods, exoticData)}")
+                                    momentumFactor * (diffMassHitpoints / differenceInMassRatio) * rotationalDirection
+                                } else {
+                                    0f
+                                }
+                            }
                             val scaledRotationalMomentum = (rotationalMomentum * getPositiveMult(member, mods, exoticData)).coerceIn(MIN_MOMENTUM_CLAMP, MAX_MOMENTUM_CLAMP)
                             // once it has been clamped, we will apply the scaling factor of 0.00216 to bring it into [-360*6, 360*6] range
                             val finalRotationalMomentum = scaledRotationalMomentum * SCALING_FACTOR
@@ -401,6 +419,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             logger.info("enemyShip.hullId: ${nearbyShip.fleetMember.hullId}, enemyShip name: ${nearbyShip.name}, enemyShip.isFighter: ${nearbyShip.isFighter}, enemyShip.parentStation: ${nearbyShip.parentStation}")
 //                            logger.info("enemyShip.maxHP.sum(): ${enemyShipTotalHitpoints}, our ship total hitpoints (momentumStrength): ${momentumStrength}, the calculation: ${((momentumStrength - enemyShipTotalHitpoints) / differenceInMassRatio)}")
                             logger.info("myMassHitpoints: ${myMassHitpoints}, enemyMassHitpoints: ${enemyMassHitpoints}, diff: ${diffMassHitpoints}, my totalHP == momentumStrength ? ${myShipTotalHitpoints == momentumStrength}")
+                            logger.info("momentumFactor: ${momentumFactor}, positiveMult: ${getPositiveMult(member, mods, exoticData)}")
                             logger.info("rotationalMomentum: ${rotationalMomentum}, scaledRotationalMomentum: ${scaledRotationalMomentum}, finalRotationalMomentum: ${finalRotationalMomentum}")
 
                             // And finally, apply the scaled rotational momentum to the enemy ship
@@ -476,5 +495,8 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         private const val MIN_MOMENTUM_CLAMP = -1000000f
         private const val MAX_MOMENTUM_CLAMP = 1000000f
         private const val SCALING_FACTOR = 0.00216f
+
+        private const val COOLDOWN_DURATION = 30f
+        private const val ALLOW_COEF = 0.33f
     }
 }

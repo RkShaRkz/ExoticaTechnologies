@@ -345,7 +345,7 @@ fun addAfterimageToWholeShip(ship: ShipAPI, data: AfterimageData) {
  * child module.
  *
  * @param ship the ship for which to collect all modules
- * @return list of [ship]'s ship modules
+ * @return list of [ship]'s ship modules, parent (root module) being last
  */
 fun getAllShipSections(ship: ShipAPI): List<ShipAPI> {
     // If ship is parent, apply to children
