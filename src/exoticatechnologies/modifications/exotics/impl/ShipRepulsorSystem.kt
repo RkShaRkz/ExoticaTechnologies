@@ -341,7 +341,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     // and make sure we're not targetting our own submodule, or submodules in general
 //                    .filter { module -> module.parentStation != ship || module.parentStation != null }
                     // make sure we're not targetting ourselves
-                    .filter { module -> module.fleetMember != member || module.parentStation != ship}
+                    .filter { module -> module.fleetMember != member && module.parentStation != ship && module != ship}
                     // make sure we're not targetting child modules
                     .filter { module -> module.parentStation == null }
                     //TODO remove this, just for testing to ignore
@@ -396,6 +396,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             val myMassHitpoints = (myShipTotalHitpoints * myShipTotalMass)
                             val enemyMassHitpoints = (enemyShipTotalHitpoints * enemyShipTotalMass)
                             val diffMassHitpoints = myMassHitpoints - enemyMassHitpoints
+                            var avoidScaling = false
                             val rotationalMomentum = if(diffMassHitpoints > 0) {
                                 momentumFactor * (diffMassHitpoints / differenceInMassRatio) * rotationalDirection
                             } else {
@@ -405,14 +406,28 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                 val diffMassHitpointRatio = abs(diffMassHitpoints / myMassHitpoints)
                                 if (diffMassHitpointRatio <= getScaledAllowCoefficient(member, mods, exoticData)) {
                                     logger.info("[ALLOW CASE] allowing because diffMassHitpointRatio ${diffMassHitpointRatio} is less than ${getScaledAllowCoefficient(member, mods, exoticData)}")
-                                    momentumFactor * (diffMassHitpoints / differenceInMassRatio) * rotationalDirection
+                                    if (diffMassHitpointRatio != 0f) {
+                                        // Special case 1 - if we're not exactly the same, but are within allowed ratio,
+                                        // use identical formula as above regardless of diffMassHitpoints being positive or negative
+                                        momentumFactor * (diffMassHitpoints / differenceInMassRatio) * rotationalDirection
+                                    } else {
+                                        // Special case 2 - If we are exactly the same, do not use the formula at all.
+                                        // Just apply a small random rotation an call it a day. Also avoid scaling in this case
+                                        avoidScaling = true
+
+                                        (Math.random() * ZERO_DIFF_ROTATION_VALUE).toFloat() * rotationalDirection
+                                    }
                                 } else {
                                     0f
                                 }
                             }
                             val scaledRotationalMomentum = (rotationalMomentum * getPositiveMult(member, mods, exoticData)).coerceIn(MIN_MOMENTUM_CLAMP, MAX_MOMENTUM_CLAMP)
                             // once it has been clamped, we will apply the scaling factor of 0.00216 to bring it into [-360*6, 360*6] range
-                            val finalRotationalMomentum = scaledRotationalMomentum * SCALING_FACTOR
+                            val finalRotationalMomentum = if (avoidScaling.not()) {
+                                scaledRotationalMomentum * SCALING_FACTOR
+                            } else {
+                                rotationalMomentum
+                            }
                             logger.info("Before applying angular velocity")
                             logger.info("my ship totalMass: ${myShipTotalMass}, my ship total HP: ${myShipTotalHitpoints}, my ship totalMassHitpoints: ${myMassHitpoints.toFormattedString()}, my ship size: ${ship.hullSize}")
                             logger.info("enemyShip total mass: ${enemyShipTotalMass}, enemyShip total HP: ${enemyShipTotalHitpoints}, enemyShip totalMassHitpoints: ${enemyMassHitpoints.toFormattedString()}, differenceInMassRatio: ${differenceInMassRatio}, enemy ship size: ${nearbyShip.hullSize}")
@@ -445,45 +460,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     }
                 }
             }
-            /*
-            for (nearbyShip in potentiallyAffectedShips) {
-                val distanceToShip = MathUtils.getDistance(nearbyShip.location, ship.location)
-                val collisionRadius = nearbyShip.collisionRadius + radius
-                if ( distanceToShip < collisionRadius ) {
-                    val pointToTest = VectorUtils.clampLength(Vector2f.sub(ship.location, nearbyShip.location, null), radius)
-                    val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(ship.location, pointToTest, nearbyShip)
-                    collisionPoint?.let { collision ->
-                        if (!nearbyShip.isStation && !(nearbyShip.isStationModule && nearbyShip.parentStation.isStation)) {
-                            // This is the normal case, when we push everyone away from our ship, scaled with positive effect mult
-                            nearbyShip.velocity.set(ship.getVelocity())
-//                            val momentum = amount * 10f * momentumFactor
-                            val momentum = getScaledPushOutEffectMomentumStrength(member, mods, exoticData)
-                            ForceApplier.applyMomentum(
-                                    entity = nearbyShip,
-                                    pointOfImpact = collision,
-                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),
-                                    momentum = momentum,
-                                    elasticCollision = true
-                            )
-                        } else {
-                            // This is the "inverse" case, when we try pushing out an immovable object - so we should push ourselves back a bit
-                            // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
-                            // And finally, we will scale the strength * factor with negative effect mult
-//                            val momentum = amount * -0.5f * 1 / momentumFactor
-//                            val momentum = (-momentumStrength / 20f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
-                            val momentum = (-momentumStrength / 2f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
-                            ForceApplier.applyMomentum(
-                                    entity = ship.parentStation,
-                                    pointOfImpact = collision,
-                                    direction = Vector2f.sub(nearbyShip.location, ship.location, null),
-                                    momentum = momentum,
-                                    elasticCollision = true
-                            )
-                        }
-                    }
-                }
-            }
-             */
             logger.info("<-- pushOutShipsWithinRadius()")
         }
     }
@@ -492,11 +468,12 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         private const val COST_CREDITS: Float = 300000f
         private const val ITEM = "et_repulsorcrystal"
 
-        private const val MIN_MOMENTUM_CLAMP = -1000000f
-        private const val MAX_MOMENTUM_CLAMP = 1000000f
-        private const val SCALING_FACTOR = 0.00216f
+        private const val MIN_MOMENTUM_CLAMP = -10000000f
+        private const val MAX_MOMENTUM_CLAMP = 10000000f
+        private const val SCALING_FACTOR = 0.000216f
 
         private const val COOLDOWN_DURATION = 30f
         private const val ALLOW_COEF = 0.33f
+        private const val ZERO_DIFF_ROTATION_VALUE = 120f
     }
 }
