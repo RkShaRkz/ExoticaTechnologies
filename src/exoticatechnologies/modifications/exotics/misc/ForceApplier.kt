@@ -10,7 +10,7 @@ import kotlin.math.max
 object ForceApplier {
     private val logger = Logger.getLogger(ForceApplier::class.java)
 
-    fun applyMomentum(entity: CombatEntityAPI?, pointOfImpact: Vector2f?, direction: Vector2f, momentum: Float, elasticCollision: Boolean) {
+    fun applyMomentum(entity: CombatEntityAPI?, pointOfImpact: Vector2f?, direction: Vector2f, momentum: Float, elasticCollision: Boolean, modifyAngularVelocity: Boolean = true) {
         logger.info("--> applyMomentum()")
         // This whole thing is weird, but necessary since arguments are being reassigned for some reason
         var entity = entity
@@ -59,14 +59,16 @@ object ForceApplier {
                 direction.scale(1 / mass)
                 Vector2f.add(direction, entity.velocity, entity.velocity)
             }
-            // calculate moment change
-            var angularAcc = VectorUtils.getCrossProduct(forceV, BPtoMC) / (0.5f * mass * entity.collisionRadius * entity.collisionRadius)
-            angularAcc = Math.toDegrees(angularAcc.toDouble()).toFloat()
-            // Apply angular velocity change
-            if (elasticCollision) {
-                entity.angularVelocity = entity.angularVelocity + angularAcc
-            } else {
-                entity.angularVelocity = entity.angularVelocity - angularAcc
+            if (modifyAngularVelocity) {
+                // calculate moment change
+                var angularAcc = VectorUtils.getCrossProduct(forceV, BPtoMC) / (0.5f * mass * entity.collisionRadius * entity.collisionRadius)
+                angularAcc = Math.toDegrees(angularAcc.toDouble()).toFloat()
+                // Apply angular velocity change
+                if (elasticCollision) {
+                    entity.angularVelocity = entity.angularVelocity + angularAcc
+                } else {
+                    entity.angularVelocity = entity.angularVelocity - angularAcc
+                }
             }
         }
         logger.info("<-- applyMomentum()")

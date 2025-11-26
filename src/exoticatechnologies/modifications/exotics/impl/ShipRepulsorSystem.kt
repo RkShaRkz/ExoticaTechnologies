@@ -367,6 +367,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             nearbyShip.velocity.set(ship.velocity)
                             val momentum = getScaledPushOutEffectMomentumStrength(member, mods, exoticData)
                             logger.info("applying momentum: ${momentum}\tentity: ${nearbyShip}")
+                            logger.info("[BEFORE1] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
                             ForceApplier.applyMomentum(
                                     entity = nearbyShip,
                                     pointOfImpact = collision,
@@ -374,7 +375,10 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                     direction = Vector2f.sub(nearbyShip.location, ship.location, null),
                                     momentum = momentum,
                                     elasticCollision = true,
+                                    // We will modify the angular velocity after just pushing it back
+                                    modifyAngularVelocity = false
                             )
+                            logger.info("[AFTER1] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
 
                             // Add the "paralyzing"/debilitating effect as well - effect being just also spinning the target
                             // besides just launching it straight away from us along the vector direction between the two of us
@@ -439,9 +443,9 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             logger.info("rotationalMomentum: ${rotationalMomentum}, scaledRotationalMomentum: ${scaledRotationalMomentum}, finalRotationalMomentum: ${finalRotationalMomentum}")
 
                             // And finally, apply the scaled rotational momentum to the enemy ship
-                            logger.info("[BEFORE] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
+                            logger.info("[BEFORE2] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
                             nearbyShip.angularVelocity += finalRotationalMomentum
-                            logger.info("[AFTER] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
+                            logger.info("[AFTER2] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
                         } else {
                             // This is the "inverse" case, when we try pushing out an immovable object - so we should push ourselves back a bit
                             // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
@@ -472,7 +476,8 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         private const val MIN_MOMENTUM_CLAMP = -10000000f
         private const val MAX_MOMENTUM_CLAMP = 10000000f
-        private const val SCALING_FACTOR = 0.000216f
+//        private const val SCALING_FACTOR = 0.000216f
+        private const val SCALING_FACTOR = 0.000108f
 
         private const val COOLDOWN_DURATION = 30f
         private const val ALLOW_COEF = 0.33f
