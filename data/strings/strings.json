@@ -610,5 +610,10 @@
 		"description": "A sudden burst of repulsive energy erupts from the vessel, creating a shimmering wave of force that violently thrusts away all nearby objects. The very fabric of space seems to ripple outward from the epicenter, accompanied by cascading arcs of disruptive energy that form a perfect defensive sphere before dissipating into the void.",
 		"tooltip": "Activates a powerful repulsion field that instantly pushes all enemy ships within radius away from the user with consistent force.",
 		"longDescription": "When activated, the system generates an instantaneous spherical pulse of repulsive energy extending up to *${radius} radius* from the vessel. All =${target_ships} ships= within this radius are violently pushed away from the center with *${push_out_strength} momentum strength*. Debilitating rotational effect allowed on ships up to *${debilitating_factor}%%* bigger sturdiness factor. The system takes *${cooldown_time} seconds* to recharge. =Works only on module(s) where it's installed=. =Installable only on the main module=."
+	},
+	"ShipAttractorSystem": {
+		"description": "A surge of gravitational energy radiates from the vessel, warping the surrounding space into a shimmering vortex that drags all nearby objects inward. The distortion bends light and matter alike, converging toward the ship’s core before the field collapses back into silence.",
+		"tooltip": "Activates a powerful attraction field that instantly pulls all enemy ships within radius toward the user with consistent force.",
+		"longDescription": "When activated, the system generates an instantaneous spherical pulse of attractive energy extending up to *${radius} radius* from the vessel. All =${target_ships} ships= within this radius are forcibly drawn toward the center with *${pull_in_strength} momentum strength*. Disorienting rotational effect allowed on ships up to *${debilitating_factor}%%* bigger sturdiness factor. The system takes *${cooldown_time} seconds* to recharge. =Works only on module(s) where it's installed=. =Installable only on the main module=."
 	}
 }

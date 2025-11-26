@@ -194,5 +194,9 @@
   "ShipRepulsorSystem": {
     "name": "Ship Repulsor System",
     "exoticClass": "exoticatechnologies.modifications.exotics.impl.ShipRepulsorSystem"
+  },
+  "ShipAttractorSystem": {
+    "name": "Ship Attractor System",
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.ShipAttractorSystem"
   }
 }
