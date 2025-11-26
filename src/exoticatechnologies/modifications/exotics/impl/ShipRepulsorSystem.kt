@@ -7,6 +7,7 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
+import com.fs.starfarer.api.util.IntervalUtil
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
@@ -15,7 +16,6 @@ import exoticatechnologies.util.*
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
-import org.lazywizard.lazylib.combat.AIUtils
 import org.lazywizard.lazylib.combat.CombatUtils
 import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystem
@@ -184,6 +184,8 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             val mods: ShipModifications,
             val exoticData: ExoticData
     ): MagicSubsystem(ship) {
+        // check for activation every 3 seconds
+        private val activationIntervalUtil = IntervalUtil(2.95f, 3.05f)
 
         override fun getBaseActiveDuration() = 1f
 
@@ -191,18 +193,26 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         override fun shouldActivateAI(amount: Float): Boolean {
             //TODO i dont know what to do here so just say 'no' for now
+            activationIntervalUtil.advance(amount)
+            if (activationIntervalUtil.intervalElapsed()) {
+                // If interval elapsed, we are going to do a few checks to determine if we should activate:
+                // 1. if we have enemies closer than any weapon's minimum range - if yes, activate
+                // 2. if we have enemies within 250 range of us - activate
+                // 3. if our flux is at 80+% of flux capacity - activate
+
+            }
             return false
         }
 
         override fun getDisplayText() = "Ship Repulsor System"
 
         override fun onActivate() {
-            logger.info("--> onActivate()")
+            log("--> onActivate()")
             super.onActivate()
 
             showVisualFlair()
             pushOutShipsWithinRadius()
-            logger.info("<-- onActivate()")
+            log("<-- onActivate()")
         }
 
         private fun showVisualFlair() {
@@ -360,7 +370,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         }
 
         private fun pushOutShipsWithinRadius() {
-            logger.info("--> pushOutShipsWithinRadius()")
+            log("--> pushOutShipsWithinRadius()")
             // Look through all ships within radius, and apply momentum
             val momentumFactor: Float = getPushOutEffectMomentumFactor(member)
             val momentumStrength: Float = getPushOutStrength(member, ship)
@@ -400,14 +410,10 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
                     val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(ship.location, endPoint, nearbyShip)
                     collisionPoint?.let { collision ->
-                        logger.info("-------------------------------------------")
                         if (!nearbyShip.isStation && !(nearbyShip.isStationModule && nearbyShip.parentStation.isStation)) {
                             // This is the normal case, when we push everyone away from our ship, scaled with positive effect mult
-                            logger.info("normal case, pushing ship ${nearbyShip}")
                             nearbyShip.velocity.set(ship.velocity)
                             val momentum = getScaledPushOutEffectMomentumStrength(member, mods, exoticData)
-                            logger.info("applying momentum: ${momentum}\tentity: ${nearbyShip}")
-                            logger.info("[BEFORE1] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
                             ForceApplier.applyMomentum(
                                     entity = nearbyShip,
                                     pointOfImpact = collision,
@@ -418,7 +424,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                     // We will modify the angular velocity after just pushing it back
                                     modifyAngularVelocity = false
                             )
-                            logger.info("[AFTER1] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
 
                             // Add the "paralyzing"/debilitating effect as well - effect being just also spinning the target
                             // besides just launching it straight away from us along the vector direction between the two of us
@@ -448,16 +453,13 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                 // to be less than a small positive number ...
                                 val diffMassHitpointRatio = abs(diffMassHitpoints / myMassHitpoints)
                                 if (diffMassHitpointRatio <= getScaledAllowCoefficient(member, mods, exoticData)) {
-                                    logger.info("[ALLOW CASE] allowing because diffMassHitpointRatio ${diffMassHitpointRatio} is less than ${getScaledAllowCoefficient(member, mods, exoticData)}")
                                     if (diffMassHitpointRatio != 0f) {
-                                        logger.info("[ALLOW CASE] special case 1 - diffMassHitpointRatio != 0}")
                                         // Special case 1 - if we're not exactly the same, but are within allowed ratio,
                                         // use identical formula as above regardless of diffMassHitpoints being positive or negative
                                         momentumFactor * (diffMassHitpoints / differenceInMassRatio) * rotationalDirection
                                     } else {
-                                        logger.info("[ALLOW CASE] special case 2 - diffMassHitpointRatio == 0}")
                                         // Special case 2 - If we are exactly the same, do not use the formula at all.
-                                        // Just apply a small random rotation an call it a day. Also avoid scaling in this case
+                                        // Just apply a small random rotation and call it a day. Also avoid scaling in this case
                                         avoidScaling = true
 
                                         (Math.random() * ZERO_DIFF_ROTATION_VALUE).toFloat() * rotationalDirection
@@ -467,32 +469,20 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                 }
                             }
                             val scaledRotationalMomentum = (rotationalMomentum * getPositiveMult(member, mods, exoticData)).coerceIn(MIN_MOMENTUM_CLAMP, MAX_MOMENTUM_CLAMP)
-                            // once it has been clamped, we will apply the scaling factor of 0.00216 to bring it into [-360*6, 360*6] range
+                            // once it has been clamped, we will apply the scaling factor of 0.00216 to bring it into [-360*3, 360*3] range
                             val finalRotationalMomentum = if (avoidScaling.not()) {
                                 scaledRotationalMomentum * SCALING_FACTOR
                             } else {
                                 rotationalMomentum
                             }
-                            logger.info("Before applying angular velocity")
-                            logger.info("my ship totalMass: ${myShipTotalMass}, my ship total HP: ${myShipTotalHitpoints}, my ship totalMassHitpoints: ${myMassHitpoints.toFormattedString()}, my ship size: ${ship.hullSize}")
-                            logger.info("enemyShip total mass: ${enemyShipTotalMass}, enemyShip total HP: ${enemyShipTotalHitpoints}, enemyShip totalMassHitpoints: ${enemyMassHitpoints.toFormattedString()}, differenceInMassRatio: ${differenceInMassRatio}, enemy ship size: ${nearbyShip.hullSize}")
-                            logger.info("enemyShip.hullId: ${nearbyShip.fleetMember.hullId}, enemyShip name: ${nearbyShip.name}, enemyShip.isFighter: ${nearbyShip.isFighter}, enemyShip.parentStation: ${nearbyShip.parentStation}")
-//                            logger.info("enemyShip.maxHP.sum(): ${enemyShipTotalHitpoints}, our ship total hitpoints (momentumStrength): ${momentumStrength}, the calculation: ${((momentumStrength - enemyShipTotalHitpoints) / differenceInMassRatio)}")
-                            logger.info("myMassHitpoints: ${myMassHitpoints}, enemyMassHitpoints: ${enemyMassHitpoints}, diff: ${diffMassHitpoints}, my totalHP == momentumStrength ? ${myShipTotalHitpoints == momentumStrength}")
-                            logger.info("momentumFactor: ${momentumFactor}, positiveMult: ${getPositiveMult(member, mods, exoticData)}")
-                            logger.info("rotationalMomentum: ${rotationalMomentum}, scaledRotationalMomentum: ${scaledRotationalMomentum}, finalRotationalMomentum: ${finalRotationalMomentum}")
 
                             // And finally, apply the scaled rotational momentum to the enemy ship
-                            logger.info("[BEFORE2] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
                             nearbyShip.angularVelocity += finalRotationalMomentum
-                            logger.info("[AFTER2] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
                         } else {
                             // This is the "inverse" case, when we try pushing out an immovable object - so we should push ourselves back a bit
                             // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
                             // And finally, we will scale the strength * factor with negative effect mult
-                            logger.info("the *other* case, pushing ship ${nearbyShip}")
                             val momentum = (-momentumStrength / 2f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
-                            logger.info("applying momentum: ${momentum}\tentity: ${ship.parentStation}")
                             ForceApplier.applyMomentum(
                                     entity = ship.parentStation,
                                     pointOfImpact = collision,
@@ -502,22 +492,25 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                     elasticCollision = true,
                             )
                         }
-                        logger.info("-------------------------------------------")
                     }
                 }
             }
-            logger.info("<-- pushOutShipsWithinRadius()")
+            log("<-- pushOutShipsWithinRadius()")
         }
+    }
+
+    private fun log(logMsg: String) {
+        if (LOGS_ENABLED) logger.info(logMsg)
     }
 
     companion object {
         private const val COST_CREDITS: Float = 300000f
         private const val ITEM = "et_repulsorcrystal"
+        private const val LOGS_ENABLED = false
 
         private const val MIN_MOMENTUM_CLAMP = -10000000f
         private const val MAX_MOMENTUM_CLAMP = 10000000f
-        private const val SCALING_FACTOR = 0.000216f
-//        private const val SCALING_FACTOR = 0.000108f
+        private const val SCALING_FACTOR = 0.000108f
 
         private const val COOLDOWN_DURATION = 30f
         private const val ALLOW_COEF = 0.33f
