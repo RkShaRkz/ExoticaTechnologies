@@ -8,6 +8,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.IntervalUtil
+import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
@@ -194,13 +195,69 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         override fun shouldActivateAI(amount: Float): Boolean {
             //TODO i dont know what to do here so just say 'no' for now
             activationIntervalUtil.advance(amount)
-            if (activationIntervalUtil.intervalElapsed()) {
-                // If interval elapsed, we are going to do a few checks to determine if we should activate:
-                // 1. if we have enemies closer than any weapon's minimum range - if yes, activate
-                // 2. if we have enemies within 250 range of us - activate
-                // 3. if our flux is at 80+% of flux capacity - activate
-
+            return if (activationIntervalUtil.intervalElapsed()) {
+                evaluateSituation()
+            } else {
+                false
             }
+        }
+
+        private fun evaluateSituation(): Boolean {
+            // If interval elapsed, we are going to do a few checks to determine if we should activate:
+            // 1. if we have enemies within 250 range of us (excluding wings) - activate
+            // 2. if our flux is at 80+% of flux capacity and there are ships in radius - activate
+            // 3. if there is 6+ of potential targets in radius (excluding wings) - activate
+            // 4. if the mass of ships in radius is bigger than our mass - activate
+            // 5. any enemies (wings included) within 250 range - activate
+            // 6. 6+ any targets (wings included) in range - activate
+            // If any criteria is met, we will do an early return and avoid evaluating the rest of them
+            // Otherwise - do nothing for this evaluation cycle
+
+            // First, grab all ships in radius, and check if we have some really close ones
+            val targetShipsInRadius = getPotentialTargets(member, mods, exoticData)
+            val reallyCloseShips = targetShipsInRadius
+                    .filter { nearbyShip -> nearbyShip.isFighter.not() }
+                    .filter { nearbyShip -> Misc.getDistance(ship.location, nearbyShip.location) < REALLY_CLOSE_ACTIVATION_RANGE }
+
+            // Criteria 1 - enemy non-fighter ships up close
+            val haveCloseShips = reallyCloseShips.isNotEmpty()
+            if (haveCloseShips) return true
+
+            // Proceed to check flux
+            val ourFluxTracker = ship.fluxTracker
+            val currentFluxLevel = ourFluxTracker.currFlux / ourFluxTracker.maxFlux
+            val anyShipsInRadius = targetShipsInRadius.isNotEmpty()
+
+            // Criteria 2 - we're overfluxing, push them away to vent
+            if (anyShipsInRadius && currentFluxLevel >= ACTIVATION_FLUX_LEVEL) return true
+
+            val howManyShipsInRadius = targetShipsInRadius.filter { ship -> ship.isFighter.not() }.size
+
+            // Criteria 3 - 6+ non-wing ships in radius
+            if (howManyShipsInRadius > MIN_SHIPS_TO_ACTIVATE) return true
+
+            // Evaluate ships in radius
+            val shipsInRadiusMassSum = targetShipsInRadius.map { ship ->
+                // grab all sections of ship, map into individual module masses and sum - effectivelly mapping 'ship' into it's summed mass
+                getAllShipSections(ship).map { module -> module.mass }.sum()
+            }.sum()
+            val myMass = getAllShipSections(ship).map { module -> module.mass }.sum()
+
+            // Criteria 4 - enemies in radius have more mass than us
+            if (shipsInRadiusMassSum > myMass) return true
+
+            val reallyCloseTargets = targetShipsInRadius
+                    .filter { nearbyShip -> Misc.getDistance(ship.location, nearbyShip.location) < REALLY_CLOSE_ACTIVATION_RANGE }
+
+            // Criteria 5 - any targets up close
+            val haveCloseTargets = reallyCloseTargets.isNotEmpty()
+            if (haveCloseTargets) return true
+
+            // Criteria 6 - 6+ targets in radius
+            val howManyTargetsInRadius = targetShipsInRadius.size
+            if (howManyTargetsInRadius > MIN_SHIPS_TO_ACTIVATE) return true
+
+            // None of the criterias were fulfilled so far, return false for this evaluation cycle
             return false
         }
 
@@ -213,6 +270,33 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             showVisualFlair()
             pushOutShipsWithinRadius()
             log("<-- onActivate()")
+        }
+
+        private fun getPotentialTargets(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): List<ShipAPI> {
+            val radius: Float = getRadiusAmount(member, mods, exoticData)
+            val workMode = getWorkMode(member, mods, exoticData)
+
+            // Depending on the workmode, grab ships within radius with some prefiltering ...
+            val potentiallyAffectedShips = when (workMode) {
+                RepulsorWorkMode.ENEMIES_ONLY -> CombatUtils.getShipsWithinRange(ship.location, radius)
+                        // make sure it only contains enemies and not enemies and neutrals
+                        .filter { filterShip -> ship.owner != filterShip.owner && filterShip.owner != 100 }
+
+                RepulsorWorkMode.ENEMIES_AND_ALLIES -> CombatUtils.getShipsWithinRange(ship.location, radius)
+                        // make sure it only contains non-neutrals
+                        .filter { filterShip -> filterShip.owner != 100 }
+
+                RepulsorWorkMode.ALLIES_ONLY -> CombatUtils.getShipsWithinRange(ship.location, radius)
+                        // make sure it only contains allies and not enemies and neutrals
+                        .filter { filterShip -> filterShip.owner == ship.owner && filterShip.owner != 100 }
+            }.exhaustive
+                    // And ... then apply some more filtering
+                    // make sure we're not targetting ourselves
+                    .filter { module -> module.fleetMember != member && module.parentStation != ship && module != ship }
+                    // make sure we're not targetting child modules
+                    .filter { module -> module.parentStation == null }
+
+            return potentiallyAffectedShips
         }
 
         private fun showVisualFlair() {
@@ -375,27 +459,8 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             val momentumFactor: Float = getPushOutEffectMomentumFactor(member)
             val momentumStrength: Float = getPushOutStrength(member, ship)
             val radius: Float = getRadiusAmount(member, mods, exoticData)
-            val workMode = getWorkMode(member, mods, exoticData)
 
-            // Depending on the workmode, grab ships within radius with some prefiltering ...
-            val potentiallyAffectedShips = when (workMode) {
-                RepulsorWorkMode.ENEMIES_ONLY -> CombatUtils.getShipsWithinRange(ship.location, radius)
-                        // make sure it only contains enemies and not enemies and neutrals
-                        .filter { filterShip -> ship.owner != filterShip.owner && filterShip.owner != 100 }
-
-                RepulsorWorkMode.ENEMIES_AND_ALLIES -> CombatUtils.getShipsWithinRange(ship.location, radius)
-                        // make sure it only contains non-neutrals
-                        .filter { filterShip -> filterShip.owner != 100 }
-
-                RepulsorWorkMode.ALLIES_ONLY -> CombatUtils.getShipsWithinRange(ship.location, radius)
-                        // make sure it only contains allies and not enemies and neutrals
-                        .filter { filterShip -> filterShip.owner == ship.owner && filterShip.owner != 100 }
-            }.exhaustive
-                    // And ... then apply some more filtering
-                    // make sure we're not targetting ourselves
-                    .filter { module -> module.fleetMember != member && module.parentStation != ship && module != ship }
-                    // make sure we're not targetting child modules
-                    .filter { module -> module.parentStation == null }
+            val potentiallyAffectedShips = getPotentialTargets(member, mods, exoticData)
 
             for (nearbyShip in potentiallyAffectedShips) {
                 val distanceToShip = MathUtils.getDistance(nearbyShip.location, ship.location)
@@ -515,5 +580,10 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         private const val COOLDOWN_DURATION = 30f
         private const val ALLOW_COEF = 0.33f
         private const val ZERO_DIFF_ROTATION_VALUE = 120f
+
+        // activation constants
+        private const val REALLY_CLOSE_ACTIVATION_RANGE = 250f
+        private const val ACTIVATION_FLUX_LEVEL = 0.8f
+        private const val MIN_SHIPS_TO_ACTIVATE = 6
     }
 }
