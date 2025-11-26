@@ -2,7 +2,9 @@ package exoticatechnologies.util.tests
 
 import exoticatechnologies.modifications.exotics.ExoticsHandler
 import exoticatechnologies.modifications.exotics.types.ExoticType
+import exoticatechnologies.util.InLogicalRangeWorkMode
 import exoticatechnologies.util.StacktraceUtils
+import exoticatechnologies.util.isInLogicalRange
 import org.junit.Assert
 import org.junit.Test
 
@@ -61,5 +63,34 @@ class UtilTests {
         System.err.println(stringifiedStacktrace)
 
         Assert.assertNotNull(stringifiedStacktrace)
+    }
+
+    @Test
+    fun test_what_happens_when_a_outofbound_number_is_cast_to_Short() {
+        val number1:Int = -65535
+        val test1: Short = number1.toShort()
+        val expected1: Short = 1.toShort()
+
+        val number2: Double = 65536.toDouble()
+        // Since we can't do this, lets go the roundabout way...
+//        val test2 = number2.toShort()
+        val test2: Short = number2.toInt().toShort()
+        val expected2: Short = 0.toShort()
+
+        Assert.assertEquals(expected1, test1)
+        Assert.assertEquals(expected2, test2)
+    }
+
+    @Test
+    fun test_what_happens_in_the_absurd_case_mentioned_in_isInLogicalRange_javadoc() {
+        val number: Short = 123
+        val left: Int = -65535
+        val right: Double = 65536.toDouble()
+
+        val test1 = number.isInLogicalRange(left, right, InLogicalRangeWorkMode.LESS_OR_EQUAL)
+        val test2 = number.isInLogicalRange(left, right, InLogicalRangeWorkMode.GREATER_OR_EQUAL)
+
+        Assert.assertEquals(false, test1)
+        Assert.assertEquals(false, test2)
     }
 }

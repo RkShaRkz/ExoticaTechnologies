@@ -16,6 +16,7 @@ import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
 import org.lazywizard.lazylib.combat.AIUtils
+import org.lazywizard.lazylib.combat.CombatUtils
 import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
@@ -364,15 +365,25 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             val momentumFactor: Float = getPushOutEffectMomentumFactor(member)
             val momentumStrength: Float = getPushOutStrength(member, ship)
             val radius: Float = getRadiusAmount(member, mods, exoticData)
+            val workMode = getWorkMode(member, mods, exoticData)
 
-            //TODO depending on negativeMult, affect only enemies, enemies+friendlies, friendlies
-            val potentiallyAffectedShips = AIUtils.getNearbyEnemies(ship, radius)
-                    // make sure it only contains enemies and not enemies and neutrals
-                    .filter { filterShip -> ship.owner != filterShip.owner && filterShip.owner != 100 }
-                    // and make sure we're not targetting our own submodule, or submodules in general
-//                    .filter { module -> module.parentStation != ship || module.parentStation != null }
+            // Depending on the workmode, grab ships within radius with some prefiltering ...
+            val potentiallyAffectedShips = when (workMode) {
+                RepulsorWorkMode.ENEMIES_ONLY -> CombatUtils.getShipsWithinRange(ship.location, radius)
+                        // make sure it only contains enemies and not enemies and neutrals
+                        .filter { filterShip -> ship.owner != filterShip.owner && filterShip.owner != 100 }
+
+                RepulsorWorkMode.ENEMIES_AND_ALLIES -> CombatUtils.getShipsWithinRange(ship.location, radius)
+                        // make sure it only contains non-neutrals
+                        .filter { filterShip -> filterShip.owner != 100 }
+
+                RepulsorWorkMode.ALLIES_ONLY -> CombatUtils.getShipsWithinRange(ship.location, radius)
+                        // make sure it only contains allies and not enemies and neutrals
+                        .filter { filterShip -> filterShip.owner == ship.owner && filterShip.owner != 100 }
+            }.exhaustive
+                    // And ... then apply some more filtering
                     // make sure we're not targetting ourselves
-                    .filter { module -> module.fleetMember != member && module.parentStation != ship && module != ship}
+                    .filter { module -> module.fleetMember != member && module.parentStation != ship && module != ship }
                     // make sure we're not targetting child modules
                     .filter { module -> module.parentStation == null }
 
@@ -405,7 +416,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                     momentum = momentum,
                                     elasticCollision = true,
                                     // We will modify the angular velocity after just pushing it back
-//                                    modifyAngularVelocity = false
+                                    modifyAngularVelocity = false
                             )
                             logger.info("[AFTER1] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
 
