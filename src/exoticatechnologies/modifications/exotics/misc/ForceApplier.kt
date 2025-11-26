@@ -8,10 +8,11 @@ import org.lwjgl.util.vector.Vector2f
 import kotlin.math.max
 
 object ForceApplier {
+    private const val LOGS_ENABLED = false
     private val logger = Logger.getLogger(ForceApplier::class.java)
 
     fun applyMomentum(entity: CombatEntityAPI?, pointOfImpact: Vector2f?, direction: Vector2f, momentum: Float, elasticCollision: Boolean, modifyAngularVelocity: Boolean = true) {
-        logger.info("--> applyMomentum()")
+        log("--> applyMomentum()")
         // This whole thing is weird, but necessary since arguments are being reassigned for some reason
         var entity = entity
         var direction = direction
@@ -39,7 +40,7 @@ object ForceApplier {
             }
             // Momentum is far too weak otherwise
             momentum *= 100f
-            logger.info("Actual momentum ${momentum}")
+            log("Actual momentum ${momentum}")
             // Doing some vector calculate
             val BPtoMC = entity?.let { Vector2f.sub(it.location, pointOfImpact, null) }
                     ?: throw RuntimeException("entity was null while assigning to BPtoMC -- this should not be happening. Look into GuardianShield -> ForceApplier::applyMomentum()")
@@ -71,6 +72,12 @@ object ForceApplier {
                 }
             }
         }
-        logger.info("<-- applyMomentum()")
+        log("<-- applyMomentum()")
+    }
+
+    private fun log(logMsg: String) {
+        if (LOGS_ENABLED) {
+            logger.info(logMsg)
+        }
     }
 }
