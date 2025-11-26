@@ -48,6 +48,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         if (expand) {
             StringUtils.getTranslation(key, "longDescription")
                     .format("radius", getRadiusAmount(member, mods, exoticData))
+                    .format("target_ships", getWorkModeString(member, mods, exoticData))
                     .format("push_out_strength", formatFloatAsString(getScaledPushOutEffectMomentumStrength(member, mods, exoticData), 2))
                     .formatFloat("debilitating_factor", getScaledAllowCoefficient(member, mods, exoticData) * 100f)
                     .formatFloat("cooldown_time", getScaledCooldownDuration(member, mods, exoticData))
@@ -146,6 +147,34 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
     private fun getScaledAllowCoefficient(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
         return ALLOW_COEF * getNegativeMult(member, mods, exoticData)
+    }
+
+    private fun getWorkMode(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): RepulsorWorkMode {
+        val negativeMult = getNegativeMult(member, mods, exoticData)
+        // When negative mult is less than 1.5, it's enemies only
+        // when it's in 1.5-3 range, it's both; for 3+ it's allies only
+        return when {
+            negativeMult.isInLogicalRange(null, 1.5f, InLogicalRangeWorkMode.LESS_OR_EQUAL) -> RepulsorWorkMode.ENEMIES_ONLY
+            negativeMult.isInLogicalRange(1.5f, 3f, InLogicalRangeWorkMode.LESS_THAN) -> RepulsorWorkMode.ENEMIES_AND_ALLIES
+            negativeMult.isInLogicalRange(3f, null, InLogicalRangeWorkMode.LESS_OR_EQUAL) -> RepulsorWorkMode.ALLIES_ONLY
+            else -> throw IllegalStateException("negativeMult wasn't in any of the expected ranges, the obscene value that caused this crash was ${negativeMult}")
+        }
+    }
+
+    private fun getWorkModeString(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): String {
+        val workMode = getWorkMode(member, mods, exoticData)
+
+        return when (workMode) {
+            RepulsorWorkMode.ENEMIES_ONLY -> "enemy"
+            RepulsorWorkMode.ENEMIES_AND_ALLIES -> "enemy and ally"
+            RepulsorWorkMode.ALLIES_ONLY -> "ally"
+        }.exhaustive
+    }
+
+
+
+    enum class RepulsorWorkMode {
+        ENEMIES_ONLY, ENEMIES_AND_ALLIES, ALLIES_ONLY
     }
 
     inner class RepulsorPushOutSystem(
@@ -376,7 +405,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                     momentum = momentum,
                                     elasticCollision = true,
                                     // We will modify the angular velocity after just pushing it back
-                                    modifyAngularVelocity = false
+//                                    modifyAngularVelocity = false
                             )
                             logger.info("[AFTER1] enemyShip.angularVelocity: ${nearbyShip.angularVelocity}")
 
@@ -476,8 +505,8 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         private const val MIN_MOMENTUM_CLAMP = -10000000f
         private const val MAX_MOMENTUM_CLAMP = 10000000f
-//        private const val SCALING_FACTOR = 0.000216f
-        private const val SCALING_FACTOR = 0.000108f
+        private const val SCALING_FACTOR = 0.000216f
+//        private const val SCALING_FACTOR = 0.000108f
 
         private const val COOLDOWN_DURATION = 30f
         private const val ALLOW_COEF = 0.33f
