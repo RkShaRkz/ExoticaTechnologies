@@ -421,6 +421,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             }
         }
 
+        //TODO move to CircleUtils, make the numDots a parameter and make the angleDeg depend on 360/numDots
         /**
          * Generates a pair of lists, going from 0-360 degrees with 10-degree increments, clockwise.
          * The left list is reversed so that it represents CCW rotation from 0 to 180

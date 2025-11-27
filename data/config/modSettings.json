@@ -107,7 +107,9 @@
       "GuardianShield",
       "RewindSystem",
       "MissileSpamSystem",
-      "AmmoCraftingSystem"
+      "AmmoCraftingSystem",
+      "ShipRepulsorSystem",
+      "ShipAttractorSystem",
     ],
     "rngUpgradeWhitelist": [
       "WeldedArmor",

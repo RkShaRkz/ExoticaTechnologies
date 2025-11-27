@@ -193,7 +193,6 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
         override fun getBaseCooldownDuration() = getScaledCooldownDuration(member, mods, exoticData)
 
         override fun shouldActivateAI(amount: Float): Boolean {
-            //TODO i dont know what to do here so just say 'no' for now
             activationIntervalUtil.advance(amount)
             return if (activationIntervalUtil.intervalElapsed()) {
                 evaluateSituation()
@@ -213,62 +212,21 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             // If any criteria is met, we will do an early return and avoid evaluating the rest of them
             // Otherwise - do nothing for this evaluation cycle
 
-            // First, grab all ships in radius, and check if we have some really close ones
-            val targetShipsInRadius = getPotentialTargets(member, mods, exoticData)
-            val reallyCloseShips = targetShipsInRadius
-                    .filter { nearbyShip -> nearbyShip.isFighter.not() }
-                    .filter { nearbyShip -> Misc.getDistance(ship.location, nearbyShip.location) < REALLY_CLOSE_ACTIVATION_RANGE }
-
-            // Criteria 1 - enemy non-fighter ships up close
-            val haveCloseShips = reallyCloseShips.isNotEmpty()
-            if (haveCloseShips) return true
-
-            // Proceed to check flux
-            val ourFluxTracker = ship.fluxTracker
-            val currentFluxLevel = ourFluxTracker.currFlux / ourFluxTracker.maxFlux
-            val anyShipsInRadius = targetShipsInRadius.isNotEmpty()
-
-            // Criteria 2 - we're overfluxing, push them away to vent
-            if (anyShipsInRadius && currentFluxLevel >= ACTIVATION_FLUX_LEVEL) return true
-
-            val howManyShipsInRadius = targetShipsInRadius.filter { ship -> ship.isFighter.not() }.size
-
-            // Criteria 3 - 6+ non-wing ships in radius
-            if (howManyShipsInRadius > MIN_SHIPS_TO_ACTIVATE) return true
-
-            // Evaluate ships in radius
-            val shipsInRadiusMassSum = targetShipsInRadius.map { ship ->
-                // grab all sections of ship, map into individual module masses and sum - effectivelly mapping 'ship' into it's summed mass
-                getAllShipSections(ship).map { module -> module.mass }.sum()
-            }.sum()
-            val myMass = getAllShipSections(ship).map { module -> module.mass }.sum()
-
-            // Criteria 4 - enemies in radius have more mass than us
-            if (shipsInRadiusMassSum > myMass) return true
-
-            val reallyCloseTargets = targetShipsInRadius
-                    .filter { nearbyShip -> Misc.getDistance(ship.location, nearbyShip.location) < REALLY_CLOSE_ACTIVATION_RANGE }
-
-            // Criteria 5 - any targets up close
-            val haveCloseTargets = reallyCloseTargets.isNotEmpty()
-            if (haveCloseTargets) return true
-
-            // Criteria 6 - 6+ targets in radius
-            val howManyTargetsInRadius = targetShipsInRadius.size
-            if (howManyTargetsInRadius > MIN_SHIPS_TO_ACTIVATE) return true
+            //TODO come up with activating criteria for the attractor
 
             // None of the criterias were fulfilled so far, return false for this evaluation cycle
             return false
         }
 
-        override fun getDisplayText() = "Ship Repulsor System"
+        override fun getDisplayText() = "Ship Attractor System"
 
         override fun onActivate() {
             log("--> onActivate()")
             super.onActivate()
 
             showVisualFlair()
-            pushOutShipsWithinRadius()
+            //TODO pullInShips()
+//            pushOutShipsWithinRadius()
             log("<-- onActivate()")
         }
 
@@ -304,154 +262,134 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             val center = ship.location
             val fullRange = getRadiusAmount(member, mods, exoticData)
             // Lets draw the first ring at 1.5x collision radius so it's more visible, 1x is kinda "too close"
+            val numPoints = 72
+            val stage6distance = fullRange
+            val stage6dots = CircleUtils.generateDots(center, stage6distance, numPoints)
+
+            val stage5distance = fullRange * 0.8f
+            val stage5dots = CircleUtils.generateDots(center, stage5distance, numPoints)
+            val stage5rotated = CircleUtils.rotatePoints(stage5dots, center, 30f)
+
+            val stage4distance = fullRange * 0.6f
+            val stage4dots = CircleUtils.generateDots(center, stage4distance, numPoints)
+            val stage4rotated = CircleUtils.rotatePoints(stage4dots, center, 60f)
+
+            val stage3distance = fullRange * 0.4f
+            val stage3dots = CircleUtils.generateDots(center, stage3distance, numPoints)
+            val stage3rotated = CircleUtils.rotatePoints(stage3dots, center, 90f)
+
+            val stage2distance = fullRange * 0.2f
+            val stage2dots = CircleUtils.generateDots(center, stage2distance, numPoints)
+            val stage2rotated = CircleUtils.rotatePoints(stage2dots, center, 120f)
+
             val stage1distance = ship.collisionRadius * 1.5f
-            val stage1DotsPair = generateDots(center, stage1distance)
+            val stage1dots = CircleUtils.generateDots(center, stage1distance, numPoints)
+            val stage1rotated = CircleUtils.rotatePoints(stage1dots, center, 150f)
 
-            val stage1left = stage1DotsPair.first
-            val stage1right = stage1DotsPair.second
-            // the first stage will draw emp arcs from left/right start to end
-            // start of stage1
-            for (index in 0 until stage1left.size -1) {
-                val fromL = stage1left[index]
-                val toL = stage1left[index+1]
+            // The attractor system will simple draw from stage6 to stage1, index to index
+            val drawingThickness = 10f
+            for (index in 0 until numPoints) {
+                val stage6dot = stage6dots[index]
+                val stage5dot = stage5rotated[index]
+                val stage4dot = stage4rotated[index]
+                val stage3dot = stage3rotated[index]
+                val stage2dot = stage2rotated[index]
+                val stage1dot = stage1rotated[index]
+
+                // And now we draw
+
+                //stage6->5
                 Global
                         .getCombatEngine()
                         .spawnEmpArcVisual(
-                                fromL,
+                                stage6dot,
                                 ship,
-                                toL,
+                                stage5dot,
                                 ship,
-                                6f,
+                                drawingThickness,
+//                                Color.BLUE.darker().darker().darker().darker().darker(),
+//                                Color.WHITE
                                 Color.BLUE.darker().darker(),
+                                Color.WHITE.darker().darker()
+                        )
+
+                //stage5->4
+                Global
+                        .getCombatEngine()
+                        .spawnEmpArcVisual(
+                                stage5dot,
+                                ship,
+                                stage4dot,
+                                ship,
+                                drawingThickness,
+//                                Color.BLUE.darker().darker().darker().darker(),
+//                                Color.WHITE.darker()
+                                Color.BLUE.darker().darker(),
+                                Color.WHITE.darker()
+                        )
+
+                //stage4->3
+                Global
+                        .getCombatEngine()
+                        .spawnEmpArcVisual(
+                                stage4dot,
+                                ship,
+                                stage3dot,
+                                ship,
+                                drawingThickness,
+//                                Color.BLUE.darker().darker().darker(),
+//                                Color.WHITE.darker().darker()
+                                Color.BLUE.darker(),
+                                Color.WHITE.darker()
+                        )
+
+                //stage3->2
+                Global
+                        .getCombatEngine()
+                        .spawnEmpArcVisual(
+                                stage3dot,
+                                ship,
+                                stage2dot,
+                                ship,
+                                drawingThickness,
+//                                Color.BLUE.darker().darker(),
+//                                Color.WHITE.darker().darker().darker()
+                                Color.BLUE.darker(),
+                                Color.WHITE.darker()
+                        )
+
+                //stage2->1
+                Global
+                        .getCombatEngine()
+                        .spawnEmpArcVisual(
+                                stage2dot,
+                                ship,
+                                stage1dot,
+                                ship,
+                                drawingThickness,
+//                                Color.BLUE.darker(),
+//                                Color.WHITE.darker().darker().darker().darker()
+                                Color.BLUE,
                                 Color.WHITE
                         )
 
-                val fromR = stage1right[index]
-                val toR = stage1right[index+1]
+                //stage1->center
                 Global
                         .getCombatEngine()
                         .spawnEmpArcVisual(
-                                fromR,
+                                stage1dot,
                                 ship,
-                                toR,
+                                ship.location,
                                 ship,
-                                6f,
-                                Color.BLUE.darker().darker(),
+                                drawingThickness,
+//                                Color.BLUE.darker(),
+//                                Color.WHITE.darker().darker().darker().darker()
+                                Color.BLUE,
                                 Color.WHITE
-                        )
-            }
-            // end of stage1
-            val stage2distance = fullRange / 2
-            val stage2dotsPair = generateDots(center, stage2distance)
-
-            val stage2left = stage2dotsPair.first
-            val stage2LeftReversed = stage2left.asReversed()
-            val stage2right = stage2dotsPair.second
-            val stage2CW = stage2right + stage2LeftReversed
-            val stage2CCW = stage2CW.asReversed()
-            val stage1CW = stage1right + stage1left.asReversed()
-
-            // stage2 will draw a full circle going from index0-35 and index35-0
-            // along with stage1[i] to stage2[i]
-            // start of stage2
-            for (index in 0 until stage2CW.size - 1) {
-                val CW1 = stage2CW[index]
-                val CW2 = stage2CW[index+1]
-                Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                CW1,
-                                ship,
-                                CW2,
-                                ship,
-                                6f,
-                                Color.BLUE.darker(),
-                                Color.WHITE.darker()
-                        )
-
-                val CCW1 = stage2CCW[index]
-                val CCW2 = stage2CCW[index+1]
-                Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                CCW1,
-                                ship,
-                                CCW2,
-                                ship,
-                                6f,
-                                Color.BLUE.darker(),
-                                Color.WHITE.darker()
-                        )
-            }
-            for (index in 0 until stage2CW.size) {
-                val from = stage1CW[index]
-                val to = stage2CW[index]
-                Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                from,
-                                ship,
-                                to,
-                                ship,
-                                6f,
-                                Color.BLUE.darker(),
-                                Color.WHITE.darker()
-                        )
-            }
-            // end of stage2
-
-            // stage3 will just do CCW arcs between stage2ccw and stage3ccw
-            val stage3distance = fullRange
-            val stage3dotsPair = generateDots(center, stage3distance)
-            val stage3CCW = stage3dotsPair.second + stage3dotsPair.first.asReversed()
-            for (index in 0 until stage3CCW.size) {
-                val from = stage2CCW[index]
-                val to = stage3CCW[index]
-                Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                from,
-                                ship,
-                                to,
-                                ship,
-                                6f,
-                                Color.BLUE.darker(),
-                                Color.WHITE.darker()
                         )
             }
         }
 
-        /**
-         * Generates a pair of lists, going from 0-360 degrees with 10-degree increments, clockwise.
-         * The left list is reversed so that it represents CCW rotation from 0 to 180
-         *
-         * @return a pair of lists, first one being the 0-180 "right" list, second one being the reversed 180-360 "left" list
-         *
-         * @param center the center from which dots should diverge
-         * @param distance how far from the center should the dots be
-         */
-        private fun generateDots(center: Vector2f, distance: Float): Pair<List<Vector2f>, List<Vector2f>> {
-            val leftDots = mutableListOf<Vector2f>()
-            val rightDots = mutableListOf<Vector2f>()
-            val numDots = 36
-            for (i in 0 until numDots) {
-//            for (i in 0 ..numDots) {
-                val angleDeg = i * 10f
-                val angleRad = angleDeg * PI.toFloat() / 180f
-                val x = center.x + distance * cos(angleRad)
-                val y = center.y + distance * sin(angleRad)
-//                dots.add(Vector2f(x, y))
-                if (i < numDots / 2) {
-                    rightDots.add(Vector2f(x,y))
-                } else {
-                    leftDots.add(Vector2f(x,y))
-                }
-            }
-            // Now, since rightDots go from top to bottom and leftDots go from bottom to top, reverse the leftDots
-            leftDots.reverse()
-
-            return Pair(leftDots, rightDots)
-        }
 
         private fun pushOutShipsWithinRadius() {
             log("--> pushOutShipsWithinRadius()")
@@ -570,7 +508,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
 
     companion object {
         private const val COST_CREDITS: Float = 300000f
-        private const val ITEM = "et_repulsorcrystal"
+        private const val ITEM = "et_attractoritem"
         private const val LOGS_ENABLED = false
 
         private const val MIN_MOMENTUM_CLAMP = -10000000f
