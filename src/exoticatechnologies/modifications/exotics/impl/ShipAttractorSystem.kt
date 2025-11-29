@@ -8,7 +8,6 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.IntervalUtil
-import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
@@ -22,10 +21,7 @@ import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
-import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
 
 class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     private val logger: Logger = Logger.getLogger(ShipAttractorSystem::class.java)
@@ -268,23 +264,23 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
 
             val stage5distance = fullRange * 0.8f
             val stage5dots = CircleUtils.generateDots(center, stage5distance, numPoints)
-            val stage5rotated = CircleUtils.rotatePoints(stage5dots, center, 30f)
+            val stage5rotated = CircleUtils.rotatePointsAlongCircle(stage5dots, center, 30f)
 
             val stage4distance = fullRange * 0.6f
             val stage4dots = CircleUtils.generateDots(center, stage4distance, numPoints)
-            val stage4rotated = CircleUtils.rotatePoints(stage4dots, center, 60f)
+            val stage4rotated = CircleUtils.rotatePointsAlongCircle(stage4dots, center, 60f)
 
             val stage3distance = fullRange * 0.4f
             val stage3dots = CircleUtils.generateDots(center, stage3distance, numPoints)
-            val stage3rotated = CircleUtils.rotatePoints(stage3dots, center, 90f)
+            val stage3rotated = CircleUtils.rotatePointsAlongCircle(stage3dots, center, 90f)
 
             val stage2distance = fullRange * 0.2f
             val stage2dots = CircleUtils.generateDots(center, stage2distance, numPoints)
-            val stage2rotated = CircleUtils.rotatePoints(stage2dots, center, 120f)
+            val stage2rotated = CircleUtils.rotatePointsAlongCircle(stage2dots, center, 120f)
 
             val stage1distance = ship.collisionRadius * 1.5f
             val stage1dots = CircleUtils.generateDots(center, stage1distance, numPoints)
-            val stage1rotated = CircleUtils.rotatePoints(stage1dots, center, 150f)
+            val stage1rotated = CircleUtils.rotatePointsAlongCircle(stage1dots, center, 150f)
 
             // The attractor system will simple draw from stage6 to stage1, index to index
             val drawingThickness = 10f

@@ -14,10 +14,11 @@ object CircleUtils {
     /**
      * Generates a list of [Vector2f] dots, going from 0-360 degrees with 360/[numDots] degree increments, clockwise.
      *
-     * @return a list of [Vector2f] dots along the circle circumference of a [distance] radius
-     *
      * @param center the center from which dots should diverge
      * @param distance how far from the center should the dots be
+     * @param numDots how many dots should be in the circle
+     *
+     * @return a list of [Vector2f] dots along the circle circumference of a [distance] radius
      */
     fun generateDots(center: Vector2f, distance: Float, numDots: Int): List<Vector2f> {
         val dots = mutableListOf<Vector2f>()
@@ -33,7 +34,18 @@ object CircleUtils {
         return dots
     }
 
-    fun rotatePoints(points: List<Vector2f>, center: Vector2f, angleDegrees: Float): List<Vector2f> {
+    /**
+     * Rotates a circle of [points] from the given [center] by a given [angleDegrees].
+     * Given a list of 360 points along some center, calling the method with `angleDegrees` of 30 would make the
+     * first point (at zero degrees) change to 30, the next point would be 31 instead of 1 and so on...
+     *
+     * @param points list of points along a circle
+     * @param center the center of the circle
+     * @param angleDegrees the angle degrees to add to their "rotation"
+     *
+     * @return a list of original [points] rotated by [angleDegrees] along the circle centered at [center]
+     */
+    fun rotatePointsAlongCircle(points: List<Vector2f>, center: Vector2f, angleDegrees: Float): List<Vector2f> {
         val angle = Math.toRadians(angleDegrees.toDouble())
         val cos = Math.cos(angle)
         val sin = Math.sin(angle)
@@ -49,51 +61,26 @@ object CircleUtils {
         }
     }
 
-
+    /**
+     * Generates a [Swirl]
+     *
+     * @param center the center of the swirl
+     * @param rings the number of rings the swirl will have
+     * @param pointsPerRing how many points per ring
+     * @param minRadius the min radius, or rather the radius of the smallest concentric ring in the swirl
+     * @param maxRadius the max radius, or rather the radius of the largest concentric ring in the swirl
+     * @param generateInwards whether the swirl should be generated inwards (from largest to smallest) or outwards (from smallest to largest). **Defaults to [false]**
+     * @param ringRotationsDegrees list of per-ring rotations. Ideally a list of the same size as [rings] because otherwise it defaults to 0
+     * @param globalRotationDegrees the global rotation to add to every point.
+     * E.g. using ship's facing here will always make the first generated point be in same relative location/angle to the ship rather than always starting at zero degrees. **Defaults to 0**
+     */
     fun generateSwirl(
         center: Vector2f,
         rings: Int,
         pointsPerRing: Int,
         minRadius: Float,
         maxRadius: Float,
-        ringRotationsDegrees: List<Float>
-    ): Swirl.Swirl2 {
-        val swirl = mutableListOf<List<Vector2f>>()
-
-        // Step sizes
-        val radiusStep = if (rings > 1) (maxRadius - minRadius) / (rings - 1) else 0f
-        val angleStepDegrees = 360.0 / pointsPerRing
-
-        for (ring in 0 until rings) {
-            val radius = minRadius + ring * radiusStep
-
-            // base rotation offset for this ring
-            val ringRotation = Math.toRadians(
-                ringRotationsDegrees.getOrNull(ring)?.toDouble() ?: 0.0
-            )
-
-            val ringPoints = mutableListOf<Vector2f>()
-
-            for (i in 0 until pointsPerRing) {
-                // base spacing in degrees, plus global rotation, plus per-ring rotation
-                val angle = Math.toRadians(angleStepDegrees * i) + ringRotation
-                val x = center.x + radius * cos(angle).toFloat()
-                val y = center.y + radius * sin(angle).toFloat()
-                ringPoints.add(Vector2f(x, y))
-            }
-            swirl.add(ringPoints)
-        }
-
-        //TODO decide on Swirl1 or Swirl2
-        return Swirl.Swirl2(swirl)
-    }
-
-    fun generateSwirlWithRotation(
-        center: Vector2f,
-        rings: Int,
-        pointsPerRing: Int,
-        minRadius: Float,
-        maxRadius: Float,
+        generateInwards: Boolean = false,
         ringRotationsDegrees: List<Float>,
         globalRotationDegrees: Float = 0f
     ): Swirl.Swirl2 {
@@ -105,7 +92,11 @@ object CircleUtils {
         val globalRotation = Math.toRadians(globalRotationDegrees.toDouble())
 
         for (ring in 0 until rings) {
-            val radius = minRadius + ring * radiusStep
+            val radius = if (generateInwards) {
+                maxRadius - ring * radiusStep
+            } else {
+                minRadius + ring * radiusStep
+            }
 
             // base rotation offset for this ring
             val ringRotation = Math.toRadians(
@@ -124,9 +115,9 @@ object CircleUtils {
             swirl.add(ringPoints)
         }
 
-        //TODO decide on Swirl1 or Swirl2
         return Swirl.Swirl2(swirl)
     }
+
 
     sealed class Swirl(private val rings: List<List<Vector2f>>) {
 
