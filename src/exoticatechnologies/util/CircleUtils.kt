@@ -230,6 +230,7 @@ object CircleUtils {
                 if (rings.size < 2) return
 
                 val numPoints = rings[0].size
+                AnonymousLogger.log("numPoints: ${numPoints}", "SHARK-drawing")
 
                 for (index in 0 until numPoints) {
                     for (ring in 0 until rings.size - 1) {
@@ -269,7 +270,7 @@ object CircleUtils {
                                     1f,
                                     particleDuration,
 //                                    core  //TODO
-                                    Color.WHITE
+                                    Color.RED
                                 )
                                 x += dx
                                 y += dy

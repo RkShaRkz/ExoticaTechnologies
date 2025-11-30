@@ -282,7 +282,8 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                     Color.BLUE to Color.WHITE.darker().darker().darker().darker().darker(),
                 ),
                 drawParticles = true,
-                particleDuration = 1f,
+                particleSize = 24f,
+                particleDuration = 5f,
                 particleSegments = 16,
                 connectToCenter = true
             )
