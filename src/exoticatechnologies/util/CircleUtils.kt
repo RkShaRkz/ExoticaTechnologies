@@ -103,7 +103,6 @@ object CircleUtils {
         // Step sizes
         val radiusStep = if (rings > 1) (maxRadius - minRadius) / (rings - 1) else 0f
         val angleStepDegrees = 360.0 / pointsPerRing
-        val globalRotation = Math.toRadians(globalRotationDegrees.toDouble())
 
         for (ring in 0 until rings) {
             val radius = if (generateInwards) {
@@ -113,17 +112,17 @@ object CircleUtils {
             }
 
             // base rotation offset for this ring
-            val ringRotation = Math.toRadians(
-                remappedRingRotations.getOrNull(ring)?.toDouble() ?: 0.0
-            )
+            val ringRotation = remappedRingRotations.getOrNull(ring)?.toDouble() ?: 0.0
 
             val ringPoints = mutableListOf<Vector2f>()
 
             for (i in 0 until pointsPerRing) {
                 // base spacing in degrees, plus global rotation, plus per-ring rotation
-                val angle = Math.toRadians(angleStepDegrees * i) + globalRotation + ringRotation
-                val x = center.x + radius * cos(angle).toFloat()
-                val y = center.y + radius * sin(angle).toFloat()
+                val angleDegrees = (angleStepDegrees * i) + globalRotationDegrees + ringRotation
+                // After summing in degrees, convert to radians
+                val angleRadians = Math.toRadians(angleDegrees)
+                val x = center.x + radius * cos(angleRadians).toFloat()
+                val y = center.y + radius * sin(angleRadians).toFloat()
                 ringPoints.add(Vector2f(x, y))
             }
             swirl.add(ringPoints)

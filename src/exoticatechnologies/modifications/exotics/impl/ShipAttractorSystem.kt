@@ -260,16 +260,6 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             // Lets draw the first ring at 1.5x collision radius so it's more visible, 1x is kinda "too close"
             val numPoints = 72
             // Lets generate the swirl
-//            val swirl = CircleUtils.generateSwirl(
-//                center = center,
-//                rings = 6,
-//                pointsPerRing = 72,
-//                minRadius = TODO(),
-//                maxRadius = TODO(),
-//                generateInwards = TODO(),
-//                ringRotationsDegrees = TODO(),
-//                globalRotationDegrees = ship.facing
-//            )
             val swirl = CircleUtils.generateSwirl(
                 center = center,
                 rings = 6,
