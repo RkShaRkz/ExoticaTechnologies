@@ -8,6 +8,7 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" exported="" name="jetbrains.kotlin.runtime" level="project" />
+    <orderEntry type="library" exported="" name="KotlinJavaRuntime" level="project" />
     <orderEntry type="module-library" exported="">
       <library>
         <CLASSES>
@@ -115,10 +116,7 @@
         <SOURCES />
       </library>
     </orderEntry>
-    <orderEntry type="library" exported="" name="KotlinJavaRuntime" level="project" />
-    <orderEntry type="library" exported="" name="json-20230618" level="project" />
     <orderEntry type="library" exported="" name="lombok" level="project" />
-    <orderEntry type="library" exported="" name="log4j.apache.extras" level="project" />
     <orderEntry type="library" name="tests" level="project" />
   </component>
 </module>
