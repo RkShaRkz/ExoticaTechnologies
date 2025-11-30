@@ -70,13 +70,15 @@ object CircleUtils {
      * @param minRadius the min radius, or rather the radius of the smallest concentric ring in the swirl
      * @param maxRadius the max radius, or rather the radius of the largest concentric ring in the swirl
      * @param generateInwards whether the swirl should be generated inwards (from largest to smallest) or outwards (from smallest to largest). **Defaults to [false]**
-     * @param ringRotationsDegrees list of per-ring rotations. Ideally a list of the same size as [rings] because otherwise it defaults to 0.
+     * @param ringRotationsDegrees list of per-ring **CLOCKWISE** rotations. Ideally a list of the same size as [rings] because otherwise it defaults to 0.
      * The rotations should be in degrees, where the following user-favored coordinate system is in place:
      * 0 degrees = north, 90 degrees = east, 180 degrees = south, 270 degrees = west.
      * Which is completely different from the geometric defaults of:
      * 0 degrees = east, 90 degrees = north, 180 degrees = west, 270 degrees = south.
      * @param globalRotationDegrees the global rotation to add to every point.
      * E.g. using ship's facing here will always make the first generated point be in same relative location/angle to the ship rather than always starting at zero degrees. **Defaults to 0**
+     * **NOTE:** since ship.facing is already coming in geometric coordinate system, or rather 0 being right, up being 90, 180 being left this parameter will not be treated
+     * as being in "user-centric" coordinate system like [ringRotationsDegrees] will be.
      */
     fun generateSwirl(
         center: Vector2f,
@@ -89,6 +91,14 @@ object CircleUtils {
         globalRotationDegrees: Float = 0f
     ): Swirl.Swirl2 {
         val swirl = mutableListOf<List<Vector2f>>()
+
+        // First thing's first - lets remap our user-centric degrees from our intuitive coord system
+        // (north = 0deg, east = 90deg, south = 180deg, west = 270deg)
+        // into actual geometric angles which is
+        // (east = 0deg, north = 90deg, west = 180deg, south = 270deg)
+        val remappedRingRotations = ringRotationsDegrees.map {userCentricAngle ->
+            remapAngleToGeomericCoordinateSystem(userCentricAngle)
+        }
 
         // Step sizes
         val radiusStep = if (rings > 1) (maxRadius - minRadius) / (rings - 1) else 0f
@@ -104,7 +114,7 @@ object CircleUtils {
 
             // base rotation offset for this ring
             val ringRotation = Math.toRadians(
-                ringRotationsDegrees.getOrNull(ring)?.toDouble() ?: 0.0
+                remappedRingRotations.getOrNull(ring)?.toDouble() ?: 0.0
             )
 
             val ringPoints = mutableListOf<Vector2f>()
@@ -121,6 +131,32 @@ object CircleUtils {
 
         return Swirl.Swirl2(swirl)
     }
+
+    /**
+     * Method for converting caller's user-intuitive expected system of
+     * 0 degrees being north,
+     * 90 degrees being east,
+     * 180 degrees being south
+     * 270 degrees being west
+     *
+     * into actual mathematically correct *actual* geometric angle coordinate system which is
+     * east being 0 degrees,
+     * north being 90 degrees
+     * west being 180 degrees
+     * south being 270 degrees.
+     *
+     * Essentially remapping the upper-right Q1, lower-right Q2, lower-left Q3, upper-left Q4 into actual
+     * upper-right Q1, upper-left Q2, lower-left Q3, lower-right Q4
+     *
+     * @param degrees the user-intuitive degree based in north being 0-degrees, east being 90-degrees, south being 180-degrees system
+     *
+     * @return the actual geometrically correct degree based in east being 0-degrees, north being 90-degrees, west being 180-degrees system
+     */
+    fun remapAngleToGeomericCoordinateSystem(degrees: Float): Float {
+        // Convert caller's "north=0" system into trig's "east=0" system
+        return (90f - degrees + 360f) % 360f
+    }
+
 
 
     sealed class Swirl(private val rings: List<List<Vector2f>>) {
