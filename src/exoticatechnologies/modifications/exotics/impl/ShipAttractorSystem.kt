@@ -259,6 +259,51 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             val fullRange = getRadiusAmount(member, mods, exoticData)
             // Lets draw the first ring at 1.5x collision radius so it's more visible, 1x is kinda "too close"
             val numPoints = 72
+            // Lets generate the swirl
+//            val swirl = CircleUtils.generateSwirl(
+//                center = center,
+//                rings = 6,
+//                pointsPerRing = 72,
+//                minRadius = TODO(),
+//                maxRadius = TODO(),
+//                generateInwards = TODO(),
+//                ringRotationsDegrees = TODO(),
+//                globalRotationDegrees = ship.facing
+//            )
+            val swirl = CircleUtils.generateSwirl(
+                center = center,
+                rings = 6,
+                pointsPerRing = 72,
+                minRadius = ship.collisionRadius * 1.5f,
+                maxRadius = fullRange,
+                generateInwards = true,
+                ringRotationsDegrees = listOf(0f, 30f, 60f, 90f, 120f, 150f),
+                globalRotationDegrees = ship.facing,
+            )
+            swirl.draw(
+                ship = ship,
+                arcThickness = 12f,
+                arcColors = listOf(
+                    Color.BLUE.darker().darker().darker().darker().darker() to Color.WHITE,
+                    Color.BLUE.darker().darker().darker().darker() to Color.WHITE.darker(),
+                    Color.BLUE.darker().darker().darker() to Color.WHITE.darker().darker(),
+                    Color.BLUE.darker().darker() to Color.WHITE.darker().darker().darker(),
+                    Color.BLUE.darker() to Color.WHITE.darker().darker().darker().darker(),
+                    Color.BLUE to Color.WHITE.darker().darker().darker().darker().darker(),
+                ),
+                drawParticles = true,
+                particleDuration = 1f,
+                particleSegments = 16,
+                connectToCenter = true
+            )
+        }
+
+        private fun showVisualFlair2() {
+            // generate dots
+            val center = ship.location
+            val fullRange = getRadiusAmount(member, mods, exoticData)
+            // Lets draw the first ring at 1.5x collision radius so it's more visible, 1x is kinda "too close"
+            val numPoints = 72
             val stage6distance = fullRange
             val stage6dots = CircleUtils.generateDots(center, stage6distance, numPoints)
 

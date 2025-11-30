@@ -70,7 +70,11 @@ object CircleUtils {
      * @param minRadius the min radius, or rather the radius of the smallest concentric ring in the swirl
      * @param maxRadius the max radius, or rather the radius of the largest concentric ring in the swirl
      * @param generateInwards whether the swirl should be generated inwards (from largest to smallest) or outwards (from smallest to largest). **Defaults to [false]**
-     * @param ringRotationsDegrees list of per-ring rotations. Ideally a list of the same size as [rings] because otherwise it defaults to 0
+     * @param ringRotationsDegrees list of per-ring rotations. Ideally a list of the same size as [rings] because otherwise it defaults to 0.
+     * The rotations should be in degrees, where the following user-favored coordinate system is in place:
+     * 0 degrees = north, 90 degrees = east, 180 degrees = south, 270 degrees = west.
+     * Which is completely different from the geometric defaults of:
+     * 0 degrees = east, 90 degrees = north, 180 degrees = west, 270 degrees = south.
      * @param globalRotationDegrees the global rotation to add to every point.
      * E.g. using ship's facing here will always make the first generated point be in same relative location/angle to the ship rather than always starting at zero degrees. **Defaults to 0**
      */
@@ -171,7 +175,7 @@ object CircleUtils {
              *
              * @param ship The ship entity (needed for arc visuals).
              * @param arcThickness Thickness of EMP arcs.
-             * @param arcColors List of (coreColor, fringeColor) per stage connection.
+             * @param arcColors List of (coreColor, fringeColor) per stage connection. Defaults to [Color.WHITE] core and [Color.CYAN] fringe
              * @param drawParticles Whether to also draw persistent particle lines.
              * @param particleSize Size of particles for persistent lines.
              * @param particleDuration Lifetime of particles for persistent lines.
@@ -210,8 +214,10 @@ object CircleUtils {
                             p2,
                             ship,
                             arcThickness,
-                            core,
-                            fringe
+//                            core,
+//                            fringe
+                            fringe,
+                            core
                         )
 
                         // Optional persistent line overlay
@@ -227,7 +233,8 @@ object CircleUtils {
                                     particleSize,
                                     1f,
                                     particleDuration,
-                                    core
+//                                    core  //TODO
+                                    Color.WHITE
                                 )
                                 x += dx
                                 y += dy
