@@ -574,16 +574,20 @@ fun Vector2f.clone(): Vector2f {
  * @param angle rotation angle in degrees
  * @return a new [Vector2f] rotated by the given angle
  */
-fun Vector2f.rotate(angle: Float): Vector2f {
+fun Vector2f.rotate(angle: Float, useFastTrig: Boolean = true): Vector2f {
     if (angle == 0f) return this.clone()
 
     val angleRadians = Math.toRadians(angle.toDouble())
-    val cosine = FastTrigUtils.cos(angleRadians).toFloat()
-    val sine = FastTrigUtils.sin(angleRadians).toFloat()
+//    val cosine = if(useFastTrig) { FastTrigUtils.cos(angleRadians)} else { cos(angleRadians) }.toFloat()
+//    val sine = if (useFastTrig) { FastTrigUtils.sin(angleRadians) } else { sin(angleRadians) }.toFloat()
+    val cosine = if(useFastTrig) { FastTrigUtils.cos(angleRadians)} else { cos(angleRadians) }
+    val sine = if (useFastTrig) { FastTrigUtils.sin(angleRadians) } else { sin(angleRadians) }
 
+    val xPrim = (this.x.toDouble() * cosine) - (this.y.toDouble() * sine)
+    val yPrim = (this.x.toDouble() * sine) + (this.y.toDouble() * cosine)
     return Vector2f(
-        (this.x * cosine) - (this.y * sine),
-        (this.x * sine) + (this.y * cosine)
+        xPrim.toFloat(),
+        yPrim.toFloat()
     )
 }
 
@@ -594,11 +598,11 @@ fun Vector2f.rotate(angle: Float): Vector2f {
  * @param angle rotation angle in degrees
  * @return a new [Vector2f] rotated around the pivot
  */
-fun Vector2f.rotateAroundPivot(pivotPoint: Vector2f, angle: Float): Vector2f {
+fun Vector2f.rotateAroundPivot(pivotPoint: Vector2f, angle: Float, useFastTrig: Boolean = true): Vector2f {
     if (angle == 0f) return this.clone()
 
     val temp = this.sub(pivotPoint)        // translate relative to pivot
-    val rotated = temp.rotate(angle)       // rotate around origin
+    val rotated = temp.rotate(angle, useFastTrig = useFastTrig)       // rotate around origin
     return rotated.add(pivotPoint)         // translate back
 }
 
