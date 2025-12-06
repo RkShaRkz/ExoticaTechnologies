@@ -569,6 +569,42 @@ fun Vector2f.clone(): Vector2f {
 }
 
 /**
+ * Rotates this vector around the origin by [angle] degrees.
+ *
+ * @param angle rotation angle in degrees
+ * @return a new [Vector2f] rotated by the given angle
+ */
+fun Vector2f.rotate(angle: Float): Vector2f {
+    if (angle == 0f) return this.clone()
+
+    val angleRadians = Math.toRadians(angle.toDouble())
+    val cosine = FastTrigUtils.cos(angleRadians).toFloat()
+    val sine = FastTrigUtils.sin(angleRadians).toFloat()
+
+    return Vector2f(
+        (this.x * cosine) - (this.y * sine),
+        (this.x * sine) + (this.y * cosine)
+    )
+}
+
+/**
+ * Rotates this vector around a given [pivotPoint] by [angle] degrees.
+ *
+ * @param pivotPoint the point to rotate around
+ * @param angle rotation angle in degrees
+ * @return a new [Vector2f] rotated around the pivot
+ */
+fun Vector2f.rotateAroundPivot(pivotPoint: Vector2f, angle: Float): Vector2f {
+    if (angle == 0f) return this.clone()
+
+    val temp = this.sub(pivotPoint)        // translate relative to pivot
+    val rotated = temp.rotate(angle)       // rotate around origin
+    return rotated.add(pivotPoint)         // translate back
+}
+
+
+
+/**
  * Calculates velocity vector which will take us from [fromVector] to [toVector] in [time] amount of time,
  * while taking distance into account.
  *

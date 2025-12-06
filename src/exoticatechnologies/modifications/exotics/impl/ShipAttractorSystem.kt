@@ -45,12 +45,12 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
     override fun modifyToolTip(tooltip: TooltipMakerAPI, title: UIComponentAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData, expand: Boolean) {
         if (expand) {
             StringUtils.getTranslation(key, "longDescription")
-                    .format("radius", getRadiusAmount(member, mods, exoticData))
-                    .format("target_ships", getWorkModeString(member, mods, exoticData))
-                    .format("push_out_strength", formatFloatAsString(getScaledPushOutEffectMomentumStrength(member, mods, exoticData), 2))
-                    .formatFloat("debilitating_factor", getScaledAllowCoefficient(member, mods, exoticData) * 100f)
-                    .formatFloat("cooldown_time", getScaledCooldownDuration(member, mods, exoticData))
-                    .addToTooltip(tooltip, title)
+                .format("radius", getRadiusAmount(member, mods, exoticData))
+                .format("target_ships", getWorkModeString(member, mods, exoticData))
+                .format("push_out_strength", formatFloatAsString(getScaledPushOutEffectMomentumStrength(member, mods, exoticData), 2))
+                .formatFloat("debilitating_factor", getScaledAllowCoefficient(member, mods, exoticData) * 100f)
+                .formatFloat("cooldown_time", getScaledCooldownDuration(member, mods, exoticData))
+                .addToTooltip(tooltip, title)
         }
     }
 
@@ -63,19 +63,19 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
     }
 
     private fun getScaledPushOutEffectMomentumStrength(
-            member: FleetMemberAPI,
-            mods: ShipModifications,
-            exoticData: ExoticData
+        member: FleetMemberAPI,
+        mods: ShipModifications,
+        exoticData: ExoticData
     ): Float {
         return getPushOutEffectMomentumFactor(
-                member = member,
+            member = member,
         ) * getPushOutStrength(
-                member = member,
-                ship = getInstalledOnShipIfAvailable()
+            member = member,
+            ship = getInstalledOnShipIfAvailable()
         ) * getPositiveMult(
-                member = member,
-                mods = mods,
-                exoticData = exoticData
+            member = member,
+            mods = mods,
+            exoticData = exoticData
         )
     }
 
@@ -88,7 +88,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
     }
 
     private fun getPushOutEffectMomentumFactor(
-            member: FleetMemberAPI,
+        member: FleetMemberAPI,
     ): Float {
         return when (member.hullSpec.hullSize) {
             null -> 0f
@@ -102,15 +102,15 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
     }
 
     private fun getPushOutStrength(
-            member: FleetMemberAPI,
-            ship: ShipAPI?
+        member: FleetMemberAPI,
+        ship: ShipAPI?
     ): Float {
         // For now, lets just try with actual hull HP and see how to go from there...
         // if ship is null (as it will be during preview) fallback to FMAPI hitpoints.
         return if (ship != null) {
             val allShipSectionsMaxHitpoints = getAllShipSections(ship)
-                    .map { section -> section.maxHitpoints }
-                    .sum()
+                .map { section -> section.maxHitpoints }
+                .sum()
 
             // Return the sum of all shipAPI's sections' hitpoints
             allShipSectionsMaxHitpoints
@@ -118,8 +118,8 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             // fallback to FMAPI
             val childModules = getChildModuleVariantList(member)
             val childHP = childModules
-                    .map { childVariant -> childVariant.hullSpec.hitpoints }
-                    .sum()
+                .map { childVariant -> childVariant.hullSpec.hitpoints }
+                .sum()
 
             // Return the sum of all member's children's hitpoints
             member.hullSpec.hitpoints + childHP
@@ -176,10 +176,10 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
     }
 
     inner class RepulsorPushOutSystem(
-            ship: ShipAPI,
-            val member: FleetMemberAPI,
-            val mods: ShipModifications,
-            val exoticData: ExoticData
+        ship: ShipAPI,
+        val member: FleetMemberAPI,
+        val mods: ShipModifications,
+        val exoticData: ExoticData
     ): MagicSubsystem(ship) {
         // check for activation every 3 seconds
         private val activationIntervalUtil = IntervalUtil(2.95f, 3.05f)
@@ -233,22 +233,22 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             // Depending on the workmode, grab ships within radius with some prefiltering ...
             val potentiallyAffectedShips = when (workMode) {
                 RepulsorWorkMode.ENEMIES_ONLY -> CombatUtils.getShipsWithinRange(ship.location, radius)
-                        // make sure it only contains enemies and not enemies and neutrals
-                        .filter { filterShip -> ship.owner != filterShip.owner && filterShip.owner != 100 }
+                    // make sure it only contains enemies and not enemies and neutrals
+                    .filter { filterShip -> ship.owner != filterShip.owner && filterShip.owner != 100 }
 
                 RepulsorWorkMode.ENEMIES_AND_ALLIES -> CombatUtils.getShipsWithinRange(ship.location, radius)
-                        // make sure it only contains non-neutrals
-                        .filter { filterShip -> filterShip.owner != 100 }
+                    // make sure it only contains non-neutrals
+                    .filter { filterShip -> filterShip.owner != 100 }
 
                 RepulsorWorkMode.ALLIES_ONLY -> CombatUtils.getShipsWithinRange(ship.location, radius)
-                        // make sure it only contains allies and not enemies and neutrals
-                        .filter { filterShip -> filterShip.owner == ship.owner && filterShip.owner != 100 }
+                    // make sure it only contains allies and not enemies and neutrals
+                    .filter { filterShip -> filterShip.owner == ship.owner && filterShip.owner != 100 }
             }.exhaustive
-                    // And ... then apply some more filtering
-                    // make sure we're not targetting ourselves
-                    .filter { module -> module.fleetMember != member && module.parentStation != ship && module != ship }
-                    // make sure we're not targetting child modules
-                    .filter { module -> module.parentStation == null }
+                // And ... then apply some more filtering
+                // make sure we're not targetting ourselves
+                .filter { module -> module.fleetMember != member && module.parentStation != ship && module != ship }
+                // make sure we're not targetting child modules
+                .filter { module -> module.parentStation == null }
 
             return potentiallyAffectedShips
         }
@@ -285,7 +285,8 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                 particleSize = 24f,
                 particleDuration = 5f,
                 particleSegments = 16,
-                connectToCenter = true
+                connectToCenter = true,
+                workMode = CircleUtils.SwirlGenerationWorkMode.BEZIER
             )
         }
 
@@ -332,93 +333,93 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
 
                 //stage6->5
                 Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                stage6dot,
-                                ship,
-                                stage5dot,
-                                ship,
-                                drawingThickness,
+                    .getCombatEngine()
+                    .spawnEmpArcVisual(
+                        stage6dot,
+                        ship,
+                        stage5dot,
+                        ship,
+                        drawingThickness,
 //                                Color.BLUE.darker().darker().darker().darker().darker(),
 //                                Color.WHITE
-                                Color.BLUE.darker().darker(),
-                                Color.WHITE.darker().darker()
-                        )
+                        Color.BLUE.darker().darker(),
+                        Color.WHITE.darker().darker()
+                    )
 
                 //stage5->4
                 Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                stage5dot,
-                                ship,
-                                stage4dot,
-                                ship,
-                                drawingThickness,
+                    .getCombatEngine()
+                    .spawnEmpArcVisual(
+                        stage5dot,
+                        ship,
+                        stage4dot,
+                        ship,
+                        drawingThickness,
 //                                Color.BLUE.darker().darker().darker().darker(),
 //                                Color.WHITE.darker()
-                                Color.BLUE.darker().darker(),
-                                Color.WHITE.darker()
-                        )
+                        Color.BLUE.darker().darker(),
+                        Color.WHITE.darker()
+                    )
 
                 //stage4->3
                 Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                stage4dot,
-                                ship,
-                                stage3dot,
-                                ship,
-                                drawingThickness,
+                    .getCombatEngine()
+                    .spawnEmpArcVisual(
+                        stage4dot,
+                        ship,
+                        stage3dot,
+                        ship,
+                        drawingThickness,
 //                                Color.BLUE.darker().darker().darker(),
 //                                Color.WHITE.darker().darker()
-                                Color.BLUE.darker(),
-                                Color.WHITE.darker()
-                        )
+                        Color.BLUE.darker(),
+                        Color.WHITE.darker()
+                    )
 
                 //stage3->2
                 Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                stage3dot,
-                                ship,
-                                stage2dot,
-                                ship,
-                                drawingThickness,
+                    .getCombatEngine()
+                    .spawnEmpArcVisual(
+                        stage3dot,
+                        ship,
+                        stage2dot,
+                        ship,
+                        drawingThickness,
 //                                Color.BLUE.darker().darker(),
 //                                Color.WHITE.darker().darker().darker()
-                                Color.BLUE.darker(),
-                                Color.WHITE.darker()
-                        )
+                        Color.BLUE.darker(),
+                        Color.WHITE.darker()
+                    )
 
                 //stage2->1
                 Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                stage2dot,
-                                ship,
-                                stage1dot,
-                                ship,
-                                drawingThickness,
+                    .getCombatEngine()
+                    .spawnEmpArcVisual(
+                        stage2dot,
+                        ship,
+                        stage1dot,
+                        ship,
+                        drawingThickness,
 //                                Color.BLUE.darker(),
 //                                Color.WHITE.darker().darker().darker().darker()
-                                Color.BLUE,
-                                Color.WHITE
-                        )
+                        Color.BLUE,
+                        Color.WHITE
+                    )
 
                 //stage1->center
                 Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                stage1dot,
-                                ship,
-                                ship.location,
-                                ship,
-                                drawingThickness,
+                    .getCombatEngine()
+                    .spawnEmpArcVisual(
+                        stage1dot,
+                        ship,
+                        ship.location,
+                        ship,
+                        drawingThickness,
 //                                Color.BLUE.darker(),
 //                                Color.WHITE.darker().darker().darker().darker()
-                                Color.BLUE,
-                                Color.WHITE
-                        )
+                        Color.BLUE,
+                        Color.WHITE
+                    )
             }
         }
 
@@ -450,14 +451,14 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                             nearbyShip.velocity.set(ship.velocity)
                             val momentum = getScaledPushOutEffectMomentumStrength(member, mods, exoticData)
                             ForceApplier.applyMomentum(
-                                    entity = nearbyShip,
-                                    pointOfImpact = collision,
+                                entity = nearbyShip,
+                                pointOfImpact = collision,
 //                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),   //this attracts
-                                    direction = Vector2f.sub(nearbyShip.location, ship.location, null),
-                                    momentum = momentum,
-                                    elasticCollision = true,
-                                    // We will modify the angular velocity after just pushing it back
-                                    modifyAngularVelocity = false
+                                direction = Vector2f.sub(nearbyShip.location, ship.location, null),
+                                momentum = momentum,
+                                elasticCollision = true,
+                                // We will modify the angular velocity after just pushing it back
+                                modifyAngularVelocity = false
                             )
 
                             // Add the "paralyzing"/debilitating effect as well - effect being just also spinning the target
@@ -519,12 +520,12 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                             // And finally, we will scale the strength * factor with negative effect mult
                             val momentum = (-momentumStrength / 2f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
                             ForceApplier.applyMomentum(
-                                    entity = ship.parentStation,
-                                    pointOfImpact = collision,
+                                entity = ship.parentStation,
+                                pointOfImpact = collision,
 //                                    direction = Vector2f.sub(nearbyShip.location, ship.location, null),  //this probably repulses?
-                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),   //this attracts
-                                    momentum = momentum,
-                                    elasticCollision = true,
+                                direction = Vector2f.sub(ship.location, nearbyShip.location, null),   //this attracts
+                                momentum = momentum,
+                                elasticCollision = true,
                             )
                         }
                     }

@@ -1,12 +1,9 @@
-package exoticatechnologies.util
-
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.ShipAPI
+import exoticatechnologies.util.*
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
+import kotlin.math.*
 
 object CircleUtils {
 
@@ -89,7 +86,7 @@ object CircleUtils {
         generateInwards: Boolean = false,
         ringRotationsDegrees: List<Float>,
         globalRotationDegrees: Float = 0f
-    ): Swirl.Swirl2 {
+    ): Swirl {
         val swirl = mutableListOf<List<Vector2f>>()
 
         // First thing's first - lets remap our user-centric degrees from our intuitive coord system
@@ -128,7 +125,14 @@ object CircleUtils {
             swirl.add(ringPoints)
         }
 
-        return Swirl.Swirl2(swirl)
+        return Swirl(
+            rings = swirl,
+            swirlType = if (generateInwards) {
+                Swirl.SwirlType.OUTWARD
+            } else {
+                Swirl.SwirlType.INWARD
+            }
+        )
     }
 
     /**
@@ -156,148 +160,269 @@ object CircleUtils {
         return (90f - degrees + 360f) % 360f
     }
 
+    /**
+     * Generates a list of sampled points forming a "swirl" curve between two [Vector2f] points.
+     *
+     * Depending on [workMode] the curve is either:
+     * - **BEZIER**: A cubic Bézier curve between [pInner] and [pOuter], with control points rotated by [bezierAngle] to
+     * cause curvature.
+     * - **LOGARITHMIC**: A logarithmic spiral segment between [pInner] and [pOuter], computed in polar coordinates using `r = a * e^(bθ)`.
+     *
+     *
+     * @param pInner the starting point of the curve (innermost ring point)
+     * @param pOuter the ending point of the curve (outer ring point)
+     * @param particleSegments number of segments to sample along the curve; higher values produce smoother curves but more points
+     * @param center the actual 'center' to pivot around; if points are already relative to some center, leave as null - depending on this rotations will either be done "in place" or "around pivot"
+     * @param bezierAngle the optional angle to use for bezier control points to control swirl intensity, unused if [workMode] isn't [SwirlGenerationWorkMode.BEZIER]. **IF SET TO ZERO** the curve will degenerate to a straight line
+     * @param workMode whether to use bezier curving or logarithmic curving. See [SwirlGenerationWorkMode]
+     *
+     * @return a list of points along the curve
+     */
+    fun generateSwirlPoints(
+        pInner: Vector2f,
+        pOuter: Vector2f,
+        particleSegments: Int,
+        center: Vector2f? = null,
+        bezierAngle: Float = 30f,
+        workMode: SwirlGenerationWorkMode,
+    ): List<Vector2f> {
+        val points = mutableListOf<Vector2f>()
 
+        when (workMode) {
+            SwirlGenerationWorkMode.BEZIER -> {
+                val c1 = Vector2f(
+                    pInner.x + (pOuter.x - pInner.x) * 0.25f,
+                    pInner.y + (pOuter.y - pInner.y) * 0.25f
+                )
+                val c2 = Vector2f(
+                    pInner.x + (pOuter.x - pInner.x) * 0.75f,
+                    pInner.y + (pOuter.y - pInner.y) * 0.75f
+                )
+                // Tangential offset to induce swirl by rotating control point around center
+                // quick and dirty hack but meh
+                // oh shit, the center won't necessarily be 0,0, we need to rotate around pivot aaargh
+                // UPDATE: ok, since all of these vectors are ship.location relative, we don't need to rotate around pivot...
+                val c1Rot: Vector2f
+                val c2Rot: Vector2f
+//                val c1Rot = c1.rotateAroundPivot(pivotPoint = center, angle = bezierAngle)
+//                val c2Rot = c2.rotateAroundPivot(pivotPoint = center, angle = -bezierAngle)
+                if (center != null) {
+                    c1Rot = c1.rotateAroundPivot(pivotPoint = center, angle = bezierAngle)
+                    c2Rot = c2.rotateAroundPivot(pivotPoint = center, angle = -bezierAngle)
+                } else {
+                    c1Rot = c1.rotate(angle = bezierAngle)
+                    c2Rot = c2.rotate(angle = -bezierAngle)
+                }
 
-    sealed class Swirl(private val rings: List<List<Vector2f>>) {
-
-        class Swirl1(private val rings: List<List<Vector2f>>) : Swirl(rings) {
-
-            /**
-             * Draws the swirl by connecting points of successive rings.
-             * Replace the drawing logic with your engine’s API calls.
-             */
-            fun draw(ship: ShipAPI, thickness: Float = 12f, color: Color = Color.CYAN) {
-                val engine = Global.getCombatEngine()
-
-                if (rings.size < 2) return
-
-                val numPoints = rings[0].size
-
-                for (i in 0 until numPoints) {
-                    for (r in 0 until rings.size - 1) {
-                        val p1 = rings[r][i]
-                        val p2 = rings[r + 1][i]
-
-                        // Example: persistent line backbone
-                        engine.addSmoothParticle(
-                            p1,
-                            Vector2f(0f, 0f),
-                            thickness,
-                            1f,
-                            0.3f,
-                            color
-                        )
-
-                        // Example: flashy arc overlay
-                        engine.spawnEmpArcVisual(
-                            p1,
-                            ship,
-                            p2,
-                            ship,
-                            thickness,
-                            color,
-                            Color.WHITE
-                        )
-                    }
+                for (i in 0..particleSegments) {
+                    val t = i.toFloat() / particleSegments
+                    val x = (1 - t).pow(3) * pInner.x +
+                        3 * (1 - t).pow(2) * t * c1Rot.x +
+                        3 * (1 - t) * t.pow(2) * c2Rot.x +
+                        t.pow(3) * pOuter.x
+                    val y = (1 - t).pow(3) * pInner.y +
+                        3 * (1 - t).pow(2) * t * c1Rot.y +
+                        3 * (1 - t) * t.pow(2) * c2Rot.y +
+                        t.pow(3) * pOuter.y
+                    points.add(Vector2f(x, y))
                 }
             }
-        }
+            SwirlGenerationWorkMode.LOGARITHMIC -> {
+                // Since center won't be 0,0 we need to translate to be relative to actual center
+                // HOWEVER since most of the time the center of the swirl will be in the swirl's center and that pInner and pOuter
+                // are already relative to the (swirl's) center,
 
-        class Swirl2(private val rings: List<List<Vector2f>>) : Swirl(rings) {
+                // If center is non-null, use it's coords, otherwise fallback to 0
+                val cx = center?.let { it.x } ?: 0f
+                val cy = center?.let { it.y } ?: 0f
+
+                // And now keep on moving regardless whether we're pivoting around (0,0) or some (x,y)
+                val dxInner = pInner.x - cx
+                val dyInner = pInner.y - cy
+                val rInner = sqrt(dxInner * dxInner + dyInner * dyInner)
+                val thetaInner = FastTrigUtils.atan2(dyInner, dxInner)
+
+                val dxOuter = pOuter.x - cx
+                val dyOuter = pOuter.y - cy
+                val rOuter = sqrt(dxOuter * dxOuter + dyOuter * dyOuter)
+                val thetaOuter = FastTrigUtils.atan2(dyOuter, dxOuter)
+
+                // Spiral parameters: r = a * e^(bθ)
+                val a = rInner
+                val b = ln(rOuter / rInner) / (thetaOuter - thetaInner)
+
+                for (i in 0..particleSegments) {
+                    val t = i.toFloat() / particleSegments
+                    val theta = thetaInner + t * (thetaOuter - thetaInner)
+                    val r = a * exp(b * (theta - thetaInner))
+                    val x = r * FastTrigUtils.cos(theta)
+                    val y = r * FastTrigUtils.sin(theta)
+                    points.add(Vector2f(x.toFloat(), y.toFloat()))
+                }
+            }
+        }.exhaustive
+
+        return points
+    }
+
+    /**
+     * Enum class describing how to generate the swirl points.
+     *
+     * @see BEZIER
+     * @see LOGARITHMIC
+     */
+    enum class SwirlGenerationWorkMode {
+        /**
+         * Use a Bezier curve rotated with some angle around points
+         */
+        BEZIER,
+
+        /**
+         * Use a natural logarithm curve
+         */
+        LOGARITHMIC
+    }
+
+
+    class Swirl(
+        private val rings: List<List<Vector2f>>,
+        private val swirlType: SwirlType
+    ) {
+
+        /**
+         * Enum class denoting whether the swirl is an inward swirl (first ring is outermost) or an outward swirl (first ring is innermost)
+         *
+         * @see INWARD
+         * @see OUTWARD
+         */
+        enum class SwirlType {
+            /**
+             * Enum value denoting that this is an INWARD swirl, meaning that it's first ring is the outermost ring
+             */
+            INWARD,
 
             /**
-             * Draws the swirl with full control over visuals.
-             *
-             * @param ship The ship entity (needed for arc visuals).
-             * @param arcThickness Thickness of EMP arcs.
-             * @param arcColors List of (coreColor, fringeColor) per stage connection. Defaults to [Color.WHITE] core and [Color.CYAN] fringe
-             * @param drawParticles Whether to also draw persistent particle lines.
-             * @param particleSize Size of particles for persistent lines.
-             * @param particleDuration Lifetime of particles for persistent lines.
-             * @param particleSegments Number of particles per line segment.
+             * Enum value denoting that this is an OUTWARD swirl, meaning that it's first ring is the innermost ring
              */
-            fun draw(
-                ship: ShipAPI,
-                arcThickness: Float = 6f,
-                arcColors: List<Pair<Color, Color>> = emptyList(),
-                drawParticles: Boolean = false,
-                particleSize: Float = 12f,
-                particleDuration: Float = 0.25f,
-                particleSegments: Int = 16,
-                connectToCenter: Boolean = true
-            ) {
-                val engine = Global.getCombatEngine()
-                if (rings.size < 2) return
+            OUTWARD
+        }
 
-                val numPoints = rings[0].size
-                AnonymousLogger.log("numPoints: ${numPoints}", "SHARK-drawing")
+        /**
+         * Draws the swirl with full control over visuals.
+         *
+         * @param ship The ship entity (needed for arc visuals).
+         * @param arcThickness Thickness of EMP arcs.
+         * @param arcColors List of (coreColor, fringeColor) per stage connection. Defaults to [Color.WHITE] core and [Color.CYAN] fringe
+         * @param drawParticles Whether to also draw persistent particle lines.
+         * @param particleSize Size of particles for persistent lines.
+         * @param particleDuration Lifetime of particles for persistent lines.
+         * @param particleSegments Number of particles per line segment.
+         */
+        fun draw(
+            ship: ShipAPI,
+            arcThickness: Float = 6f,
+            arcColors: List<Pair<Color, Color>> = emptyList(),
+            drawParticles: Boolean = false,
+            particleSize: Float = 12f,
+            particleDuration: Float = 0.25f,
+            particleSegments: Int = 16,
+            connectToCenter: Boolean = true,
+            workMode: SwirlGenerationWorkMode = SwirlGenerationWorkMode.BEZIER
+        ) {
+            val engine = Global.getCombatEngine()
+            if (rings.size < 2) return
 
-                for (index in 0 until numPoints) {
-                    for (ring in 0 until rings.size - 1) {
-                        val p1 = rings[ring][index]
-                        val p2 = rings[ring + 1][index]
+            val numPoints = rings[0].size
+            AnonymousLogger.log("numPoints: ${numPoints}", "SHARK-drawing")
+            for (ringNum in rings.indices) {
+                AnonymousLogger.log("rings[${ringNum}].size: ${rings[ringNum].size}", "SHARK-drawing")
+            }
 
-                        // EMP arc visual
-                        val (core, fringe) = if (arcColors.isNotEmpty() && ring < arcColors.size) {
-                            arcColors[ring]
-                        } else {
-                            Color.CYAN to Color.WHITE
-                        }
+            for (index in 0 until numPoints) {
+                // We cannot use "in rings.indices" here because then we will hit an OOB when p2 tries to access ring+1
+                for (ring in 0 until rings.size - 1) {
+//                for (ring in rings.indices) {
+                    val p1 = rings[ring][index]
+                    val p2 = rings[ring + 1][index]
 
-                        engine.spawnEmpArcVisual(
-                            p1,
-                            ship,
-                            p2,
-                            ship,
-                            arcThickness,
+                    // EMP arc visual
+                    val (core, fringe) = if (arcColors.isNotEmpty() && ring < arcColors.size) {
+                        arcColors[ring]
+                    } else {
+                        Color.CYAN to Color.WHITE
+                    }
+
+                    engine.spawnEmpArcVisual(
+                        p1,
+                        ship,
+                        p2,
+                        ship,
+                        arcThickness,
 //                            core,
 //                            fringe
-                            fringe,
-                            core
-                        )
+                        fringe,
+                        core
+                    )
 
-                        // Optional persistent line overlay
-                        if (drawParticles) {
-                            val dx = (p2.x - p1.x) / particleSegments
-                            val dy = (p2.y - p1.y) / particleSegments
-                            var x = p1.x
-                            var y = p1.y
-                            for (seg in 0..particleSegments) {
-                                engine.addSmoothParticle(
-                                    Vector2f(x, y),
-                                    Vector2f(0f, 0f),
-                                    particleSize,
-                                    1f,
-                                    particleDuration,
+                    // Optional persistent line overlay
+                    if (drawParticles) {
+//                            val dx = (p2.x - p1.x) / particleSegments
+//                            val dy = (p2.y - p1.y) / particleSegments
+//                            var x = p1.x
+//                            var y = p1.y
+                        val center = ship.location
+                        val swirlPoints = generateSwirlPoints(
+                            pInner = p1,
+                            pOuter = p2,
+                            particleSegments = particleSegments,
+//                            center = center,
+                            // we should not pivot around the center again since all points are already relative to the ship-location
+                            // even if they are in absolute world-location units - at least for bezier at least
+                            center = when(workMode) {
+                                SwirlGenerationWorkMode.BEZIER -> null
+                                SwirlGenerationWorkMode.LOGARITHMIC -> center
+                            }.exhaustive,
+                            bezierAngle = 30f,
+                            workMode = workMode
+                        )
+//                            for (seg in 0 until particleSegments) {
+                        for (point in swirlPoints) {
+                            engine.addSmoothParticle(
+                                point,
+                                Vector2f(0f, 0f),
+                                particleSize,
+                                1f,
+                                particleDuration,
 //                                    core  //TODO
-                                    Color.RED
-                                )
-                                x += dx
-                                y += dy
-                            }
+                                Color.RED
+                            )
+//                            x += dx
+//                            y += dy
                         }
                     }
+                }
 
-                    // Optionally connect innermost ring to center
-                    if (connectToCenter) {
+                // After messing with the ring loop, optionally connect innermost ring to center
+                if (connectToCenter) {
 
-                        val (core, fringe) = arcColors.last()
+                    val (core, fringe) = arcColors.last()
 
-                        val innermost = rings.last()[index]
-                        engine.spawnEmpArcVisual(
-                            innermost,
-                            ship,
-                            ship.location,
-                            ship,
-                            arcThickness,
-                            fringe,
-                            core
-                        )
-                    }
+                    val innermost = when(swirlType) {
+                        SwirlType.INWARD -> rings.last()[index]
+                        SwirlType.OUTWARD -> rings.first()[index]
+                    }.exhaustive
+                    engine.spawnEmpArcVisual(
+                        innermost,
+                        ship,
+                        ship.location,
+                        ship,
+                        arcThickness,
+                        fringe,
+                        core
+                    )
                 }
             }
         }
-
     }
 
 }
