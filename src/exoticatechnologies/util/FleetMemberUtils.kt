@@ -138,13 +138,33 @@ object FleetMemberUtils {
         }
     }
 
+    /**
+     * Gets commander from [member] by either doing [FleetMemberAPI.getFleetCommander]
+     * and if that is null, it tries going through [CampaignFleetAPI]. Bails out if
+     * [CampaignFleetAPI.getFleetData] is null to avoid NPE.
+     *
+     * @param member the member to look up the Fleet Commander for
+     * @return the fleet commander if found (and has fleet data) or null
+     */
     fun getFleetCommander(member: FleetMemberAPI): PersonAPI? {
         var fleetCommander = member.fleetCommander
         if (member.fleetCommander == null) {
             fleetCommander = if (member.fleetData != null) {
                 member.fleetData.commander
             } else {
-                findFleetForVariant(member.variant, member)?.commander
+                // Since '.commander' or `.getCommander()` goes through fleet data, check again
+//                findFleetForVariant(member.variant, member)?.commander
+                // relevant code from CampaignFleetAPI:
+                // public Person getCommander() {
+                //     return this.fleetData.getCommander();
+                // }
+                val campaignFleet = findFleetForVariant(member.variant, member)
+
+                if (campaignFleet?.fleetData != null) {
+                    campaignFleet.commander
+                } else {
+                    null
+                }
             }
         }
 
