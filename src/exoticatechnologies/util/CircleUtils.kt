@@ -66,7 +66,7 @@ object CircleUtils {
      * @param pointsPerRing how many points per ring
      * @param minRadius the min radius, or rather the radius of the smallest concentric ring in the swirl
      * @param maxRadius the max radius, or rather the radius of the largest concentric ring in the swirl
-     * @param generateInwards whether the swirl should be generated inwards (from largest to smallest) or outwards (from smallest to largest). **Defaults to [false]**
+     * @param generateInwards whether the swirl should be generated inwards (from largest to smallest) for [true] or outwards (from smallest to largest) for [false]. **Defaults to [false]**
      * @param ringRotationsDegrees list of per-ring **CLOCKWISE** rotations. Ideally a list of the same size as [rings] because otherwise it defaults to 0.
      * The rotations should be in degrees, where the following user-favored coordinate system is in place:
      * 0 degrees = north, 90 degrees = east, 180 degrees = south, 270 degrees = west.
