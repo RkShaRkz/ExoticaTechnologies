@@ -269,6 +269,9 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                 generateInwards = true,
                 ringRotationsDegrees = listOf(0f, 30f, 60f, 90f, 120f, 150f),
                 globalRotationDegrees = ship.facing,
+                generateParticles = true,
+                particleSegments = 16,
+                particleGenerationWorkMode = CircleUtils.SwirlGenerationWorkMode.LOGARITHMIC
             )
             swirl.draw(
                 ship = ship,

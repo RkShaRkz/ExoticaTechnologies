@@ -1,5 +1,6 @@
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.ShipAPI
+import com.fs.starfarer.api.util.IntervalUtil
 import com.fs.starfarer.combat.CombatEngine
 import exoticatechnologies.util.*
 import org.lwjgl.util.vector.Vector2f
@@ -77,6 +78,12 @@ object CircleUtils {
      * E.g. using ship's facing here will always make the first generated point be in same relative location/angle to the ship rather than always starting at zero degrees. **Defaults to 0**
      * **NOTE:** since ship.facing is already coming in geometric coordinate system, or rather 0 being right, up being 90, 180 being left this parameter will not be treated
      * as being in "user-centric" coordinate system like [ringRotationsDegrees] will be.
+     * @param generateParticles whether this swirl should also generate particles or not
+     * @param particleSegments how many 'line segments' should there be for each ring-to-ring connection. Disregarded if [generateParticles] is [false]
+     * @param particleGenerationWorkMode how to generate the particles. See [SwirlGenerationWorkMode]
+     * @param particleDrawInterval the default interval used for the [Swirl.intervalUtil]. Defaults to 0.1
+     *
+     * @return an instance of a [Swirl]. See [Swirl.draw] and [Swirl.drawParticles]
      */
     fun generateSwirl(
         center: Vector2f,
@@ -86,7 +93,11 @@ object CircleUtils {
         maxRadius: Float,
         generateInwards: Boolean = false,
         ringRotationsDegrees: List<Float>,
-        globalRotationDegrees: Float = 0f
+        globalRotationDegrees: Float = 0f,
+        generateParticles: Boolean = false,
+        particleSegments: Int,
+        particleGenerationWorkMode: SwirlGenerationWorkMode = SwirlGenerationWorkMode.LOGARITHMIC,
+        particleDrawInterval: Float = 0.1f
     ): Swirl {
         val swirl = mutableListOf<List<Vector2f>>()
 
@@ -132,7 +143,12 @@ object CircleUtils {
                 Swirl.SwirlType.OUTWARD
             } else {
                 Swirl.SwirlType.INWARD
-            }
+            },
+            generateParticles = generateParticles,
+            particleSegments = particleSegments,
+            particleGenerationWorkMode = particleGenerationWorkMode,
+            particleGenerationCenter = center,
+            particleDrawInterval = particleDrawInterval
         )
     }
 
@@ -286,11 +302,7 @@ object CircleUtils {
                 // Spiral parameters: r = a * e^(bθ)
                 val a = rInner
                 // Calculate and normalize the thetaOuter - thetaInner
-                // While both of these should be in the [-Pi, Pi] range, using them raw like this will collapse
-                // the sign and make it think it went a whole circle rather than just a tiny bit.
-                // E.g. One point at +179*, other point a bit past -179*, delta will turn out to be -358*. Instead of 2.
                 val dTheta = normalizeAngularDelta(thetaOuter - thetaInner)
-//                val dTheta = normalizeRawAngularDelta(thetaOuter, thetaInner)
 
                 val b = ln(rOuter / rInner) / dTheta
 
@@ -330,10 +342,78 @@ object CircleUtils {
     }
 
 
-    class Swirl(
+    data class Swirl(
         private val rings: List<List<Vector2f>>,
-        private val swirlType: SwirlType
+        private val swirlType: SwirlType,
+        private val generateParticles: Boolean,
+        private val particleSegments: Int,
+        private val particleGenerationWorkMode: SwirlGenerationWorkMode,
+        private val particleGenerationCenter: Vector2f,
+        private val particleDrawInterval: Float
     ) {
+        private val particlePoints: List<SwirlArmParticles>
+        private val intervalUtil: IntervalUtil
+        init {
+            particlePoints = if (generateParticles) {
+                // If we should generate particles, we need to iterate through all rings, generate particles
+                // and then return that list of SwirlArmParticles
+                val center = particleGenerationCenter
+                val numPoints = rings[0].size
+                // prepare SwirlArm list
+                val swirlArms = mutableListOf<SwirlArmParticles>()
+                // Start iterating through rings and their points ...
+                for (index in 0 until numPoints) {
+                    // Add swirl arm
+                    swirlArms.add(
+                        SwirlArmParticles()
+                    )
+                    // Move on to further generate the whole arm
+                    for (ring in 0 until rings.size - 1) {
+                        val p1 = rings[ring][index]
+                        val p2 = rings[ring + 1][index]
+
+                        // Determine the 'inner' and 'outer' points, or whether p1/p2 is inner or outer
+                        val (inner, outer) = when (swirlType) {
+                            SwirlType.INWARD -> {
+                                // For inward swirls, the biggest index is closest to center
+                                // p1 is 'ring', p2 is 'ring+1'
+                                p2 to p1
+                            }
+
+                            SwirlType.OUTWARD -> {
+                                // For outward swirls, the smallest index is closest to center
+                                // p1 is 'ring', p2 is 'ring+1'
+                                p1 to p2
+                            }
+                        }.exhaustive
+                        val swirlPoints = generateSwirlPoints(
+                            pInner = inner,
+                            pOuter = outer,
+                            particleSegments = particleSegments,
+                            // we should not pivot around the center again since all points are already relative to the ship-location
+                            // even if they are in absolute world-location units - at least for bezier at least
+                            center = when (particleGenerationWorkMode) {
+                                SwirlGenerationWorkMode.BEZIER -> null
+                                SwirlGenerationWorkMode.LOGARITHMIC -> center
+                            }.exhaustive,
+                            bezierAngle = 30f,
+                            workMode = particleGenerationWorkMode
+                        )
+                        // And add them to the arm
+                        swirlArms[index].addMorePoints(swirlPoints)
+                    }
+                }
+
+                // And finally, return the list of SwirlArms
+                swirlArms.toList()
+            } else {
+                // If we should not generate particles, just return an empty list
+                emptyList()
+            }
+
+            // After generating the particles, instantiate the intervalUtil
+            intervalUtil = IntervalUtil(particleDrawInterval, particleDrawInterval)
+        }
 
         /**
          * Enum class denoting whether the swirl is an inward swirl (first ring is outermost) or an outward swirl (first ring is innermost)
@@ -379,11 +459,6 @@ object CircleUtils {
             if (rings.size < 2) return
 
             val numPoints = rings[0].size
-            //TODO get rid of this stuff below
-            AnonymousLogger.log("numPoints: ${numPoints}", "SHARK-drawing")
-            for (ringNum in rings.indices) {
-                AnonymousLogger.log("rings[${ringNum}].size: ${rings[ringNum].size}", "SHARK-drawing")
-            }
 
             //TODO change this to be List<List<Vector2f>> so I can have a list of "swirl arms"
             val particlePoints = mutableListOf<Vector2f>()
@@ -496,6 +571,22 @@ object CircleUtils {
                 }
                 // Revert limit after drawing
 //                (engine as CombatEngine).smoothParticles.limit = originalLimit
+            }
+        }
+
+        inner class SwirlArmParticles(
+            private val particlePoints: MutableList<Vector2f> = mutableListOf()
+        ) {
+            // drawing should just draw the first point and remove it from the list after drawing
+            fun draw() {
+                val point = particlePoints.removeAt(0)
+                //TODO draw the point
+
+            }
+
+            // adding more points should just add them
+            fun addMorePoints(points: List<Vector2f>) {
+                particlePoints.addAll(points)
             }
         }
     }
