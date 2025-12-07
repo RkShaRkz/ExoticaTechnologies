@@ -183,6 +183,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
     ): MagicSubsystem(ship) {
         // check for activation every 3 seconds
         private val activationIntervalUtil = IntervalUtil(2.95f, 3.05f)
+        private var visualSwirl: CircleUtils.Swirl? = null
 
         override fun getBaseActiveDuration() = 1f
 
@@ -226,6 +227,31 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             log("<-- onActivate()")
         }
 
+        override fun advance(amount: Float, isPaused: Boolean) {
+            if (isPaused.not()) {
+                // If not paused, draw particles on the swirl if we have it
+                visualSwirl?.let { swirl ->
+                    swirl.drawParticles(
+                        amount = amount,
+                        particleSize = 64f,
+                        particlesToDrawPerInterval = 1,
+                        particleColors = listOf(
+                            Color.WHITE,
+                            Color.WHITE.darker(),
+                            Color.WHITE.darker().darker(),
+                            Color.WHITE.darker().darker().darker(),
+                            Color.WHITE.darker().darker().darker().darker(),
+                            Color.WHITE.darker().darker().darker().darker().darker(),
+                        )
+                    )
+                    // If all arms have finished, get rid of visualSwirl
+                    if (swirl.hasFinished()) {
+                        visualSwirl = null
+                    }
+                }
+            }
+        }
+
         private fun getPotentialTargets(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): List<ShipAPI> {
             val radius: Float = getRadiusAmount(member, mods, exoticData)
             val workMode = getWorkMode(member, mods, exoticData)
@@ -260,7 +286,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             // Lets draw the first ring at 1.5x collision radius so it's more visible, 1x is kinda "too close"
             val numPoints = 72
             // Lets generate the swirl
-            val swirl = CircleUtils.generateSwirl(
+            visualSwirl = CircleUtils.generateSwirl(
                 center = center,
                 rings = 6,
                 pointsPerRing = 72,
@@ -273,7 +299,8 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                 particleSegments = 16,
                 particleGenerationWorkMode = CircleUtils.SwirlGenerationWorkMode.LOGARITHMIC
             )
-            swirl.draw(
+            // Draw the instantaneous part of the swirl
+            visualSwirl?.draw(
                 ship = ship,
                 arcThickness = 12f,
                 arcColors = listOf(
@@ -284,150 +311,17 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                     Color.BLUE.darker() to Color.WHITE.darker().darker().darker().darker(),
                     Color.BLUE to Color.WHITE.darker().darker().darker().darker().darker(),
                 ),
-                drawParticles = true,
-//                particleSize = 24f,
+//                drawParticles = true,
+                drawParticles = false,
+        //                particleSize = 24f,
                 particleSize = 64f,
                 particleDuration = 5f,
                 particleSegments = 16,
-//                particleSegments = 8,
-//                particleSegments = 4,
                 connectToCenter = true,
-//                workMode = CircleUtils.SwirlGenerationWorkMode.BEZIER
+        //                workMode = CircleUtils.SwirlGenerationWorkMode.BEZIER
                 workMode = CircleUtils.SwirlGenerationWorkMode.LOGARITHMIC
             )
-        }
-
-        private fun showVisualFlair2() {
-            // generate dots
-            val center = ship.location
-            val fullRange = getRadiusAmount(member, mods, exoticData)
-            // Lets draw the first ring at 1.5x collision radius so it's more visible, 1x is kinda "too close"
-            val numPoints = 72
-            val stage6distance = fullRange
-            val stage6dots = CircleUtils.generateDots(center, stage6distance, numPoints)
-
-            val stage5distance = fullRange * 0.8f
-            val stage5dots = CircleUtils.generateDots(center, stage5distance, numPoints)
-            val stage5rotated = CircleUtils.rotatePointsAlongCircle(stage5dots, center, 30f)
-
-            val stage4distance = fullRange * 0.6f
-            val stage4dots = CircleUtils.generateDots(center, stage4distance, numPoints)
-            val stage4rotated = CircleUtils.rotatePointsAlongCircle(stage4dots, center, 60f)
-
-            val stage3distance = fullRange * 0.4f
-            val stage3dots = CircleUtils.generateDots(center, stage3distance, numPoints)
-            val stage3rotated = CircleUtils.rotatePointsAlongCircle(stage3dots, center, 90f)
-
-            val stage2distance = fullRange * 0.2f
-            val stage2dots = CircleUtils.generateDots(center, stage2distance, numPoints)
-            val stage2rotated = CircleUtils.rotatePointsAlongCircle(stage2dots, center, 120f)
-
-            val stage1distance = ship.collisionRadius * 1.5f
-            val stage1dots = CircleUtils.generateDots(center, stage1distance, numPoints)
-            val stage1rotated = CircleUtils.rotatePointsAlongCircle(stage1dots, center, 150f)
-
-            // The attractor system will simple draw from stage6 to stage1, index to index
-            val drawingThickness = 10f
-            for (index in 0 until numPoints) {
-                val stage6dot = stage6dots[index]
-                val stage5dot = stage5rotated[index]
-                val stage4dot = stage4rotated[index]
-                val stage3dot = stage3rotated[index]
-                val stage2dot = stage2rotated[index]
-                val stage1dot = stage1rotated[index]
-
-                // And now we draw
-
-                //stage6->5
-                Global
-                    .getCombatEngine()
-                    .spawnEmpArcVisual(
-                        stage6dot,
-                        ship,
-                        stage5dot,
-                        ship,
-                        drawingThickness,
-//                                Color.BLUE.darker().darker().darker().darker().darker(),
-//                                Color.WHITE
-                        Color.BLUE.darker().darker(),
-                        Color.WHITE.darker().darker()
-                    )
-
-                //stage5->4
-                Global
-                    .getCombatEngine()
-                    .spawnEmpArcVisual(
-                        stage5dot,
-                        ship,
-                        stage4dot,
-                        ship,
-                        drawingThickness,
-//                                Color.BLUE.darker().darker().darker().darker(),
-//                                Color.WHITE.darker()
-                        Color.BLUE.darker().darker(),
-                        Color.WHITE.darker()
-                    )
-
-                //stage4->3
-                Global
-                    .getCombatEngine()
-                    .spawnEmpArcVisual(
-                        stage4dot,
-                        ship,
-                        stage3dot,
-                        ship,
-                        drawingThickness,
-//                                Color.BLUE.darker().darker().darker(),
-//                                Color.WHITE.darker().darker()
-                        Color.BLUE.darker(),
-                        Color.WHITE.darker()
-                    )
-
-                //stage3->2
-                Global
-                    .getCombatEngine()
-                    .spawnEmpArcVisual(
-                        stage3dot,
-                        ship,
-                        stage2dot,
-                        ship,
-                        drawingThickness,
-//                                Color.BLUE.darker().darker(),
-//                                Color.WHITE.darker().darker().darker()
-                        Color.BLUE.darker(),
-                        Color.WHITE.darker()
-                    )
-
-                //stage2->1
-                Global
-                    .getCombatEngine()
-                    .spawnEmpArcVisual(
-                        stage2dot,
-                        ship,
-                        stage1dot,
-                        ship,
-                        drawingThickness,
-//                                Color.BLUE.darker(),
-//                                Color.WHITE.darker().darker().darker().darker()
-                        Color.BLUE,
-                        Color.WHITE
-                    )
-
-                //stage1->center
-                Global
-                    .getCombatEngine()
-                    .spawnEmpArcVisual(
-                        stage1dot,
-                        ship,
-                        ship.location,
-                        ship,
-                        drawingThickness,
-//                                Color.BLUE.darker(),
-//                                Color.WHITE.darker().darker().darker().darker()
-                        Color.BLUE,
-                        Color.WHITE
-                    )
-            }
+            // The "particle over time" part will be done separately in advance() ...
         }
 
 

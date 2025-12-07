@@ -352,6 +352,8 @@ object CircleUtils {
         private val particleDrawInterval: Float
     ) {
         private val particlePoints: List<SwirlArmParticles>
+        //TODO for cases when FPS drops, we might go over more than one interval due to it's short lifespan
+        // replace with MultiInvervalUtil
         private val intervalUtil: IntervalUtil
         init {
             particlePoints = if (generateParticles) {
@@ -460,8 +462,6 @@ object CircleUtils {
 
             val numPoints = rings[0].size
 
-            //TODO change this to be List<List<Vector2f>> so I can have a list of "swirl arms"
-            val particlePoints = mutableListOf<Vector2f>()
             for (index in 0 until numPoints) {
                 // We cannot use "in rings.indices" here because then we will hit an OOB when p2 tries to access ring+1
                 for (ring in 0 until rings.size - 1) {
@@ -487,57 +487,17 @@ object CircleUtils {
                         fringe,
                         core
                     )
-
-                    // Optional persistent line overlay
-                    if (drawParticles) {
-//                            val dx = (p2.x - p1.x) / particleSegments
-//                            val dy = (p2.y - p1.y) / particleSegments
-//                            var x = p1.x
-//                            var y = p1.y
-                        val center = ship.location
-                        // Determine the 'inner' and 'outer' points, or whether p1/p2 is inner or outer
-                        val (inner, outer) = when (swirlType) {
-                            SwirlType.INWARD -> {
-                                // For inward swirls, the biggest index is closest to center
-                                // p1 is 'ring', p2 is 'ring+1'
-                                p2 to p1
-                            }
-                            SwirlType.OUTWARD -> {
-                                // For outward swirls, the smallest index is closest to center
-                                // p1 is 'ring', p2 is 'ring+1'
-                                p1 to p2
-                            }
-                        }.exhaustive
-                        val swirlPoints = generateSwirlPoints(
-                            pInner = inner,
-                            pOuter = outer,
-                            particleSegments = particleSegments,
-//                            center = center,
-                            // we should not pivot around the center again since all points are already relative to the ship-location
-                            // even if they are in absolute world-location units - at least for bezier at least
-                            center = when(workMode) {
-                                SwirlGenerationWorkMode.BEZIER -> null
-                                SwirlGenerationWorkMode.LOGARITHMIC -> center
-                            }.exhaustive,
-                            bezierAngle = 30f,
-                            workMode = workMode
-                        )
-                        particlePoints.addAll(swirlPoints)
-//                            for (seg in 0 until particleSegments) {
-                        AnonymousLogger.log("swirlPoints.size: ${swirlPoints.size}", "SHARK-drawing")
-                        AnonymousLogger.log("particlePoints.size: ${particlePoints.size}", "SHARK-drawing")
-                    }
                 }
 
                 // After messing with the ring loop, optionally connect innermost ring to center
                 if (connectToCenter) {
-
+                    // Figure out the colors and which point to connect to the center (ship.location)
                     val (core, fringe) = arcColors.last()
-
                     val innermost = when(swirlType) {
                         SwirlType.INWARD -> rings.last()[index]
                         SwirlType.OUTWARD -> rings.first()[index]
                     }.exhaustive
+                    // Draw the emp visual
                     engine.spawnEmpArcVisual(
                         innermost,
                         ship,
@@ -551,42 +511,125 @@ object CircleUtils {
             }
 
             // Now that we're done with the emp arcs - draw the particles if allowed
-            if (drawParticles) {
-                // Fetch the original smooth particle limit
-                val engine = Global.getCombatEngine()
-                val originalLimit = (engine as CombatEngine).smoothParticles.limit
-                // bump limit so they all fit
-                (engine as CombatEngine).smoothParticles.limit = particlePoints.size
-//                AnonymousLogger.log("particlePoints: ${particlePoints}", "SHARK-drawing")
-                for (point in particlePoints) {
-                    engine.addSmoothParticle(
-                        point,
-                        Vector2f(0f, 0f),
-                        particleSize,
-                        1f,
-                        particleDuration,
-//                                    core  //TODO
-                        Color.RED //delete
-                    )
+        }
+
+        fun drawParticles(
+            amount: Float,
+            particleSize: Float = 12f,
+            particleDuration: Float = 0.25f,
+            particlesToDrawPerInterval: Int = 1,
+            particleColors: List<Color>
+        ) {
+            // Drawing particles is rather simple. Feed the amount into the interval util, if amount has passed -
+            // call draw on each SwirlArmParticles instance. They will automatically remove the drawn point.
+            intervalUtil.advance(amount)
+            if (intervalUtil.intervalElapsed()) {
+                particlePoints.forEach { swirlArm ->
+                    // If we should draw more particles, do so
+                    repeat(particlesToDrawPerInterval) {
+                        // decode color based on where we are in the list
+                        // Each 'particleSegments' number of items should belong to the same color,
+                        // after which we switch to the next color index
+                        val colorIndex = swirlArm.getCurrentPointIndex() / particleSegments
+                        val color = if (colorIndex < particleColors.size) { particleColors[colorIndex] } else { particleColors.last() }
+                        swirlArm.draw(
+                            particleSize = particleSize,
+                            particleDuration = particleDuration,
+                            particleColor = color
+                        )
+                    }
                 }
-                // Revert limit after drawing
-//                (engine as CombatEngine).smoothParticles.limit = originalLimit
             }
+        }
+
+        /**
+         * Method for checking whether all of this [Swirl]'s particle arms ([SwirlArmParticles] have finished or not
+         *
+         * @return whether all particle arms have finished or not
+         */
+        fun hasFinished(): Boolean {
+            return particlePoints.all { it.hasFinished() }
         }
 
         inner class SwirlArmParticles(
             private val particlePoints: MutableList<Vector2f> = mutableListOf()
         ) {
-            // drawing should just draw the first point and remove it from the list after drawing
-            fun draw() {
-                val point = particlePoints.removeAt(0)
-                //TODO draw the point
+            private var armSize: Int = 0
+            private var isFinished = false
 
+            // drawing should just draw the first point and remove it from the list after drawing
+            /**
+             * Draws the first point in the list, and removes it from the list of points
+             */
+            fun draw(
+                particleSize: Float = 12f,
+                particleDuration: Float = 0.25f,
+                particleColor: Color,
+                particleBrightness: Float = 1f
+            ) {
+                if (particlePoints.isNotEmpty()) {
+                    val point = particlePoints.removeAt(0)
+                    //TODO draw the point
+
+                    // Fetch the original smooth particle limit
+                    val engine = Global.getCombatEngine()
+//                    val originalLimit = (engine as CombatEngine).smoothParticles.limit
+                    // bump limit so they all fit
+//                (engine as CombatEngine).smoothParticles.limit = particlePoints.size
+//                AnonymousLogger.log("particlePoints: ${particlePoints}", "SHARK-drawing")
+//                    for (point in particlePoints) {
+                    engine.addSmoothParticle(
+                        point,
+                        Vector2f(0f, 0f),
+                        particleSize,
+                        particleBrightness,
+                        particleDuration,
+                        particleColor
+                    )
+//                    }
+                    // Revert limit after drawing
+//                (engine as CombatEngine).smoothParticles.limit = originalLimit
+                } else {
+                    isFinished = true
+                }
             }
 
             // adding more points should just add them
             fun addMorePoints(points: List<Vector2f>) {
                 particlePoints.addAll(points)
+                armSize += points.size
+            }
+
+            /**
+             * Method for returning the "arm size". This is **not** the number of points remaining in the arm.
+             * This is just a hacky representation of how many points the [particlePoints] contained after we added
+             * all points to it.
+             *
+             * @return the initial size of this [SwirlArmParticles] collection before we started draining it via [draw]
+             */
+            fun getArmSize(): Int {
+                return armSize
+            }
+
+            /**
+             * Gets the current point "index" or rather the difference between [armSize] and size of [particlePoints]
+             *
+             * Better call this before [draw]ing because drawing will mutate it.
+             *
+             * @return the "next drawing point" index
+             */
+            fun getCurrentPointIndex(): Int {
+                return getArmSize() - particlePoints.size
+            }
+
+            /**
+             * Method that checks whether this particle arm has finished or not.
+             * A particle arm is considered "finished" when it has exhausted all of it's points
+             *
+             * @return whether this arm has finished or not
+             */
+            fun hasFinished(): Boolean {
+                return isFinished
             }
         }
     }
