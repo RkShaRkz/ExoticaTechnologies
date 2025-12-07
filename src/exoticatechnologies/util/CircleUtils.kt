@@ -161,6 +161,32 @@ object CircleUtils {
     }
 
     /**
+     * Normalizes an angular difference to the canonical range [-π, π].
+     *
+     * This function ensures that any raw angular delta (which may be outside
+     * the standard interval) is wrapped to represent the shortest signed
+     * rotation between two angles. Positive results indicate a counterclockwise
+     * difference, while negative results indicate a clockwise difference.
+     *
+     * Internally, it uses the identity atan2(sin(Δθ), cos(Δθ)) to guarantee
+     * the result lies within [-π, π].
+     *
+     * @param dTheta The raw angular difference in radians (may be outside [-π, π]).
+     * @return The normalized angular difference in radians, guaranteed to be within [-π, π].
+     *
+     * Example:
+     * ```
+     * normalizeAngularDelta(Math.PI + 0.1)   // ≈ -3.04159 (just under -π)
+     * normalizeAngularDelta(-4.0)            // ≈ 2.28319 (wrapped into [-π, π])
+     * ```
+     */
+    fun normalizeAngularDelta(dTheta: Double): Double {
+        // returns in [-π, π]
+        return Math.atan2(Math.sin(dTheta), Math.cos(dTheta))
+    }
+
+
+    /**
      * Generates a list of sampled points forming a "swirl" curve between two [Vector2f] points.
      *
      * Depending on [workMode] the curve is either:
@@ -249,11 +275,17 @@ object CircleUtils {
 
                 // Spiral parameters: r = a * e^(bθ)
                 val a = rInner
-                val b = ln(rOuter / rInner) / (thetaOuter - thetaInner)
+                // Calculate and normalize the thetaOuter - thetaInner
+                // While both of these should be in the [-Pi, Pi] range, using them raw like this will collapse
+                // the sign and make it think it went a whole circle rather than just a tiny bit.
+                // E.g. One point at +179*, other point a bit past -179*, delta will turn out to be -358*. Instead of 2.
+                val dTheta = normalizeAngularDelta(thetaOuter - thetaInner)
+
+                val b = ln(rOuter / rInner) / dTheta
 
                 for (i in 0..particleSegments) {
                     val t = i.toFloat() / particleSegments
-                    val theta = thetaInner + t * (thetaOuter - thetaInner)
+                    val theta = thetaInner + t * dTheta
                     val r = a * exp(b * (theta - thetaInner))
                     val x = r * FastTrigUtils.cos(theta)
                     val y = r * FastTrigUtils.sin(theta)
@@ -336,6 +368,7 @@ object CircleUtils {
             if (rings.size < 2) return
 
             val numPoints = rings[0].size
+            //TODO get rid of this stuff below
             AnonymousLogger.log("numPoints: ${numPoints}", "SHARK-drawing")
             for (ringNum in rings.indices) {
                 AnonymousLogger.log("rings[${ringNum}].size: ${rings[ringNum].size}", "SHARK-drawing")
@@ -375,6 +408,7 @@ object CircleUtils {
 //                            var y = p1.y
                         val center = ship.location
                         val swirlPoints = generateSwirlPoints(
+                            //TODO this will differ for SwirlType.INWARD and OUTWARD
                             pInner = p1,
                             pOuter = p2,
                             particleSegments = particleSegments,
@@ -389,6 +423,7 @@ object CircleUtils {
                             workMode = workMode
                         )
 //                            for (seg in 0 until particleSegments) {
+                        AnonymousLogger.log("swirlPoints.size: ${swirlPoints.size}", "SHARK-drawing")
                         for (point in swirlPoints) {
                             engine.addSmoothParticle(
                                 point,
