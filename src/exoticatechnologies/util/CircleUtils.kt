@@ -257,7 +257,10 @@ object CircleUtils {
                     val r = a * exp(b * (theta - thetaInner))
                     val x = r * FastTrigUtils.cos(theta)
                     val y = r * FastTrigUtils.sin(theta)
-                    points.add(Vector2f(x.toFloat(), y.toFloat()))
+                    // In case we translated the center of the coord system at the start, we should translate back
+                    val xTrans = x + cx
+                    val yTrans = y + cy
+                    points.add(Vector2f(xTrans.toFloat(), yTrans.toFloat()))
                 }
             }
         }.exhaustive
