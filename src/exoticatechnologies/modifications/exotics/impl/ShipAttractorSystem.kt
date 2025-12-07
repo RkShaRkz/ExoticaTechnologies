@@ -286,6 +286,8 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                 particleSize = 64f,
                 particleDuration = 5f,
                 particleSegments = 16,
+//                particleSegments = 8,
+//                particleSegments = 4,
                 connectToCenter = true,
 //                workMode = CircleUtils.SwirlGenerationWorkMode.BEZIER
                 workMode = CircleUtils.SwirlGenerationWorkMode.LOGARITHMIC

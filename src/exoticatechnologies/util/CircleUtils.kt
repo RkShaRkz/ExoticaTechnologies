@@ -1,5 +1,6 @@
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.ShipAPI
+import com.fs.starfarer.combat.CombatEngine
 import exoticatechnologies.util.*
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
@@ -476,6 +477,11 @@ object CircleUtils {
 
             // Now that we're done with the emp arcs - draw the particles if allowed
             if (drawParticles) {
+                // Fetch the original smooth particle limit
+                val engine = Global.getCombatEngine()
+                val originalLimit = (engine as CombatEngine).smoothParticles.limit
+                // bump limit so they all fit
+                (engine as CombatEngine).smoothParticles.limit = particlePoints.size
 //                AnonymousLogger.log("particlePoints: ${particlePoints}", "SHARK-drawing")
                 for (point in particlePoints) {
                     engine.addSmoothParticle(
@@ -488,6 +494,8 @@ object CircleUtils {
                         Color.RED //delete
                     )
                 }
+                // Revert limit after drawing
+//                (engine as CombatEngine).smoothParticles.limit = originalLimit
             }
         }
     }
