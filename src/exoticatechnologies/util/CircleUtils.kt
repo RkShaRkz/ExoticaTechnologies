@@ -185,6 +185,15 @@ object CircleUtils {
         return Math.atan2(Math.sin(dTheta), Math.cos(dTheta))
     }
 
+    fun normalizeRawAngularDelta(thetaOuter: Double, thetaInner: Double): Double {
+        val twoPi = (2 * Math.PI).toFloat()
+        var delta = thetaOuter - thetaInner
+        // normalize into [0, 2π) instead of (–π, π]
+        delta = (delta % twoPi + twoPi) % twoPi
+        return delta
+    }
+
+
 
     /**
      * Generates a list of sampled points forming a "swirl" curve between two [Vector2f] points.
@@ -280,6 +289,7 @@ object CircleUtils {
                 // the sign and make it think it went a whole circle rather than just a tiny bit.
                 // E.g. One point at +179*, other point a bit past -179*, delta will turn out to be -358*. Instead of 2.
                 val dTheta = normalizeAngularDelta(thetaOuter - thetaInner)
+//                val dTheta = normalizeRawAngularDelta(thetaOuter, thetaInner)
 
                 val b = ln(rOuter / rInner) / dTheta
 
@@ -374,6 +384,8 @@ object CircleUtils {
                 AnonymousLogger.log("rings[${ringNum}].size: ${rings[ringNum].size}", "SHARK-drawing")
             }
 
+            //TODO change this to be List<List<Vector2f>> so I can have a list of "swirl arms"
+            val particlePoints = mutableListOf<Vector2f>()
             for (index in 0 until numPoints) {
                 // We cannot use "in rings.indices" here because then we will hit an OOB when p2 tries to access ring+1
                 for (ring in 0 until rings.size - 1) {
@@ -434,21 +446,10 @@ object CircleUtils {
                             bezierAngle = 30f,
                             workMode = workMode
                         )
+                        particlePoints.addAll(swirlPoints)
 //                            for (seg in 0 until particleSegments) {
                         AnonymousLogger.log("swirlPoints.size: ${swirlPoints.size}", "SHARK-drawing")
-                        for (point in swirlPoints) {
-                            engine.addSmoothParticle(
-                                point,
-                                Vector2f(0f, 0f),
-                                particleSize,
-                                1f,
-                                particleDuration,
-//                                    core  //TODO
-                                Color.RED
-                            )
-//                            x += dx
-//                            y += dy
-                        }
+                        AnonymousLogger.log("particlePoints.size: ${particlePoints.size}", "SHARK-drawing")
                     }
                 }
 
@@ -469,6 +470,22 @@ object CircleUtils {
                         arcThickness,
                         fringe,
                         core
+                    )
+                }
+            }
+
+            // Now that we're done with the emp arcs - draw the particles if allowed
+            if (drawParticles) {
+//                AnonymousLogger.log("particlePoints: ${particlePoints}", "SHARK-drawing")
+                for (point in particlePoints) {
+                    engine.addSmoothParticle(
+                        point,
+                        Vector2f(0f, 0f),
+                        particleSize,
+                        1f,
+                        particleDuration,
+//                                    core  //TODO
+                        Color.RED //delete
                     )
                 }
             }
