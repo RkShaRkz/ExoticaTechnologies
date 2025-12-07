@@ -407,10 +407,22 @@ object CircleUtils {
 //                            var x = p1.x
 //                            var y = p1.y
                         val center = ship.location
+                        // Determine the 'inner' and 'outer' points, or whether p1/p2 is inner or outer
+                        val (inner, outer) = when (swirlType) {
+                            SwirlType.INWARD -> {
+                                // For inward swirls, the biggest index is closest to center
+                                // p1 is 'ring', p2 is 'ring+1'
+                                p2 to p1
+                            }
+                            SwirlType.OUTWARD -> {
+                                // For outward swirls, the smallest index is closest to center
+                                // p1 is 'ring', p2 is 'ring+1'
+                                p1 to p2
+                            }
+                        }.exhaustive
                         val swirlPoints = generateSwirlPoints(
-                            //TODO this will differ for SwirlType.INWARD and OUTWARD
-                            pInner = p1,
-                            pOuter = p2,
+                            pInner = inner,
+                            pOuter = outer,
                             particleSegments = particleSegments,
 //                            center = center,
                             // we should not pivot around the center again since all points are already relative to the ship-location
