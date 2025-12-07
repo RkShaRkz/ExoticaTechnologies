@@ -1,7 +1,5 @@
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.ShipAPI
-import com.fs.starfarer.api.util.IntervalUtil
-import com.fs.starfarer.combat.CombatEngine
 import exoticatechnologies.util.*
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
@@ -341,6 +339,24 @@ object CircleUtils {
         LOGARITHMIC
     }
 
+    /**
+     * Enum describing how particles should be drawn when using [Swirl.drawParticles] and [Swirl.SwirlArmParticles.draw]
+     *
+     * @see ONE_AT_A_TIME
+     * @see WHOLE_ARM
+     */
+    enum class ParticleDrawMode {
+        /**
+         * Enum signifying the "one dot at a time" mode, which draws one dot and removes it from the arm
+         */
+        ONE_AT_A_TIME,
+
+        /**
+         * Enum signifying the "whole arm at a time" mode, which draws the whole arm and removes a number of dots from it
+         */
+        WHOLE_ARM
+    }
+
 
     data class Swirl(
         private val rings: List<List<Vector2f>>,
@@ -352,10 +368,11 @@ object CircleUtils {
         private val particleDrawInterval: Float
     ) {
         private val particlePoints: List<SwirlArmParticles>
-        //TODO for cases when FPS drops, we might go over more than one interval due to it's short lifespan
-        // replace with MultiInvervalUtil
-//        private val intervalUtil: IntervalUtil
         private val intervalUtil: MultiIntervalUtil
+
+        // Used only when drawing in WHOLE_ARM mode
+        private var lastDrawnArm: Int = 0
+
         init {
             particlePoints = if (generateParticles) {
                 // If we should generate particles, we need to iterate through all rings, generate particles
@@ -415,7 +432,6 @@ object CircleUtils {
             }
 
             // After generating the particles, instantiate the intervalUtil
-//            intervalUtil = IntervalUtil(particleDrawInterval, particleDrawInterval)
             intervalUtil = MultiIntervalUtil(particleDrawInterval)
         }
 
@@ -438,26 +454,17 @@ object CircleUtils {
         }
 
         /**
-         * Draws the swirl with full control over visuals.
+         * Draws the swirl with full control over visuals. This just draws out EMP arcs
          *
          * @param ship The ship entity (needed for arc visuals).
          * @param arcThickness Thickness of EMP arcs.
          * @param arcColors List of (coreColor, fringeColor) per stage connection. Defaults to [Color.WHITE] core and [Color.CYAN] fringe
-         * @param drawParticles Whether to also draw persistent particle lines.
-         * @param particleSize Size of particles for persistent lines.
-         * @param particleDuration Lifetime of particles for persistent lines.
-         * @param particleSegments Number of particles per line segment.
          */
         fun draw(
             ship: ShipAPI,
             arcThickness: Float = 6f,
             arcColors: List<Pair<Color, Color>> = emptyList(),
-            drawParticles: Boolean = false,
-            particleSize: Float = 12f,
-            particleDuration: Float = 0.25f,
-            particleSegments: Int = 16,
             connectToCenter: Boolean = true,
-            workMode: SwirlGenerationWorkMode = SwirlGenerationWorkMode.BEZIER
         ) {
             val engine = Global.getCombatEngine()
             if (rings.size < 2) return
@@ -467,7 +474,6 @@ object CircleUtils {
             for (index in 0 until numPoints) {
                 // We cannot use "in rings.indices" here because then we will hit an OOB when p2 tries to access ring+1
                 for (ring in 0 until rings.size - 1) {
-//                for (ring in rings.indices) {
                     val p1 = rings[ring][index]
                     val p2 = rings[ring + 1][index]
 
@@ -484,8 +490,6 @@ object CircleUtils {
                         p2,
                         ship,
                         arcThickness,
-//                            core,
-//                            fringe
                         fringe,
                         core
                     )
@@ -515,32 +519,103 @@ object CircleUtils {
             // Now that we're done with the emp arcs - draw the particles if allowed
         }
 
+        /**
+         * Method that draws particles over time, and should be called repeatedly until all arms are finished.
+         *
+         * @param amount the amount of time that has passed, used to feed into [intervalUtil]
+         * @param particleSize the particle size
+         * @param particleDuration the lifetime of each particle
+         * @param particlesToDrawPerInterval depending on the [particleDrawMode] it will either:
+         * - For [ParticleDrawMode.ONE_AT_A_TIME] it will call [SwirlArmParticles.draw] this many times
+         * - For [ParticleDrawMode.WHOLE_ARM] it will call [SwirlArmParticles.draw] followed by [SwirlArmParticles.removePoints] with this number
+         * @param particleColors a **non-empty** list of [Color]s to use for the particles depending on which segment of the arm they belong to.
+         * Needs at least one color, **list cannot be empty**
+         * @param particleDrawMode the [ParticleDrawMode] to use
+         * @param particleArmsToDraw how many swirl arms to draw, relevant only when [particleDrawMode] is [ParticleDrawMode.WHOLE_ARM]
+         */
         fun drawParticles(
             amount: Float,
             particleSize: Float = 12f,
             particleDuration: Float = 0.25f,
             particlesToDrawPerInterval: Int = 1,
-            particleColors: List<Color>
+            particleColors: List<Color>,
+            particleDrawMode: ParticleDrawMode,
+            particleArmsToDraw: Int
         ) {
             // Drawing particles is rather simple. Feed the amount into the interval util, if amount has passed -
             // call draw on each SwirlArmParticles instance. They will automatically remove the drawn point.
             intervalUtil.advance(amount)
             intervalUtil.onIntervalElapsed {
-                particlePoints.forEach { swirlArm ->
-                    // If we should draw more particles, do so
-                    repeat(particlesToDrawPerInterval) {
-                        // decode color based on where we are in the list
-                        // Each 'particleSegments' number of items should belong to the same color,
-                        // after which we switch to the next color index
-                        val colorIndex = swirlArm.getCurrentPointIndex() / particleSegments
-                        val color = if (colorIndex < particleColors.size) { particleColors[colorIndex] } else { particleColors.last() }
-                        swirlArm.draw(
+                // Depending on the particle draw mode, we will either:
+                // draw 'particlesToDrawPerInterval' points from each arm at the same time
+                // draw whole arms one at a time and remove points from them until they all drain out
+                when(particleDrawMode) {
+                    ParticleDrawMode.ONE_AT_A_TIME -> {
+                        particlePoints.forEach { swirlArm ->
+                            // If we should draw more particles, do so
+                            repeat(particlesToDrawPerInterval) {
+                                // decode color based on where we are in the list
+                                // Each 'particleSegments' number of items should belong to the same color,
+                                // after which we switch to the next color index
+                                val colorIndex = swirlArm.getCurrentPointIndex() / particleSegments
+                                val color = if (colorIndex < particleColors.size) {
+                                    particleColors[colorIndex]
+                                } else {
+                                    particleColors.last()
+                                }
+                                swirlArm.draw(
+                                    particleSize = particleSize,
+                                    particleDuration = particleDuration,
+                                    particleColors = listOf(color),
+                                    particleDrawMode = particleDrawMode
+                                )
+                            }
+                        }
+                    }
+
+                    /*
+                    ParticleDrawMode.WHOLE_ARM -> {
+                        // For whole arm, we do not need to decode the color to use, the arm will do that itself.
+                        // Idea is, we will keep on drawing arms one at a time
+                        particlePoints[lastDrawnArm].draw(
                             particleSize = particleSize,
                             particleDuration = particleDuration,
-                            particleColor = color
+                            particleColors = particleColors,
+                            particleDrawMode = particleDrawMode
                         )
+                        // now remove points from that arm
+                        particlePoints[lastDrawnArm].removePoints(particlesToDrawPerInterval)
+                        // now bump up the last drawn arm for next iteration, and ensure it is within range
+                        lastDrawnArm++
+                        lastDrawnArm %= particlePoints.size
+                        // Eventually they will drain out ...
                     }
-                }
+                     */
+                    ParticleDrawMode.WHOLE_ARM -> {
+                        // For whole arm, we do not need to decode the color to use, the arm will do that itself.
+                        // Idea is, we will keep on drawing arms one at a time, or many at a time depending on particleArmsToDraw
+                        val stride = ceil(
+                            particlePoints.size.toDouble() / particleArmsToDraw
+                        ).toInt()
+
+                        for (i in 0 until particleArmsToDraw) {
+                            // calculate proper index, deducting so it goes in the right direction but i guess it doesn't matter
+                            val armIndex = wrapAroundMod(lastDrawnArm - i * stride, particlePoints.size)
+                            // draw the arm
+                            particlePoints[armIndex].draw(
+                                particleSize = particleSize,
+                                particleDuration = particleDuration,
+                                particleColors = particleColors,
+                                particleDrawMode = particleDrawMode
+                            )
+                            // deduct points from that arm
+                            particlePoints[armIndex].removePoints(particlesToDrawPerInterval)
+                        }
+
+                        // now, decrement lastDrawnArm for next iteration
+                        lastDrawnArm = wrapAroundMod(lastDrawnArm - 1, particlePoints.size)
+                    }
+                }.exhaustive
             }
         }
 
@@ -559,36 +634,70 @@ object CircleUtils {
             private var armSize: Int = 0
             private var isFinished = false
 
-            // drawing should just draw the first point and remove it from the list after drawing
             /**
-             * Draws the first point in the list, and removes it from the list of points
+             * Draws the arm depending on the [particleDrawMode]
+             *
+             * For [ParticleDrawMode.ONE_AT_A_TIME], it draws the first point in the list and then removes it from the list of points
+             * For [ParticleDrawMode.WHOLE_ARM], it draws the whole arm and **DOESN'T** remove any points from it.
+             * **NOTE:** In this mode, the points have to be externally removed, because otherwise the arm will **NEVER** finish.
+             *
+             * @param particleSize the particle size to use. Defaults to 12f.
+             * @param particleDuration the lifetime of a single particle, in seconds. Defaults to 0.25f
+             * @param particleColors depending on [particleDrawMode], it should either be a one-element list for [ParticleDrawMode.ONE_AT_A_TIME]
+             * or a list of colors for [ParticleDrawMode.WHOLE_ARM]
+             * @param particleBrightness particle brightness to use. Defaults to 1f
+             * @param particleDrawMode the mode in which to draw particles. See [ParticleDrawMode]
              */
             fun draw(
                 particleSize: Float = 12f,
                 particleDuration: Float = 0.25f,
-                particleColor: Color,
-                particleBrightness: Float = 1f
+                particleColors: List<Color>,
+                particleBrightness: Float = 1f,
+                particleDrawMode: ParticleDrawMode
             ) {
                 if (particlePoints.isNotEmpty()) {
-                    val point = particlePoints.removeAt(0)
-                    // Fetch the original smooth particle limit
-                    val engine = Global.getCombatEngine()
-//                    val originalLimit = (engine as CombatEngine).smoothParticles.limit
-                    // bump limit so they all fit
-//                (engine as CombatEngine).smoothParticles.limit = particlePoints.size
-//                AnonymousLogger.log("particlePoints: ${particlePoints}", "SHARK-drawing")
-//                    for (point in particlePoints) {
-                    engine.addSmoothParticle(
-                        point,
-                        Vector2f(0f, 0f),
-                        particleSize,
-                        particleBrightness,
-                        particleDuration,
-                        particleColor
-                    )
-//                    }
-                    // Revert limit after drawing
-//                (engine as CombatEngine).smoothParticles.limit = originalLimit
+                    when(particleDrawMode) {
+                        ParticleDrawMode.ONE_AT_A_TIME -> {
+                            val point = particlePoints.removeAt(0)
+                            val engine = Global.getCombatEngine()
+                            // Fetch the original smooth particle limit
+//                            val originalLimit = (engine as CombatEngine).smoothParticles.limit
+                            // bump limit so they all fit
+//                            (engine as CombatEngine).smoothParticles.limit = particlePoints.size
+                            val particleColor = particleColors.first()
+                            engine.addSmoothParticle(
+                                point,
+                                Vector2f(0f, 0f),
+                                particleSize,
+                                particleBrightness,
+                                particleDuration,
+                                particleColor
+                            )
+                            // Revert limit after drawing
+//                            (engine as CombatEngine).smoothParticles.limit = originalLimit
+                        }
+                        ParticleDrawMode.WHOLE_ARM -> {
+                            // Fetch the original smooth particle limit
+                            val engine = Global.getCombatEngine()
+                            for (point in particlePoints) {
+                                val colorIndex = getCurrentPointIndex() / particleSegments
+                                val color = if (colorIndex < particleColors.size) {
+                                    particleColors[colorIndex]
+                                } else {
+                                    particleColors.last()
+                                }
+
+                                engine.addSmoothParticle(
+                                    point,
+                                    Vector2f(0f, 0f),
+                                    particleSize,
+                                    particleBrightness,
+                                    particleDuration,
+                                    color
+                                )
+                            }
+                        }
+                    }.exhaustive
                 } else {
                     isFinished = true
                 }
@@ -630,6 +739,19 @@ object CircleUtils {
              */
             fun hasFinished(): Boolean {
                 return isFinished
+            }
+
+            /**
+             * Method that removes [pointsToRemove] first points from this arm.
+             * If the method tries to remove more points than we have in [particlePoints] it will remove as many
+             * as it can and then do nothing.
+             */
+            fun removePoints(pointsToRemove: Int) {
+                repeat(pointsToRemove) {
+                    if (particlePoints.isNotEmpty()) {
+                        particlePoints.removeAt(0)
+                    }
+                }
             }
         }
     }

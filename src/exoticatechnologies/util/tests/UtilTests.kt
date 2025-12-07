@@ -5,6 +5,7 @@ import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.InLogicalRangeWorkMode
 import exoticatechnologies.util.StacktraceUtils
 import exoticatechnologies.util.isInLogicalRange
+import exoticatechnologies.util.wrapAroundMod
 import org.junit.Assert
 import org.junit.Test
 
@@ -93,4 +94,21 @@ class UtilTests {
         Assert.assertEquals(false, test1)
         Assert.assertEquals(false, test2)
     }
+
+
+    @Test
+    fun test_when_decrementing_40_from_20_for_size_72_using_wraparoundmod_then_we_get_52() {
+        val size = 72
+        val start = 20
+        val decrement = 40
+
+        val raw = start - decrement       // 20 - 40 = -20
+        val result = wrapAroundMod(raw, size)       // wrap into [0, 71]
+
+        println("Start=$start, Decrement=$decrement, Raw=$raw, Wrapped=$result")
+
+        // Expected: -20 wrapped into 52
+        Assert.assertEquals(52, result)
+    }
+
 }

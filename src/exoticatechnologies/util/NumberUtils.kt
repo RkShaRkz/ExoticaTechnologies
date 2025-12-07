@@ -376,3 +376,20 @@ enum class InLogicalRangeWorkMode {
      */
     GREATER_OR_EQUAL
 }
+
+/**
+ * Modulo that wraps around
+ *
+ * @param number the number to mod
+ * @param modulo the number to modulo around
+ *
+ * @return a positive number in the range of [0, modulo-1]
+ */
+public fun wrapAroundMod(number: Int, modulo: Int): Int {
+    val temp = number % modulo
+    return if (temp < 0) {
+        temp + modulo
+    } else {
+        temp
+    }
+}
