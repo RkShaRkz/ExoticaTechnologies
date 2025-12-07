@@ -573,24 +573,6 @@ object CircleUtils {
                         }
                     }
 
-                    /*
-                    ParticleDrawMode.WHOLE_ARM -> {
-                        // For whole arm, we do not need to decode the color to use, the arm will do that itself.
-                        // Idea is, we will keep on drawing arms one at a time
-                        particlePoints[lastDrawnArm].draw(
-                            particleSize = particleSize,
-                            particleDuration = particleDuration,
-                            particleColors = particleColors,
-                            particleDrawMode = particleDrawMode
-                        )
-                        // now remove points from that arm
-                        particlePoints[lastDrawnArm].removePoints(particlesToDrawPerInterval)
-                        // now bump up the last drawn arm for next iteration, and ensure it is within range
-                        lastDrawnArm++
-                        lastDrawnArm %= particlePoints.size
-                        // Eventually they will drain out ...
-                    }
-                     */
                     ParticleDrawMode.WHOLE_ARM -> {
                         // For whole arm, we do not need to decode the color to use, the arm will do that itself.
                         // Idea is, we will keep on drawing arms one at a time, or many at a time depending on particleArmsToDraw

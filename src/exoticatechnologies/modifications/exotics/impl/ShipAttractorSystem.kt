@@ -227,47 +227,6 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             log("<-- onActivate()")
         }
 
-        override fun advance(amount: Float, isPaused: Boolean) {
-            if (isPaused.not()) {
-                // If not paused, draw particles on the swirl if we have it
-                visualSwirl?.let { swirl ->
-                    swirl.drawParticles(
-                        amount = amount,
-                        particleSize = 64f,
-                        particlesToDrawPerInterval = 3,
-//                        particleColors = listOf(
-//                            Color.WHITE,
-//                            Color.WHITE.darker(),
-//                            Color.WHITE.darker().darker(),
-//                            Color.WHITE.darker().darker().darker(),
-//                            Color.WHITE.darker().darker().darker().darker(),
-//                            Color.WHITE.darker().darker().darker().darker().darker(),
-//                        )
-//                        particleColors = listOf(
-//                            Color.BLUE.brighter().brighter(),
-//                            Color.BLUE.brighter(),
-//                            Color.WHITE,
-//                            Color.WHITE.darker(),
-//                            Color.WHITE.darker().darker(),
-//                            Color.WHITE.darker().darker().darker().darker()
-//                        )
-                        particleColors = listOf(
-                            Color.WHITE.brighter().brighter(),
-                            Color.WHITE,
-                            Color.LIGHT_GRAY.brighter().brighter(),
-                            Color.LIGHT_GRAY,
-                            Color.DARK_GRAY,
-                            Color.DARK_GRAY.darker().darker()
-                        )
-                    )
-                    // If all arms have finished, get rid of visualSwirl
-                    if (swirl.hasFinished()) {
-                        visualSwirl = null
-                    }
-                }
-            }
-        }
-
         private fun getPotentialTargets(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): List<ShipAPI> {
             val radius: Float = getRadiusAmount(member, mods, exoticData)
             val workMode = getWorkMode(member, mods, exoticData)
@@ -295,12 +254,40 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             return potentiallyAffectedShips
         }
 
+        override fun advance(amount: Float, isPaused: Boolean) {
+            if (isPaused.not()) {
+                // If not paused, draw particles on the swirl if we have it
+                visualSwirl?.let { swirl ->
+                    swirl.drawParticles(
+                        amount = amount,
+                        particleSize = 64f,
+//                        particlesToDrawPerInterval = 3,
+                        particlesToDrawPerInterval = 4,
+                        particleColors = listOf(
+                            Color.WHITE.brighter().brighter(),
+                            Color.WHITE,
+                            Color.LIGHT_GRAY.brighter().brighter(),
+                            Color.LIGHT_GRAY,
+                            Color.DARK_GRAY,
+                            Color.DARK_GRAY.darker().darker()
+                        ),
+                        particleDrawMode = CircleUtils.ParticleDrawMode.WHOLE_ARM,
+//                        particleArmsToDraw = 1  //TODO
+                        particleArmsToDraw = 6  //TODO
+                    )
+                    // If all arms have finished, get rid of visualSwirl
+                    if (swirl.hasFinished()) {
+                        visualSwirl = null
+                    }
+                }
+            }
+        }
+
         private fun showVisualFlair() {
             // generate dots
             val center = ship.location
             val fullRange = getRadiusAmount(member, mods, exoticData)
             // Lets draw the first ring at 1.5x collision radius so it's more visible, 1x is kinda "too close"
-            val numPoints = 72
             // Lets generate the swirl
             visualSwirl = CircleUtils.generateSwirl(
                 center = center,
@@ -317,27 +304,20 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                 particleDrawInterval = 0.05f
             )
             // Draw the instantaneous part of the swirl
-            visualSwirl?.draw(
-                ship = ship,
-                arcThickness = 12f,
-                arcColors = listOf(
-                    Color.BLUE.darker().darker().darker().darker().darker() to Color.WHITE,
-                    Color.BLUE.darker().darker().darker().darker() to Color.WHITE.darker(),
-                    Color.BLUE.darker().darker().darker() to Color.WHITE.darker().darker(),
-                    Color.BLUE.darker().darker() to Color.WHITE.darker().darker().darker(),
-                    Color.BLUE.darker() to Color.WHITE.darker().darker().darker().darker(),
-                    Color.BLUE to Color.WHITE.darker().darker().darker().darker().darker(),
-                ),
-//                drawParticles = true,
-                drawParticles = false,
-        //                particleSize = 24f,
-                particleSize = 64f,
-                particleDuration = 5f,
-                particleSegments = 16,
-                connectToCenter = true,
-        //                workMode = CircleUtils.SwirlGenerationWorkMode.BEZIER
-                workMode = CircleUtils.SwirlGenerationWorkMode.LOGARITHMIC
-            )
+            // This causes a decent FPS drop, and are mainly EMP arcs, so i'll leave it here for the time being
+//            visualSwirl?.draw(
+//                ship = ship,
+//                arcThickness = 12f,
+//                arcColors = listOf(
+//                    Color.BLUE.darker().darker().darker().darker().darker() to Color.WHITE,
+//                    Color.BLUE.darker().darker().darker().darker() to Color.WHITE.darker(),
+//                    Color.BLUE.darker().darker().darker() to Color.WHITE.darker().darker(),
+//                    Color.BLUE.darker().darker() to Color.WHITE.darker().darker().darker(),
+//                    Color.BLUE.darker() to Color.WHITE.darker().darker().darker().darker(),
+//                    Color.BLUE to Color.WHITE.darker().darker().darker().darker().darker(),
+//                ),
+//                connectToCenter = true,
+//            )
             // The "particle over time" part will be done separately in advance() ...
         }
 
