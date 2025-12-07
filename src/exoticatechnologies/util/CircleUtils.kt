@@ -354,7 +354,8 @@ object CircleUtils {
         private val particlePoints: List<SwirlArmParticles>
         //TODO for cases when FPS drops, we might go over more than one interval due to it's short lifespan
         // replace with MultiInvervalUtil
-        private val intervalUtil: IntervalUtil
+//        private val intervalUtil: IntervalUtil
+        private val intervalUtil: MultiIntervalUtil
         init {
             particlePoints = if (generateParticles) {
                 // If we should generate particles, we need to iterate through all rings, generate particles
@@ -414,7 +415,8 @@ object CircleUtils {
             }
 
             // After generating the particles, instantiate the intervalUtil
-            intervalUtil = IntervalUtil(particleDrawInterval, particleDrawInterval)
+//            intervalUtil = IntervalUtil(particleDrawInterval, particleDrawInterval)
+            intervalUtil = MultiIntervalUtil(particleDrawInterval)
         }
 
         /**
@@ -523,7 +525,7 @@ object CircleUtils {
             // Drawing particles is rather simple. Feed the amount into the interval util, if amount has passed -
             // call draw on each SwirlArmParticles instance. They will automatically remove the drawn point.
             intervalUtil.advance(amount)
-            if (intervalUtil.intervalElapsed()) {
+            intervalUtil.onIntervalElapsed {
                 particlePoints.forEach { swirlArm ->
                     // If we should draw more particles, do so
                     repeat(particlesToDrawPerInterval) {
@@ -569,8 +571,6 @@ object CircleUtils {
             ) {
                 if (particlePoints.isNotEmpty()) {
                     val point = particlePoints.removeAt(0)
-                    //TODO draw the point
-
                     // Fetch the original smooth particle limit
                     val engine = Global.getCombatEngine()
 //                    val originalLimit = (engine as CombatEngine).smoothParticles.limit

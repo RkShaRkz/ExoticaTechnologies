@@ -234,14 +234,30 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                     swirl.drawParticles(
                         amount = amount,
                         particleSize = 64f,
-                        particlesToDrawPerInterval = 1,
+                        particlesToDrawPerInterval = 3,
+//                        particleColors = listOf(
+//                            Color.WHITE,
+//                            Color.WHITE.darker(),
+//                            Color.WHITE.darker().darker(),
+//                            Color.WHITE.darker().darker().darker(),
+//                            Color.WHITE.darker().darker().darker().darker(),
+//                            Color.WHITE.darker().darker().darker().darker().darker(),
+//                        )
+//                        particleColors = listOf(
+//                            Color.BLUE.brighter().brighter(),
+//                            Color.BLUE.brighter(),
+//                            Color.WHITE,
+//                            Color.WHITE.darker(),
+//                            Color.WHITE.darker().darker(),
+//                            Color.WHITE.darker().darker().darker().darker()
+//                        )
                         particleColors = listOf(
+                            Color.WHITE.brighter().brighter(),
                             Color.WHITE,
-                            Color.WHITE.darker(),
-                            Color.WHITE.darker().darker(),
-                            Color.WHITE.darker().darker().darker(),
-                            Color.WHITE.darker().darker().darker().darker(),
-                            Color.WHITE.darker().darker().darker().darker().darker(),
+                            Color.LIGHT_GRAY.brighter().brighter(),
+                            Color.LIGHT_GRAY,
+                            Color.DARK_GRAY,
+                            Color.DARK_GRAY.darker().darker()
                         )
                     )
                     // If all arms have finished, get rid of visualSwirl
@@ -297,7 +313,8 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                 globalRotationDegrees = ship.facing,
                 generateParticles = true,
                 particleSegments = 16,
-                particleGenerationWorkMode = CircleUtils.SwirlGenerationWorkMode.LOGARITHMIC
+                particleGenerationWorkMode = CircleUtils.SwirlGenerationWorkMode.LOGARITHMIC,
+                particleDrawInterval = 0.05f
             )
             // Draw the instantaneous part of the swirl
             visualSwirl?.draw(
