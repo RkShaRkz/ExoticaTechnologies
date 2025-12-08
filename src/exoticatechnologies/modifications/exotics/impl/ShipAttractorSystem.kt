@@ -8,6 +8,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.IntervalUtil
+import com.fs.starfarer.combat.CombatEngine
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
@@ -184,6 +185,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
         // check for activation every 3 seconds
         private val activationIntervalUtil = IntervalUtil(2.95f, 3.05f)
         private var visualSwirl: CircleUtils.Swirl? = null
+        private val ORIGINAL_PARTICLE_LIMIT = (Global.getCombatEngine() as CombatEngine).smoothParticles.limit
 
         override fun getBaseActiveDuration() = 1f
 
@@ -216,6 +218,10 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
         }
 
         override fun getDisplayText() = "Ship Attractor System"
+
+        private fun setSmoothParticleLimit(newLimit: Int) {
+            (Global.getCombatEngine() as CombatEngine).smoothParticles.limit = newLimit
+        }
 
         override fun onActivate() {
             log("--> onActivate()")
@@ -261,7 +267,6 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                     swirl.drawParticles(
                         amount = amount,
                         particleSize = 64f,
-//                        particlesToDrawPerInterval = 3,
                         particlesToDrawPerInterval = 4,
                         particleColors = listOf(
                             Color.WHITE.brighter().brighter(),
@@ -272,18 +277,21 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                             Color.DARK_GRAY.darker().darker()
                         ),
                         particleDrawMode = CircleUtils.ParticleDrawMode.WHOLE_ARM,
-//                        particleArmsToDraw = 1  //TODO
-                        particleArmsToDraw = 6  //TODO
+                        particleArmsToDraw = 9
                     )
                     // If all arms have finished, get rid of visualSwirl
                     if (swirl.hasFinished()) {
                         visualSwirl = null
+                        // And reset the smooth particle limit back to original
+                        setSmoothParticleLimit(newLimit = ORIGINAL_PARTICLE_LIMIT)
                     }
                 }
             }
         }
 
         private fun showVisualFlair() {
+            // Bump the limit temporarily
+            setSmoothParticleLimit(newLimit = 4000)
             // generate dots
             val center = ship.location
             val fullRange = getRadiusAmount(member, mods, exoticData)
