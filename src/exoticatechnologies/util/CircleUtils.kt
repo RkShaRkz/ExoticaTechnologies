@@ -369,10 +369,10 @@ object CircleUtils {
     ) {
         private val particlePoints: List<SwirlArmParticles>
         private val intervalUtil: MultiIntervalUtil
+        private var drawIterations: Int = 0
 
         // Used only when drawing in WHOLE_ARM mode
         private var lastDrawnArm: Int = 0
-        private var wholeArmDrawIterations: Int = 0
 
         init {
             particlePoints = if (generateParticles) {
@@ -533,6 +533,7 @@ object CircleUtils {
          * Needs at least one color, **list cannot be empty**
          * @param particleDrawMode the [ParticleDrawMode] to use
          * @param particleArmsToDraw how many swirl arms to draw, relevant only when [particleDrawMode] is [ParticleDrawMode.WHOLE_ARM]
+         * @param continuousDrain whether to pre-drain arms before drawing depending on the drawing iteration.
          */
         fun drawParticles(
             amount: Float,
@@ -541,7 +542,8 @@ object CircleUtils {
             particlesToDrawPerInterval: Int = 1,
             particleColors: List<Color>,
             particleDrawMode: ParticleDrawMode,
-            particleArmsToDraw: Int
+            particleArmsToDraw: Int,
+            continuousDrain: Boolean
         ) {
             // Drawing particles is rather simple. Feed the amount into the interval util, if amount has passed -
             // call draw on each SwirlArmParticles instance. They will automatically remove the drawn point.
@@ -564,12 +566,27 @@ object CircleUtils {
                                 } else {
                                     particleColors.last()
                                 }
+
+                                // Pre-drain if we should
+                                if (continuousDrain) {
+                                    swirlArm.removePoints(drawIterations)
+                                }
+
+                                // And finally draw the arm
                                 swirlArm.draw(
                                     particleSize = particleSize,
                                     particleDuration = particleDuration,
                                     particleColors = listOf(color),
                                     particleDrawMode = particleDrawMode
                                 )
+
+                                // It makes sense to do this in the 'repeat' after drawing, because if we drew only one point
+                                // we want the next arm to pre-drain one point;
+                                // If we drew 5 points, we want the next arm to pre-drain 5 points before drawing as well.
+                                drawIterations++
+
+                                // And return nothing
+                                Unit
                             }
                         }
                     }
@@ -591,6 +608,12 @@ object CircleUtils {
                             // third iteration: 4 new, even shorter arms are drawn, and then drained of X points
                             // this would make them shrink during the first circle instead of their drain being visible from second circle onward
 
+                            //FIXME fix this so that it pre-removes enough points to finish on the previously-drawn arm's size,
+                            // just pre-draining 'iteration' number like this will quickly lead to draining getting out of hand
+                            if (continuousDrain) {
+                                particlePoints[armIndex].removePoints(drawIterations)
+                            }
+
                             // draw the arm
                             particlePoints[armIndex].draw(
                                 particleSize = particleSize,
@@ -604,6 +627,11 @@ object CircleUtils {
 
                         // now, decrement lastDrawnArm for next iteration
                         lastDrawnArm = wrapAroundMod(lastDrawnArm - 1, particlePoints.size)
+                        // And bump the drawIterations
+                        drawIterations++
+
+                        // And return nothing
+                        Unit
                     }
                 }.exhaustive
             }
