@@ -357,6 +357,22 @@ object CircleUtils {
         WHOLE_ARM
     }
 
+    /**
+     * Enum class describing the "contiuous drain" and how many particles should be pre-drained before drawing
+     */
+    enum class ContinuousDrainMode {
+        /**
+         * Pre-drain based on drawing iteration, first draw iteration pre-draining 0, second draw-iteration pre-draining 1 and so on...
+         */
+        ITERATION_BASED_MODE,
+
+        /**
+         * Pre-drain based on previous arm's post-draw size, so that the next arm's draw state begins from the size of the last arm's drawing state
+         */
+        //TODO test this out
+        PREVIOUS_ARM_SIZE_MODE
+    }
+
 
     data class Swirl(
         private val rings: List<List<Vector2f>>,
@@ -370,6 +386,7 @@ object CircleUtils {
         private val particlePoints: List<SwirlArmParticles>
         private val intervalUtil: MultiIntervalUtil
         private var drawIterations: Int = 0
+        private var previousArmPostDrawIndex: Int = 0
 
         // Used only when drawing in WHOLE_ARM mode
         private var lastDrawnArm: Int = 0
@@ -533,7 +550,7 @@ object CircleUtils {
          * Needs at least one color, **list cannot be empty**
          * @param particleDrawMode the [ParticleDrawMode] to use
          * @param particleArmsToDraw how many swirl arms to draw, relevant only when [particleDrawMode] is [ParticleDrawMode.WHOLE_ARM]
-         * @param continuousDrain whether to pre-drain arms before drawing depending on the drawing iteration.
+         * @param continuousDrain optional parameter determining whether to pre-drain arms before drawing. See [ContinuousDrainMode]
          */
         fun drawParticles(
             amount: Float,
@@ -543,7 +560,7 @@ object CircleUtils {
             particleColors: List<Color>,
             particleDrawMode: ParticleDrawMode,
             particleArmsToDraw: Int,
-            continuousDrain: Boolean
+            continuousDrain: ContinuousDrainMode?
         ) {
             // Drawing particles is rather simple. Feed the amount into the interval util, if amount has passed -
             // call draw on each SwirlArmParticles instance. They will automatically remove the drawn point.
@@ -555,6 +572,18 @@ object CircleUtils {
                 when(particleDrawMode) {
                     ParticleDrawMode.ONE_AT_A_TIME -> {
                         particlePoints.forEach { swirlArm ->
+                            // Pre-drain if we should
+                            continuousDrain?.let {
+                                when(it) {
+                                    ContinuousDrainMode.ITERATION_BASED_MODE -> {
+                                        swirlArm.removePoints(drawIterations)
+                                    }
+                                    ContinuousDrainMode.PREVIOUS_ARM_SIZE_MODE -> {
+                                        swirlArm.removePoints(previousArmPostDrawIndex)
+                                    }
+                                }.exhaustive
+                            }
+
                             // If we should draw more particles, do so
                             repeat(particlesToDrawPerInterval) {
                                 // decode color based on where we are in the list
@@ -565,11 +594,6 @@ object CircleUtils {
                                     particleColors[colorIndex]
                                 } else {
                                     particleColors.last()
-                                }
-
-                                // Pre-drain if we should
-                                if (continuousDrain) {
-                                    swirlArm.removePoints(drawIterations)
                                 }
 
                                 // And finally draw the arm
@@ -588,6 +612,7 @@ object CircleUtils {
                                 // And return nothing
                                 Unit
                             }
+                            previousArmPostDrawIndex = swirlArm.getCurrentPointIndex()
                         }
                     }
 
@@ -601,17 +626,17 @@ object CircleUtils {
                         for (i in 0 until particleArmsToDraw) {
                             // calculate proper index, deducting so it goes in the right direction but i guess it doesn't matter
                             val armIndex = wrapAroundMod(lastDrawnArm - i * stride, particlePoints.size)
-                            //TODO consider experimenting with an ever-shrinking swirl, so that we pre-remove the iterationNumber
-                            // points, which might produce a much shorter, quicker draining swirl.
-                            // first iteration: 4 arms are drawn, and then drained of X points
-                            // second iteration: 4 new, shorter arms are drawn, and then drained of X points
-                            // third iteration: 4 new, even shorter arms are drawn, and then drained of X points
-                            // this would make them shrink during the first circle instead of their drain being visible from second circle onward
 
-                            //FIXME fix this so that it pre-removes enough points to finish on the previously-drawn arm's size,
-                            // just pre-draining 'iteration' number like this will quickly lead to draining getting out of hand
-                            if (continuousDrain) {
-                                particlePoints[armIndex].removePoints(drawIterations)
+                            // Pre-drain if we should (will drain once on a per-arm basis)
+                            continuousDrain?.let {
+                                when(it) {
+                                    ContinuousDrainMode.ITERATION_BASED_MODE -> {
+                                        particlePoints[armIndex].removePoints(drawIterations)
+                                    }
+                                    ContinuousDrainMode.PREVIOUS_ARM_SIZE_MODE -> {
+                                        particlePoints[armIndex].removePoints(previousArmPostDrawIndex)
+                                    }
+                                }.exhaustive
                             }
 
                             // draw the arm
@@ -627,8 +652,9 @@ object CircleUtils {
 
                         // now, decrement lastDrawnArm for next iteration
                         lastDrawnArm = wrapAroundMod(lastDrawnArm - 1, particlePoints.size)
-                        // And bump the drawIterations
+                        // And bump the drawIterations and previousArmPostDrawIndex
                         drawIterations++
+                        previousArmPostDrawIndex = particlePoints[lastDrawnArm].getCurrentPointIndex()
 
                         // And return nothing
                         Unit

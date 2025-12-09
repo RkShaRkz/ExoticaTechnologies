@@ -284,7 +284,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                         ),
                         particleDrawMode = CircleUtils.ParticleDrawMode.WHOLE_ARM,
                         particleArmsToDraw = 9,
-                        continuousDrain = true
+                        continuousDrain = CircleUtils.ContinuousDrainMode.ITERATION_BASED_MODE
                     )
                     // If all arms have finished, get rid of visualSwirl
                     if (swirl.hasFinished()) {
