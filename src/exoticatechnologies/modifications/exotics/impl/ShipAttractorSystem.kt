@@ -260,6 +260,12 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             return potentiallyAffectedShips
         }
 
+        fun onSwirlFinished(swirlThatFinished: CircleUtils.Swirl) {
+            visualSwirl = null
+            // And reset the smooth particle limit back to original
+            setSmoothParticleLimit(newLimit = ORIGINAL_PARTICLE_LIMIT)
+        }
+
         override fun advance(amount: Float, isPaused: Boolean) {
             if (isPaused.not()) {
                 // If not paused, draw particles on the swirl if we have it
@@ -267,7 +273,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                     swirl.drawParticles(
                         amount = amount,
                         particleSize = 64f,
-                        particlesToDrawPerInterval = 4,
+                        particlesToDrawPerInterval = 6,
                         particleColors = listOf(
                             Color.WHITE.brighter().brighter(),
                             Color.WHITE,
@@ -281,9 +287,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                     )
                     // If all arms have finished, get rid of visualSwirl
                     if (swirl.hasFinished()) {
-                        visualSwirl = null
-                        // And reset the smooth particle limit back to original
-                        setSmoothParticleLimit(newLimit = ORIGINAL_PARTICLE_LIMIT)
+                        onSwirlFinished(swirl)
                     }
                 }
             }
@@ -295,13 +299,13 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             // generate dots
             val center = ship.location
             val fullRange = getRadiusAmount(member, mods, exoticData)
-            // Lets draw the first ring at 1.5x collision radius so it's more visible, 1x is kinda "too close"
+            // Lets draw the first ring at 1.25x collision radius so it's more visible, 1x is kinda "too close"
             // Lets generate the swirl
             visualSwirl = CircleUtils.generateSwirl(
                 center = center,
                 rings = 6,
                 pointsPerRing = 72,
-                minRadius = ship.collisionRadius * 1.5f,
+                minRadius = ship.collisionRadius * 1.25f,
                 maxRadius = fullRange,
                 generateInwards = true,
                 ringRotationsDegrees = listOf(0f, 30f, 60f, 90f, 120f, 150f),

@@ -372,6 +372,7 @@ object CircleUtils {
 
         // Used only when drawing in WHOLE_ARM mode
         private var lastDrawnArm: Int = 0
+        private var wholeArmDrawIterations: Int = 0
 
         init {
             particlePoints = if (generateParticles) {
@@ -583,6 +584,13 @@ object CircleUtils {
                         for (i in 0 until particleArmsToDraw) {
                             // calculate proper index, deducting so it goes in the right direction but i guess it doesn't matter
                             val armIndex = wrapAroundMod(lastDrawnArm - i * stride, particlePoints.size)
+                            //TODO consider experimenting with an ever-shrinking swirl, so that we pre-remove the iterationNumber
+                            // points, which might produce a much shorter, quicker draining swirl.
+                            // first iteration: 4 arms are drawn, and then drained of X points
+                            // second iteration: 4 new, shorter arms are drawn, and then drained of X points
+                            // third iteration: 4 new, even shorter arms are drawn, and then drained of X points
+                            // this would make them shrink during the first circle instead of their drain being visible from second circle onward
+
                             // draw the arm
                             particlePoints[armIndex].draw(
                                 particleSize = particleSize,
