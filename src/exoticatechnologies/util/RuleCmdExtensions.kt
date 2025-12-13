@@ -34,8 +34,10 @@ fun FireAll.fire_safe(ruleId: String?, dialog: InteractionDialogAPI, memoryMap: 
 /**
  * This is just a kotlin-safe wrapper around [FireAll] and [FireAll.fire] so that it treats nullability as it should
  *
- * However, due to the nullability not being a thing in java, you **should prefer** using the three-parameter [fire] method
+ * However, due to the nullability not being a thing in java, you **should prefer** using the three-parameter [fireSafe] method
  * instead
+ *
+ * Also provides the useful [getMemoryMap] method
  */
 object FireAllKotlin : FireAll() {
     val logger = Logger.getLogger(FireAllKotlin::class.java)
@@ -120,7 +122,8 @@ object FireAllKotlin : FireAll() {
      *
      * @return result of [InteractionDialogPlugin.getMemoryMap] if plugin was non-null or null if plugin was null.
      */
-    private fun getMemoryMap(interactionDialogPlugin: InteractionDialogPlugin?): Map<String, MemoryAPI>? {
+    @JvmStatic
+    fun getMemoryMap(interactionDialogPlugin: InteractionDialogPlugin?): Map<String, MemoryAPI>? {
         // If 'interactionDialog' or it's memory map is null - return null
         // otherwise, return it's memory map
         return if (interactionDialogPlugin != null) {
@@ -128,6 +131,25 @@ object FireAllKotlin : FireAll() {
             interactionDialogPlugin.memoryMap
         } else {
             // interaction dialog was null, it can't have a memory map - return null
+            null
+        }
+    }
+
+    /**
+     * Returns a nullable memoryMap from a nullable [interactionDialog].
+     * This method exists solely because I just want to replace my own catering of the memoryMap in other places
+     * (and similar reason as the other [getMemoryMap] for plugin)
+     *
+     * @param interactionDialog the [InteractionDialogAPI] whose (plugin's) memory map should be returned
+     *
+     * @return result of [InteractionDialogPlugin.getMemoryMap] if dialog and plugin were non-null or null if either was null.
+     */
+    @JvmStatic
+    fun getMemoryMap(interactionDialog: InteractionDialogAPI?): Map<String, MemoryAPI>? {
+        // If interaction dialog is null, there is no map
+        return if(interactionDialog != null) {
+            getMemoryMap(interactionDialog.plugin)
+        } else {
             null
         }
     }

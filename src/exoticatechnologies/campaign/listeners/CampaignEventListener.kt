@@ -68,7 +68,7 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
                 }
 
             // Grab memory map, and fire if non-null, log warning if was null
-            val memoryMap = getMemoryMap(dialog.plugin)
+            val memoryMap = FireAllKotlin.getMemoryMap(dialog)
             if (memoryMap != null) {
                 FireAllKotlin.fire(
                     ruleId = null,
@@ -102,7 +102,7 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             dlog("Generating modifications for fleet.")
             activeFleets.add(interactionTarget)
             applyExtraSystemsToFleet(interactionTarget)
-            val memoryMap = getMemoryMap(dialog.plugin)
+            val memoryMap = FireAllKotlin.getMemoryMap(dialog)
             if (memoryMap != null) {
                 FireAllKotlin.fire(
                     ruleId = null,
@@ -329,18 +329,6 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
                 val gatheringPoint = prod.gatheringPoint ?: return@forEach
                 ShipModFactory.generateForFleetMember(it, gatheringPoint)
             }
-        }
-    }
-
-    private fun getMemoryMap(interactionDialog: InteractionDialogPlugin?): Map<String, MemoryAPI>? {
-        // If 'interactionDialog' or it's memory map is null - return null
-        // otherwise, return it's memory map
-        return if (interactionDialog != null) {
-            // now return the nullable memory map
-            interactionDialog.memoryMap
-        } else {
-            // interaction dialog was null, it can't have a memory map - return null
-            null
         }
     }
 
