@@ -70,7 +70,12 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             // Grab memory map, and fire if non-null, log warning if was null
             val memoryMap = getMemoryMap(dialog.plugin)
             if (memoryMap != null) {
-                FireAll.fire(null, dialog, memoryMap, "GeneratedESForFleet")
+                fireAll(
+                    ruleId = null,
+                    dialog = dialog,
+                    memoryMap = memoryMap,
+                    params = "GeneratedESForFleet"
+                )
             } else {
                 // log since it was null
                 log(
@@ -99,7 +104,12 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             applyExtraSystemsToFleet(interactionTarget)
             val memoryMap = getMemoryMap(dialog.plugin)
             if (memoryMap != null) {
-                FireAll.fire(null, dialog, memoryMap, "GeneratedESForFleet")
+                fireAll(
+                    ruleId = null,
+                    dialog = dialog,
+                    memoryMap = memoryMap,
+                    params = "GeneratedESForFleet"
+                )
             } else {
                 log(
                     logMsg = "Did not generate exoticas for fleet named ${interactionTarget.nameWithFaction} due to memoryMap being null!",
@@ -327,14 +337,7 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
         // otherwise, return it's memory map
         return if (interactionDialog != null) {
             // now return the nullable memory map
-            val memoryMap: Map<String, MemoryAPI>? = interactionDialog.memoryMap
-            if (memoryMap != null) {
-                // memory map was non-null, return it
-                memoryMap
-            } else {
-                // memory map was null, return null
-                null
-            }
+            interactionDialog.memoryMap
         } else {
             // interaction dialog was null, it can't have a memory map - return null
             null
@@ -348,6 +351,13 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             logLevel = logLevel,
             minLogLevel = Level.WARN
         )
+    }
+
+    /**
+     * This is just a kotlin-safe wrapper around [FireAll] and [FireAll.fire] so that it treats nullability as it should
+     */
+    private fun fireAll(ruleId: String?, dialog: InteractionDialogAPI, memoryMap: Map<String, MemoryAPI>, params: String) {
+        FireAll.fire(ruleId, dialog, memoryMap, params)
     }
 
     companion object {
