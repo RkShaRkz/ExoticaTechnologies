@@ -124,13 +124,13 @@ object FireAllKotlin : FireAll() {
      */
     @JvmStatic
     fun getMemoryMap(interactionDialogPlugin: InteractionDialogPlugin?): Map<String, MemoryAPI>? {
-        // If 'interactionDialog' or it's memory map is null - return null
+        // If 'interactionDialogPlugin' or it's memory map is null - return null
         // otherwise, return it's memory map
         return if (interactionDialogPlugin != null) {
             // now return the nullable memory map
             interactionDialogPlugin.memoryMap
         } else {
-            // interaction dialog was null, it can't have a memory map - return null
+            // interaction dialog plugin was null, it can't have a memory map - return null
             null
         }
     }
