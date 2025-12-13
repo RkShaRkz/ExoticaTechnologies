@@ -344,6 +344,9 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
         }
     }
 
+    /**
+     * Method that logs messages only above [Level.WARN]
+     */
     private fun log(logMsg: String, logLevel: Level) {
         shouldLog(
             logMsg = logMsg,

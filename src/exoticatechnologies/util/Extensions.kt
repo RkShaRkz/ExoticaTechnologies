@@ -759,11 +759,11 @@ fun shouldLog(logMsg: String, logger: Logger, logLevel: Level, minLogLevel: Leve
 object AnonymousLogger {
     private val logger: Logger = Logger.getLogger(AnonymousLogger::class.java)
 
-    fun log(log: String) {
-        logger.info("[AnonymousLogger] $log")
+    fun log(log: String, logLevel: Level = Level.INFO) {
+        log(log, "AnonymousLogger", logLevel)
     }
 
-    fun log(log: String, logtag: String) {
-        logger.info("[$logtag] $log")
+    fun log(log: String, logtag: String, logLevel: Level = Level.INFO) {
+        log("[$logtag] $log", logger, logLevel)
     }
 }
