@@ -6,6 +6,7 @@ import com.fs.starfarer.api.campaign.*
 import com.fs.starfarer.api.campaign.CampaignEventListener.FleetDespawnReason
 import com.fs.starfarer.api.campaign.econ.MonthlyReport
 import com.fs.starfarer.api.campaign.listeners.EconomyTickListener
+import com.fs.starfarer.api.campaign.rules.MemoryAPI
 import com.fs.starfarer.api.combat.EngagementResultAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.fleet.FleetMemberType
@@ -35,14 +36,15 @@ import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.Utilities
+import exoticatechnologies.util.shouldLog
 import lombok.extern.log4j.Log4j
+import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import kotlin.math.roundToInt
 
 
 @Log4j
-class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(permaRegister), EveryFrameScript,
-        EconomyTickListener {
+class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(permaRegister), EveryFrameScript, EconomyTickListener {
     private val cleaningInterval = IntervalUtil(15f, 15f)
 
     override fun reportShownInteractionDialog(dialog: InteractionDialogAPI) {
@@ -65,7 +67,17 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
                         applyExtraSystemsToFleet(it)
                     }
 
-            FireAll.fire(null, dialog, dialog.plugin.memoryMap, "GeneratedESForFleet")
+            // Grab memory map, and fire if non-null, log warning if was null
+            val memoryMap = getMemoryMap(dialog.plugin)
+            if (memoryMap != null) {
+                FireAll.fire(null, dialog, memoryMap, "GeneratedESForFleet")
+            } else {
+                // log since it was null
+                log(
+                    logMsg = "Did not generate exoticas for fleet due to memoryMap being null!",
+                    logLevel = Level.WARN
+                )
+            }
         }
 
         val defenderFleet = interactionTarget.memoryWithoutUpdate.getFleet("\$defenderFleet")
@@ -85,7 +97,15 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             dlog("Generating modifications for fleet.")
             activeFleets.add(interactionTarget)
             applyExtraSystemsToFleet(interactionTarget)
-            FireAll.fire(null, dialog, dialog.plugin.memoryMap, "GeneratedESForFleet")
+            val memoryMap = getMemoryMap(dialog.plugin)
+            if (memoryMap != null) {
+                FireAll.fire(null, dialog, memoryMap, "GeneratedESForFleet")
+            } else {
+                log(
+                    logMsg = "Did not generate exoticas for fleet named ${interactionTarget.nameWithFaction} due to memoryMap being null!",
+                    logLevel = Level.WARN
+                )
+            }
             return
         }
 
@@ -302,9 +322,37 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
         }
     }
 
+    private fun getMemoryMap(interactionDialog: InteractionDialogPlugin?): Map<String, MemoryAPI>? {
+        // If 'interactionDialog' or it's memory map is null - return null
+        // otherwise, return it's memory map
+        return if (interactionDialog != null) {
+            // now return the nullable memory map
+            val memoryMap: Map<String, MemoryAPI>? = interactionDialog.memoryMap
+            if (memoryMap != null) {
+                // memory map was non-null, return it
+                memoryMap
+            } else {
+                // memory map was null, return null
+                null
+            }
+        } else {
+            // interaction dialog was null, it can't have a memory map - return null
+            null
+        }
+    }
+
+    private fun log(logMsg: String, logLevel: Level) {
+        shouldLog(
+            logMsg = logMsg,
+            logger = log,
+            logLevel = logLevel,
+            minLogLevel = Level.WARN
+        )
+    }
+
     companion object {
         private const val debug = false
-        private val log = Logger.getLogger(Companion::class.java)
+        private val log = Logger.getLogger(CampaignEventListener::class.java)
         private val submarketIdsToCheckForSpecialItems: MutableList<String> =
                 mutableListOf(Submarkets.SUBMARKET_BLACK, Submarkets.SUBMARKET_OPEN, Submarkets.GENERIC_MILITARY)
         val activeFleets: MutableList<CampaignFleetAPI> = ArrayList()
