@@ -18,7 +18,6 @@ import com.fs.starfarer.api.impl.campaign.ids.Entities
 import com.fs.starfarer.api.impl.campaign.ids.MemFlags
 import com.fs.starfarer.api.impl.campaign.ids.Submarkets
 import com.fs.starfarer.api.impl.campaign.ids.Tags
-import com.fs.starfarer.api.impl.campaign.rulecmd.FireAll
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial.PerShipData
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial.ShipRecoverySpecialData
 import com.fs.starfarer.api.impl.campaign.shared.SharedData
@@ -34,6 +33,7 @@ import exoticatechnologies.modifications.ShipModFactory.generateRandom
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.ExoticData
+import exoticatechnologies.util.FireAllKotlin
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.Utilities
 import exoticatechnologies.util.shouldLog
@@ -70,7 +70,7 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             // Grab memory map, and fire if non-null, log warning if was null
             val memoryMap = getMemoryMap(dialog.plugin)
             if (memoryMap != null) {
-                fireAll(
+                FireAllKotlin.fire(
                     ruleId = null,
                     dialog = dialog,
                     memoryMap = memoryMap,
@@ -104,7 +104,7 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             applyExtraSystemsToFleet(interactionTarget)
             val memoryMap = getMemoryMap(dialog.plugin)
             if (memoryMap != null) {
-                fireAll(
+                FireAllKotlin.fire(
                     ruleId = null,
                     dialog = dialog,
                     memoryMap = memoryMap,
@@ -351,13 +351,6 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             logLevel = logLevel,
             minLogLevel = Level.WARN
         )
-    }
-
-    /**
-     * This is just a kotlin-safe wrapper around [FireAll] and [FireAll.fire] so that it treats nullability as it should
-     */
-    private fun fireAll(ruleId: String?, dialog: InteractionDialogAPI, memoryMap: Map<String, MemoryAPI>, params: String) {
-        FireAll.fire(ruleId, dialog, memoryMap, params)
     }
 
     companion object {
