@@ -70,6 +70,7 @@ class Kingslayer(key: String, settings: JSONObject): Upgrade(key, settings) {
             .addToTooltip(tooltip)
     }
 
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
 
     companion object {
         private val HULLSIZE_DAMAGE_MAP = mutableMapOf(ShipAPI.HullSize.FRIGATE to 0.05f, ShipAPI.HullSize.DESTROYER to 0.025f)

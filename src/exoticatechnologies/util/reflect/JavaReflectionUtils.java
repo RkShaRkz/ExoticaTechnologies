@@ -1,10 +1,15 @@
 package exoticatechnologies.util.reflect;
 
+import org.apache.log4j.Logger;
+
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 
 public class JavaReflectionUtils {
+
+    private static final Logger logger = Logger.getLogger(JavaReflectionUtils.class);
+
 
     public static Object newArrayInstance(Class<?> clazz, int size) {
         try {
@@ -20,6 +25,7 @@ public class JavaReflectionUtils {
         }
 
         System.err.println("Returning null because shit hit the fan");
+        logger.error("Returning null because shit hit the fan");
         return null;
     }
 }

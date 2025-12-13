@@ -15,7 +15,6 @@ class WaspDefenseDrones(key: String, settings: JSONObject) : Upgrade(key, settin
     override var maxLevel: Int = 1
 
     override fun applyToShip(member: FleetMemberAPI, ship: ShipAPI, mods: ShipModifications) {
-//        ActivatorManager.addActivator(ship, WaspDroneActivator(ship))
         MagicSubsystemsManager.addSubsystemToShip(ship, WaspDroneActivator(ship))
     }
 
@@ -48,7 +47,6 @@ class WaspDefenseDrones(key: String, settings: JSONObject) : Upgrade(key, settin
                 .addToTooltip(tooltip)
     }
 
-    //    class WaspDroneActivator(ship: ShipAPI) : DroneActivator(ship) {
     class WaspDroneActivator(ship: ShipAPI) : MagicDroneSubsystem(ship) {
         companion object {
             val maxDronesMap: Map<ShipAPI.HullSize, Int> = mapOf(

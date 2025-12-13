@@ -121,7 +121,12 @@ class MarketCargoListener(val dialog: InteractionDialogAPI, val marketData: Mark
         val retVal = mutableListOf<ModSpecialItemPlugin>()
         for (stack in cargo.stacksCopy) {
             val plugin = stack.plugin
-            retVal.add(plugin as ModSpecialItemPlugin)
+            // Since I got a bug report here, about a null pointer, lets just ensure that we only add non-null plugins
+            // to the list to avoid further NPEs from kotlin itself when we try to assign (add) nullable items into
+            // a list of non-nullable items
+            plugin?.let { nonNullPlugin ->
+                retVal.add(nonNullPlugin as ModSpecialItemPlugin)
+            }
         }
 
         return retVal

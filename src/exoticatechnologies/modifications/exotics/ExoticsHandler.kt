@@ -129,4 +129,23 @@ object ExoticsHandler {
         }
         return factionAllowedExotics
     }
+
+    @JvmStatic
+    fun stringifyExotics() : String {
+        val sb = StringBuilder()
+        for (key in EXOTICS.keys) {
+            sb.append(key).append(", ")
+        }
+        // remove last two characters, if we managed to get any exotics
+        if (sb.length > 2) {
+            sb.setLength(sb.length - 2)
+        }
+
+        return sb.toString()
+    }
+
+    @JvmStatic
+    fun getExoticsKeys() : List<String> {
+        return EXOTICS.keys.toList()
+    }
 }

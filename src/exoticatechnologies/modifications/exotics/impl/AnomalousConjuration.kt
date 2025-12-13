@@ -26,13 +26,14 @@ import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.StringUtils
+import exoticatechnologies.util.Utilities
 import org.json.JSONObject
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
 
 class AnomalousConjuration(key: String, settings: JSONObject) : Exotic(key, settings) {
     override var color = Color(180, 255, 200)
-    override var canDropFromCombat: Boolean = false
+    override var canDropFromCombat: Boolean = true
 
     override fun modifyToolTip(
         tooltip: TooltipMakerAPI,
@@ -49,15 +50,12 @@ class AnomalousConjuration(key: String, settings: JSONObject) : Exotic(key, sett
     }
 
     override fun shouldShow(member: FleetMemberAPI, mods: ShipModifications, market: MarketAPI?): Boolean {
-        return false
+        return Utilities.hasExoticChip(Global.getSector().playerFleet.cargo, key)
+                || Utilities.hasExoticChip(Misc.getStorageCargo(market), key)
     }
 
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
         return true
-    }
-
-    override fun canUseExoticType(type: ExoticType): Boolean {
-        return false
     }
 
     override fun getGenerationChanceMult(member: FleetMemberAPI): Float {
@@ -220,8 +218,7 @@ class AnomalousConjuration(key: String, settings: JSONObject) : Exotic(key, sett
                     weightFriends += if (other.isFighter || other.isDrone) {
                         0.25f
                     } else {
-                        val w = Misc.getShipWeight(other)
-                        w
+                        Misc.getShipWeight(other)
                     }
                 }
             }

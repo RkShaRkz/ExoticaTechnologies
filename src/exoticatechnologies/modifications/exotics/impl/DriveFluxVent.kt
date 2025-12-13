@@ -89,6 +89,8 @@ class DriveFluxVent(key: String, settings: JSONObject) : Exotic(key, settings) {
         return DAMAGE_TAKEN_INCREASE * getNegativeMult(member, mods, exoticData)
     }
 
+    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
+
     //    inner class BigVentActivator(ship: ShipAPI, val member: FleetMemberAPI, val mods: ShipModifications, val exoticData: ExoticData): CombatActivator(ship) {
     inner class BigVentActivator(ship: ShipAPI, val member: FleetMemberAPI, val mods: ShipModifications, val exoticData: ExoticData) : MagicSubsystem(ship) {
         private var lastActivation: Float = -1f

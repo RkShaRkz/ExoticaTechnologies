@@ -54,12 +54,22 @@ class ETExotics {
         putExotic(ExoticData(key!!))
     }
 
-    fun removeExotic(key: String) {
-        exoticData.remove(key)
+    /**
+     * Removes a particular [Exotic] with the given [key] from the list of installed exotics
+     *
+     * @return whether the Exotic was successfully removed or not
+     */
+    fun removeExotic(key: String): Boolean {
+        return exoticData.remove(key) != null
     }
 
-    fun removeExotic(exotic: Exotic) {
-        exoticData.remove(exotic.key)
+    /**
+     * Removes a particular [Exotic] from the list of installed exotics
+     *
+     * @return whether the [exotic] was successfully removed or not
+     */
+    fun removeExotic(exotic: Exotic): Boolean {
+        return exoticData.remove(exotic.key) != null
     }
 
     fun hasAnyExotic(): Boolean {
@@ -100,9 +110,7 @@ class ETExotics {
     }
 
     override fun toString(): String {
-        return "ETExotics{" +
-                "exoticData=" + exoticData +
-                '}'
+        return "ETExotics{exotics=${exotics},exoticData=${exoticData}}"
     }
 
     fun toJson(): JSONObject? {

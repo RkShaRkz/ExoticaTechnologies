@@ -4,6 +4,7 @@ import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.campaign.CampaignFleetAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.*
+import com.fs.starfarer.api.combat.ShipAPI.HullSize
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.fleet.FleetMemberType
 import com.fs.starfarer.api.mission.FleetSide
@@ -14,9 +15,7 @@ import exoticatechnologies.combat.ExoticaShipRemovalReason
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
-import exoticatechnologies.util.CollisionUtil
-import exoticatechnologies.util.StringUtils
-import exoticatechnologies.util.Utilities
+import exoticatechnologies.util.*
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
@@ -44,6 +43,11 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
      */
     private val systemDeactivatedForGood = AtomicBoolean(false)
 
+    /**
+     * This flag is used to avoid looking up through all ships to determine whether the ship is in combat or not
+     */
+    private val shipIsInCombat = AtomicBoolean(false)
+
     private val logger: Logger = Logger.getLogger(GuardianShieldDrone::class.java)
 
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
@@ -55,6 +59,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         return true
     }
 
+    @Synchronized
     override fun modifyToolTip(
             tooltip: TooltipMakerAPI,
             title: UIComponentAPI,
@@ -63,16 +68,23 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             exoticData: ExoticData,
             expand: Boolean
     ) {
-        StringUtils.getTranslation(key, "longDescription")
-                .format("flux_method", lazyFluxMethodString)
-                .format("flux_effects", lazyFluxEffectString)
-                .addToTooltip(tooltip, title)
+        if (expand) {
+            StringUtils.getTranslation(key, "longDescription")
+                    .format("radius", getRadiusAmount(member, mods, exoticData))
+                    .format("expansion_speed", getShieldExpansionAmount(member, mods, exoticData))
+                    .format("push_out_strength", formatFloatAsString(getShieldPushOutEffectMomentumFactor(member.hullSpec.hullSize, member, mods, exoticData), 2))
+                    .format("flux_method", lazyFluxMethodString)
+                    .format("flux_effects", generateFluxEffectString(member, mods, exoticData))
+                    .addToTooltip(tooltip, title)
+        }
     }
 
     override fun applyToShip(id: String, member: FleetMemberAPI, ship: ShipAPI, mods: ShipModifications, exoticData: ExoticData) {
+        log("--> applyToShip(id=${id}, member=${member}, ship=${ship}, mods=${mods}, exoticData=${exoticData})\tthis=${this}")
         super.applyToShip(id, member, ship, mods, exoticData)
 
         originalShip = ship
+        log("applyToShip()\tship.childModulesCopy = ${ship.childModulesCopy}\tship.parentStation = ${ship.parentStation}")
 
         // If ship had a shield, lets save it
         ship.shield?.let {
@@ -82,9 +94,10 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         ship.setShield(ShieldAPI.ShieldType.NONE, 0f, 0f, 0f)
 
         // Secondly, give the ship a new subsystem to summon a drone hosting the Guardian Shield that will follow the ship around
-        subsystem = GuardianShieldDrone(ship)
+        subsystem = GuardianShieldDrone(ship, member, mods, exoticData)
         subsystem.setDronesToSpawn(1)
         MagicSubsystemsManager.addSubsystemToShip(ship, subsystem)
+        log("<-- applyToShip()\tsubsystem=${subsystem}")
     }
 
     override fun onDestroy(member: FleetMemberAPI) {
@@ -103,6 +116,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
 
     override fun onOwnerShipRemovedFromCombat(ship: ShipAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData, reason: ExoticaShipRemovalReason) {
         super.onOwnerShipRemovedFromCombat(ship, member, mods, exoticData, reason)
+        shipIsInCombat.set(false)
 
         log("--> onOwnerShipRemovedFromCombat(ship=$ship, member=$member, mods=$mods, exoticData=$exoticData, reason=$reason)")
         if (::subsystem.isInitialized) {
@@ -113,6 +127,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
 
     override fun onOwnerShipEnteredCombat(ship: ShipAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData) {
         super.onOwnerShipEnteredCombat(ship, member, mods, exoticData)
+        shipIsInCombat.set(true)
 
         log("--> onOwnerShipEnteredCombat(ship=$ship, member=$member, mods=$mods, exoticData=$exoticData)\t\tsystemDeactivatedForGood: ${systemDeactivatedForGood.get()}")
         systemDeactivatedForGood.set(false)
@@ -120,9 +135,140 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         log("<-- onOwnerShipEnteredCombat()\t\tsystemDeactivatedForGood: ${systemDeactivatedForGood.get()}")
     }
 
-    inner class GuardianShieldDrone(ship: ShipAPI) : MagicDroneSubsystem(ship) {
+    /**
+     * Method for calculating Flux regen debuff amount, or rather how good the flux regeneration will be, after applying
+     * the [getNegativeMult] modifier to it. Coerced (clamped) to a [0,1] range via [Float.coerceIn]
+     *
+     * Defaults to (1 - [FLUX_DEBUFF_AMOUNT])
+     */
+    private fun getFluxDebuffAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return (1f - (FLUX_DEBUFF_AMOUNT * getNegativeMult(member, mods, exoticData))).coerceIn(0f, 1f)
+    }
+
+    /**
+     * Method for calculating Hard Flux regen debuff amount, or rather how good the hard flux regeneration will be, after
+     * applying the [getNegativeMult] modifier to it. Coerced (clamped) to a [0,1] range via [Float.coerceIn]
+     *
+     * Defaults to (1 - [HARDFLUX_DEBUFF_AMOUNT])
+     */
+    private fun getHardFluxDebuffAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return (1f - (HARDFLUX_DEBUFF_AMOUNT * getNegativeMult(member, mods, exoticData))).coerceIn(0f, 1f)
+    }
+
+    /**
+     * Method for calculating the radius, or rather how big the active Guardian Shield radius will be, after
+     * applying the [getPositiveMult] modifier to it.
+     *
+     * If ship has 'extendedshieldemitter' as a S-modded builtin hullmod the coefficient will be 2.0, 1.5 for just installed or 1.0 if absent.
+     *
+     * Defaults to [ACTIVE_SHIELD_RADIUS]
+     */
+    private fun getRadiusAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return if (USE_ADDITIONAL_EFFECTS_BASED_ON_HOST_SMODS) {
+            // Assign 2.0 if S-modded built-in, 1.5 if present or built-in, 1.0 if absent
+            val hullModCoef = if (member.hasSModdedBuiltInHullmod(EXTENDED_SHIELDS_ID)) {
+                2.0f
+            } else if (member.hasBuiltInHullmod(EXTENDED_SHIELDS_ID) || member.hasHullmod(EXTENDED_SHIELDS_ID)) {
+                1.5f
+            } else {
+                1.0f
+            }
+
+            ACTIVE_SHIELD_RADIUS * getPositiveMult(member, mods, exoticData) * hullModCoef
+        } else {
+            ACTIVE_SHIELD_RADIUS * getPositiveMult(member, mods, exoticData)
+        }
+    }
+
+    /**
+     * Method for calculating the shield expansion factor, or rather how good the hard flux regeneration will be, after
+     * applying the [getPositiveMult] modifier to it.
+     *
+     * If ship has 'advancedshieldemitter' as a S-modded builtin hullmod the coefficient will be 2.5, 1.75 for just installed or 1.0 if absent.
+     *
+     * Defaults to [SHIELD_EXPANDING_FACTOR]
+     */
+    private fun getShieldExpansionAmount(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return if (USE_ADDITIONAL_EFFECTS_BASED_ON_HOST_SMODS) {
+            // Assign 2.5 if S-modded built-in, 1.75 if present or built-in, 1.0 if absent
+            val hullModCoef = if (member.hasSModdedBuiltInHullmod(ACCELERATED_SHIELDS_ID)) {
+                2.5f
+            } else if (member.hasBuiltInHullmod(ACCELERATED_SHIELDS_ID) || member.hasHullmod(ACCELERATED_SHIELDS_ID)) {
+                1.75f
+            } else {
+                1.0f
+            }
+
+            SHIELD_EXPANDING_FACTOR * getPositiveMult(member, mods, exoticData) * hullModCoef
+        } else {
+            SHIELD_EXPANDING_FACTOR * getPositiveMult(member, mods, exoticData)
+        }
+    }
+
+    /**
+     * Method for calculating the shield push out effect factor, or rather how strong the shield will push out enemies,
+     * after applying the [getPositiveMult] modifier to it
+     *
+     * If ship has both 'hardenedshieldemitter' and 'stabilizedshieldemitter' as S-modded builtin hullmods the coefficient
+     * will be 3.0, 2.0 for just one of them or 1.0 if both are absent.
+     *
+     * Defaults to:
+     * - 0 for null
+     * - 1 for [HullSize.DEFAULT]
+     * - 1 for [HullSize.FIGHTER]
+     * - 2 for [HullSize.FRIGATE]
+     * - 2.5 for [HullSize.DESTROYER]
+     * - 3.5 for [HullSize.CRUISER]
+     * - 5 for [HullSize.CAPITAL_SHIP]
+     */
+    private fun getShieldPushOutEffectMomentumFactor(
+            hullSize: HullSize?,
+            member: FleetMemberAPI,
+            mods: ShipModifications,
+            exoticData: ExoticData
+    ): Float {
+        return if (USE_ADDITIONAL_EFFECTS_BASED_ON_HOST_SMODS) {
+            val hardenedShieldCoef = if (member.hasSModdedBuiltInHullmod(HARDENED_SHIELDS_ID)) { 1.0f } else { 0f }
+            val stabilizedShieldCoef = if (member.hasSModdedBuiltInHullmod(STABILIZED_SHIELDS_ID)) { 1.0f } else { 0f }
+            val hullModCoef = 1.0f + hardenedShieldCoef + stabilizedShieldCoef
+
+            when (hullSize) {
+                null -> 0f
+                HullSize.DEFAULT -> 1f
+                HullSize.FIGHTER -> 1f
+                HullSize.FRIGATE -> 2f
+                HullSize.DESTROYER -> 2.5f
+                HullSize.CRUISER -> 3.5f
+                HullSize.CAPITAL_SHIP -> 5f
+            }.exhaustive * getPositiveMult(member, mods, exoticData) * hullModCoef
+        } else {
+            when (hullSize) {
+                null -> 0f
+                HullSize.DEFAULT -> 1f
+                HullSize.FIGHTER -> 1f
+                HullSize.FRIGATE -> 2f
+                HullSize.DESTROYER -> 2.5f
+                HullSize.CRUISER -> 3.5f
+                HullSize.CAPITAL_SHIP -> 5f
+            }.exhaustive * getPositiveMult(member, mods, exoticData)
+        }
+    }
+
+    private fun generateFluxEffectString(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): String {
+        return lazyFluxEffectString
+                .replace(FLUX_DEBUFF_TOKEN, Math.round(getFluxDebuffAmount(member, mods, exoticData) * 100f).toString())
+                .replace(HARDFLUX_DEBUFF_TOKEN, Math.round(getHardFluxDebuffAmount(member, mods, exoticData) * 100f).toString())
+    }
+
+    inner class GuardianShieldDrone(
+            ship: ShipAPI,
+            val member: FleetMemberAPI,
+            val mods: ShipModifications,
+            val exoticData: ExoticData
+    ) : MagicDroneSubsystem(ship) {
 
         var engine: CombatEngineAPI = Global.getCombatEngine()
+        @Volatile
         private var drone: ShipAPI? = null
         private val tracker = IntervalUtil(0.3f, 0.5f)
         private val shieldController = ShieldController()
@@ -158,7 +304,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             if (engine.isPaused) {
                 return false
             }
-            if (drone == null) {
+            if (drone == null && isShipAliveAndInCombat()) {
                 drone = spawnDrone()
             }
             drone?.let {
@@ -194,22 +340,29 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 drone?.let {
                     it.location.set(ship.location.x, ship.location.y)
                     it.facing = ship.facing
+
+                    if (isShipAliveAndInCombat().not()) removeDroneAndDeactivateForGood()
                 }
 
                 shieldController.assesSituation(amount)
                 shieldController.controlShield(amount)
                 shieldController.shieldPushOutEffect(amount)
-                shieldController.transferFlux(amount, workingMode = FluxTransferMode.ONE_WAY, transfer = USE_TRANSFER)
+                shieldController.transferFlux(amount, workingMode = WORKING_MODE, transfer = USE_TRANSFER)
             }
+        }
+
+        private fun isShipAliveAndInCombat() : Boolean {
+            val shipAlive = ship.isAlive
+            val shipInCombat = shipIsInCombat.get() //Global.getCombatEngine().ships.contains(ship)
+
+            return shipAlive && shipInCombat
         }
 
         override fun dronesExplodeWhenShipDies() = true
 
         override fun onShipDeath() {
             super.onShipDeath()
-            drone?.let {
-                Global.getCombatEngine().removeEntity(it)
-            }
+            removeDroneAndDeactivateForGood()
         }
 
         private fun systemOn() {
@@ -227,11 +380,11 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     log("systemOn()\taborted due to overload/venting", "$LOGTAG:GuardianShieldDrone")
                 }
                 if (APPLY_FLUX_DEBUFF) {
-                    ship.mutableStats.fluxDissipation.modifyMult(GUARDIAN_SHIELD_FLUX_DISSIPATION_DEBUFF_ID, FLUX_DEBUFF_AMOUNT)
+                    ship.mutableStats.fluxDissipation.modifyMult(GUARDIAN_SHIELD_FLUX_DISSIPATION_DEBUFF_ID, getFluxDebuffAmount(member, mods, exoticData))
                 }
 
                 if (APPLY_HARDFLUX_DEBUFF) {
-                    ship.mutableStats.hardFluxDissipationFraction.modifyMult(GUARDIAN_SHIELD_HARDFLUX_DISSIPATION_DEBUFF_ID, HARDFLUX_DEBUFF_AMOUNT)
+                    ship.mutableStats.hardFluxDissipationFraction.modifyMult(GUARDIAN_SHIELD_HARDFLUX_DISSIPATION_DEBUFF_ID, getHardFluxDebuffAmount(member, mods, exoticData))
                 }
             }
         }
@@ -250,6 +403,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             }
         }
 
+        @Synchronized
         public fun removeDroneAndDeactivateForGood() {
             log("--> removeDrone()\tdrone: ${drone}\tsystemDeactivatedForGood: ${systemDeactivatedForGood.get()}")
             drone?.let {
@@ -261,54 +415,94 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
             log("<-- removeDrone()\tdrone: ${drone}\tsystemDeactivatedForGood: ${systemDeactivatedForGood.get()}")
         }
 
+        @Synchronized
         override fun spawnDrone(): ShipAPI {
+            log("--> spawnDrone()\tdrone = ${drone}\tdrone is null ? ${drone == null}\townerShip = ${ship}")
+            val hasSmoddedAcceleratedShields = ship.hasSModdedBuiltInHullmod(ACCELERATED_SHIELDS_ID)
+            val hasSmoddedHardenedShields = ship.hasSModdedBuiltInHullmod(HARDENED_SHIELDS_ID)
+            val hasSmoddedStabilizedShields = ship.hasSModdedBuiltInHullmod(STABILIZED_SHIELDS_ID)
+            val hasSmoddedExtendedShields = ship.hasSModdedBuiltInHullmod(EXTENDED_SHIELDS_ID)
+            log("spawnDrone()\thasSmoddedAcceleratedShields: ${hasSmoddedAcceleratedShields}, hasSmoddedHardenedShields: ${hasSmoddedHardenedShields}, hasSmoddedStabilizedShields: ${hasSmoddedStabilizedShields}, hasSmoddedExtendedShields: ${hasSmoddedExtendedShields}")
 
-            val drone: ShipAPI = if(SPAWN_SHIELD_DRONE_USING_FXDRONE) {
-                val spec = Global.getSettings().getHullSpec(getDroneHullId())
-                val v = Global.getSettings().createEmptyVariant(getDroneVariant(), spec)
-                val fxDrone: ShipAPI = Global.getCombatEngine().createFXDrone(v)
-                fxDrone.layer = CombatEngineLayers.ABOVE_SHIPS_AND_MISSILES_LAYER
-                fxDrone.owner = ship.originalOwner
-                fxDrone.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f) // so it's non-targetable
-                fxDrone.isDrone = true
-                fxDrone.aiFlags.setFlag(ShipwideAIFlags.AIFlags.DRONE_MOTHERSHIP, 100000f, ship)
-                fxDrone.collisionClass = CollisionClass.FIGHTER
-                fxDrone.shipAI = null
-                fxDrone.isForceHideFFOverlay = true
-                fxDrone.setRenderBounds(false)
-                fxDrone.giveCommand(ShipCommand.SELECT_GROUP, null, 0)
-                Global.getCombatEngine().addEntity(fxDrone)
 
-                fxDrone
+            val spawnedDrone: ShipAPI = if (drone == null) {
+                synchronized(this) {
+                    return@synchronized if (drone == null) {
+                        if (SPAWN_SHIELD_DRONE_USING_FXDRONE) {
+                            val spec = Global.getSettings().getHullSpec(getDroneHullId())
+                            val v = Global.getSettings().createEmptyVariant(getDroneVariant(), spec)
+                            // Hullmod-specific inheritance part
+                            if (SHIELD_DRONE_INHERITS_HOST_SHIPS_SMODDED_HULLMODS) {
+                                if (hasSmoddedAcceleratedShields) v.addPermaMod(ACCELERATED_SHIELDS_ID, true)
+                                if (hasSmoddedExtendedShields) v.addPermaMod(EXTENDED_SHIELDS_ID, true) //doesn't make sense for 360-degree shield
+                                if (hasSmoddedHardenedShields) v.addPermaMod(HARDENED_SHIELDS_ID, true)
+                                if (hasSmoddedExtendedShields) v.addPermaMod(STABILIZED_SHIELDS_ID, true)
+                            }
+
+                            val fxDrone: ShipAPI = Global.getCombatEngine().createFXDrone(v)
+                            fxDrone.layer = CombatEngineLayers.ABOVE_SHIPS_AND_MISSILES_LAYER
+                            fxDrone.owner = ship.originalOwner
+                            fxDrone.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f) // so it's non-targetable
+                            fxDrone.isDrone = true
+                            fxDrone.aiFlags.setFlag(ShipwideAIFlags.AIFlags.DRONE_MOTHERSHIP, 100000f, ship)
+                            fxDrone.collisionClass = CollisionClass.FIGHTER
+                            fxDrone.shipAI = null
+                            fxDrone.isForceHideFFOverlay = true
+                            fxDrone.setRenderBounds(false)
+                            fxDrone.giveCommand(ShipCommand.SELECT_GROUP, null, 0)
+
+                            log("spawnDrone()\tDRONE hasBuildInAcceleratedShields: ${fxDrone.hasSModdedBuiltInHullmod(ACCELERATED_SHIELDS_ID)}, hasBuildInHardenedShields: ${fxDrone.hasSModdedBuiltInHullmod(HARDENED_SHIELDS_ID)}, hasBuildInStabilizedShields: ${fxDrone.hasSModdedBuiltInHullmod(STABILIZED_SHIELDS_ID)}, hasBuildInExtendedShields: ${fxDrone.hasSModdedBuiltInHullmod(EXTENDED_SHIELDS_ID)}")
+
+                            Global.getCombatEngine().addEntity(fxDrone)
+
+                            fxDrone
+                        } else {
+                            Global.getCombatEngine().getFleetManager(ship.owner).isSuppressDeploymentMessages = true
+
+                            val fleetSide = FleetSide.values()[ship.owner]
+                            val fighter = CombatUtils.spawnShipOrWingDirectly(
+                                    getDroneVariant(),
+                                    FleetMemberType.SHIP,
+                                    fleetSide,
+                                    1f,
+                                    ship.location,
+                                    ship.facing
+                            )
+                            activeWings[fighter] = getPIDController()
+                            fighter.shipAI = null
+                            fighter.giveCommand(ShipCommand.SELECT_GROUP, null, 99)
+                            Global.getCombatEngine().getFleetManager(ship.owner).isSuppressDeploymentMessages = false
+
+                            fighter.isForceHideFFOverlay = true
+                            // Make the shield-hosting drone invulnerable, so that it's not targetable.
+                            // Because the owning ship keeps shooting it down.
+                            fighter.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f)
+                            // Set it's collision channel to fighter - since they can fly over the ship and should still react to most of the things
+                            fighter.collisionClass = CollisionClass.FIGHTER
+
+                            // Hullmod-specific inheritance part
+                            if (SHIELD_DRONE_INHERITS_HOST_SHIPS_SMODDED_HULLMODS) {
+                                if (hasSmoddedAcceleratedShields) fighter.variant.addPermaMod(ACCELERATED_SHIELDS_ID, true)
+                                if (hasSmoddedExtendedShields) fighter.variant.addPermaMod(EXTENDED_SHIELDS_ID, true) //doesn't make sense for 360-degree shield
+                                if (hasSmoddedHardenedShields) fighter.variant.addPermaMod(HARDENED_SHIELDS_ID, true)
+                                if (hasSmoddedStabilizedShields) fighter.variant.addPermaMod(STABILIZED_SHIELDS_ID, true)
+                            }
+                            log("spawnDrone()\tFIGHTER hasBuildInAcceleratedShields: ${fighter.hasSModdedBuiltInHullmod(ACCELERATED_SHIELDS_ID)}, hasBuildInHardenedShields: ${fighter.hasSModdedBuiltInHullmod(HARDENED_SHIELDS_ID)}, hasBuildInStabilizedShields: ${fighter.hasSModdedBuiltInHullmod(STABILIZED_SHIELDS_ID)}, hasBuildInExtendedShields: ${fighter.hasSModdedBuiltInHullmod(EXTENDED_SHIELDS_ID)}")
+
+                            fighter
+                        }
+                    } else {
+                        // It's non-null, and we need a complete if/else for this, so just doublebang it as it's safe
+                        drone!!
+                    }
+                }
             } else {
-                Global.getCombatEngine().getFleetManager(ship.owner).isSuppressDeploymentMessages = true
-
-                val fleetSide = FleetSide.values()[ship.owner]
-                val fighter = CombatUtils.spawnShipOrWingDirectly(
-                        getDroneVariant(),
-                        FleetMemberType.SHIP,
-                        fleetSide,
-                        1f,
-                        ship.location,
-                        ship.facing
-                )
-                activeWings[fighter] = getPIDController()
-                fighter.shipAI = null
-                fighter.giveCommand(ShipCommand.SELECT_GROUP, null, 99)
-                Global.getCombatEngine().getFleetManager(ship.owner).isSuppressDeploymentMessages = false
-
-                fighter.isForceHideFFOverlay = true
-                // Make the shield-hosting drone invulnerable, so that it's not targetable.
-                // Because the owning ship keeps shooting it down.
-                fighter.mutableStats.hullDamageTakenMult.modifyMult(INVULNERABLE_SHIELD_DRONE, 0f)
-                // Set it's collision channel to fighter - since they can fly over the ship and should still react to most of the things
-                fighter.collisionClass = CollisionClass.FIGHTER
-
-                fighter
+                // Identical thing as above
+                drone!!
             }
 
-            log("<-- spawnDrone()\tdrone shield: ${drone.shield}, shield arc: ${drone.shield.arc}, shield type: ${drone.shield.type}, shield active ? ${drone.shield.isOn}", "$LOGTAG:GuardianShieldDrone")
-            return drone
+            log("<-- spawnDrone()\tdrone shield: ${spawnedDrone.shield}, shield arc: ${spawnedDrone.shield.arc}, shield type: ${spawnedDrone.shield.type}, shield active ? ${spawnedDrone.shield.isOn}", "$LOGTAG:GuardianShieldDrone")
+            return spawnedDrone
         }
 
         inner class ShieldController {
@@ -344,7 +538,8 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     }
 
                     // Check for allies in radius of 1500 and whether they need help or have incoming damage
-                    val allies = AIUtils.getNearbyAllies(ship, ACTIVE_SHIELD_RADIUS.toFloat())
+                    val radius = getRadiusAmount(member, mods, exoticData)
+                    val allies = AIUtils.getNearbyAllies(ship, radius)
                     // add shield to allies if it's non-null
                     if (drone != null) {
                         allies.add(drone)
@@ -361,8 +556,10 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     }
 
                     // Check for nearby enemies within 2000, ignoring those that need help.
+                    // Since the default radius was 1500, this makes it 4/3 of the radius
+                    val checkRange = radius * 4/3
                     // Shield remains up if there are some.
-                    val enemies = AIUtils.getNearbyEnemies(ship, 2000f)
+                    val enemies = AIUtils.getNearbyEnemies(ship, checkRange)
                     for (enemy in enemies) {
                         if ((enemy.aiFlags != null && enemy.aiFlags.hasFlag(ShipwideAIFlags.AIFlags.NEEDS_HELP))
                                 || enemy.isRetreating) {
@@ -377,7 +574,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     val projectiles: List<DamagingProjectileAPI> = engine.projectiles
                     for (proj in projectiles) {
                         if (proj.owner != ship.owner
-                                && (MathUtils.getDistance(ship, proj) > ACTIVE_SHIELD_RADIUS || nullSafeGetDistance(drone, proj) > ACTIVE_SHIELD_RADIUS)) {
+                                && (MathUtils.getDistance(ship, proj) > radius || nullSafeGetDistance(drone, proj) > radius)) {
                             log("calling systemOn()\t\tprojectiles near ship or shield condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
@@ -386,8 +583,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     val beams: List<BeamAPI> = engine.beams
                     for (beam in beams) {
                         if (beam.source.owner != ship.owner
-                                && (MathUtils.isWithinRange(ship, beam.to, ACTIVE_SHIELD_RADIUS.toFloat())
-                                        || nullSafeIsWithinRange(drone, beam.to, ACTIVE_SHIELD_RADIUS.toFloat()))) {
+                                && (MathUtils.isWithinRange(ship, beam.to, radius) || nullSafeIsWithinRange(drone, beam.to, radius))) {
                             log("calling systemOn()\t\tbeam within range of ship or shield condition", "$LOGTAG:ShieldController")
                             systemOn()
                             return true
@@ -421,12 +617,14 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                         it.collisionClass = CollisionClass.FIGHTER
                         it.collisionRadius = SHIELD_OFF_COLLISION_RADIUS //400f
                     } else if (it.shield.isOn) {
+                        val maxRadius = getRadiusAmount(member, mods, exoticData)
+                        val shieldExpandFactor = getShieldExpansionAmount(member, mods, exoticData)
                         it.shield.activeArc = 360f
                         var radius = it.collisionRadius
-                        if (radius < ACTIVE_SHIELD_RADIUS) {
-                            radius += SHIELD_EXPANDING_FACTOR * amount //300
+                        if (radius < maxRadius) {
+                            radius += shieldExpandFactor * amount //300
                         } else {
-                            radius = ACTIVE_SHIELD_RADIUS.toFloat()
+                            radius = maxRadius
                         }
                         it.shield.radius = radius
                         it.collisionRadius = radius
@@ -439,15 +637,7 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
 
             fun shieldPushOutEffect(amount: Float) {
                 drone?.let {
-                    val momentumFactor: Float = when (ship.hullSize) {
-                        null -> 0f
-                        ShipAPI.HullSize.DEFAULT -> 1f
-                        ShipAPI.HullSize.FIGHTER -> 1f
-                        ShipAPI.HullSize.FRIGATE -> 2f
-                        ShipAPI.HullSize.DESTROYER -> 2.5f
-                        ShipAPI.HullSize.CRUISER -> 3.5f
-                        ShipAPI.HullSize.CAPITAL_SHIP -> 5f
-                    }
+                    val momentumFactor: Float = getShieldPushOutEffectMomentumFactor(ship.hullSize, member, mods, exoticData)
 
                     for (ship in AIUtils.getNearbyEnemies(it, it.collisionRadius)) {
                         if (MathUtils.getDistance(ship.location, it.location) < ship.collisionRadius + it.getCollisionRadius()) { //hmm, I needs to override the no negative result thing here.
@@ -735,13 +925,33 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
         private const val GUARDIAN_SHIELD_FLUX_DISSIPATION_DEBUFF_ID = "guardian_shield_debuff_flux-dissipation"
         private const val GUARDIAN_SHIELD_HARDFLUX_DISSIPATION_DEBUFF_ID = "guardian_shield_debuff_hardflux-dissipation"
 
+        /**
+         * Active Shield Radius. Default value is 1500
+         */
         private const val ACTIVE_SHIELD_RADIUS = 1500
+
+        /**
+         * Shield expanding factor. Default value is 300
+         */
         private const val SHIELD_EXPANDING_FACTOR = 300
+
+        /**
+         * Shield off collision radius, or rather - how big is the collision radius when the shield is off. Default value is 400
+         *
+         * Suggestion is to **not** change this from the default value
+         */
         private const val SHIELD_OFF_COLLISION_RADIUS = 400f
         private const val APPLY_FLUX_DEBUFF = true
         private const val APPLY_HARDFLUX_DEBUFF = true
-        private const val FLUX_DEBUFF_AMOUNT = 0.75f        // smaller is worse for the player
-        private const val HARDFLUX_DEBUFF_AMOUNT = 0.25f    // ditto, smaller is worse
+
+        /**
+         * The penalty applied to flux regeneration. Default value is 0.25 so it ends up being 0.75
+         */
+        private const val FLUX_DEBUFF_AMOUNT = 0.25f        // higher is worse for the player
+        /**
+         * The penalty applied to hard flux regeneration. Default value is 0.75 so it ends up being 0.25
+         */
+        private const val HARDFLUX_DEBUFF_AMOUNT = 0.75f    // ditto, higher is worse
 
         /**
          * Should the shield-hosting drone be an FXDrone or regular Drone
@@ -764,10 +974,20 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
          */
         private const val USE_TRANSFER = true
 
+        private const val FLUX_DEBUFF_TOKEN = "!FLUXDEBUFF!"
+        private const val HARDFLUX_DEBUFF_TOKEN = "!HARDFLUXDEBUFF!"
+
+        private const val ACCELERATED_SHIELDS_ID = "advancedshieldemitter"
+        private const val HARDENED_SHIELDS_ID = "hardenedshieldemitter"
+        private const val STABILIZED_SHIELDS_ID = "stabilizedshieldemitter"
+        private const val EXTENDED_SHIELDS_ID = "extendedshieldemitter"
+        private const val SHIELD_DRONE_INHERITS_HOST_SHIPS_SMODDED_HULLMODS = true
+        private const val USE_ADDITIONAL_EFFECTS_BASED_ON_HOST_SMODS = true
+
         // These three need to end with space because the string looks like "... , =${flux_effects}=and ..."
-        private val CASE_BOTH = "but =reduces flux dissipation to ${Math.round(FLUX_DEBUFF_AMOUNT * 100)}%% and hard flux dissipation to ${Math.round(HARDFLUX_DEBUFF_AMOUNT * 100)}%%= "
-        private val CASE_FLUX = "but =reduces flux dissipation to ${Math.round(FLUX_DEBUFF_AMOUNT * 100)}%%= "
-        private val CASE_HARDFLUX = "but =reduces hard flux dissipation to ${Math.round(HARDFLUX_DEBUFF_AMOUNT * 100)}%%= "
+        private val CASE_BOTH = "but =reduces flux dissipation to ${FLUX_DEBUFF_TOKEN}%% and hard flux dissipation to ${HARDFLUX_DEBUFF_TOKEN}%%= "
+        private val CASE_FLUX = "but =reduces flux dissipation to ${FLUX_DEBUFF_TOKEN}%%= "
+        private val CASE_HARDFLUX = "but =reduces hard flux dissipation to ${HARDFLUX_DEBUFF_TOKEN}%%= "
         private val lazyFluxEffectString: String by lazy {
             "${
                 if (APPLY_FLUX_DEBUFF && APPLY_HARDFLUX_DEBUFF) {

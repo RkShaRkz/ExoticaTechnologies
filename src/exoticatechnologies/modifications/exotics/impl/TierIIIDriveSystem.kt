@@ -3,6 +3,7 @@ package exoticatechnologies.modifications.exotics.impl
 import com.fs.starfarer.api.campaign.CampaignFleetAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
+import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.ids.Stats
 import com.fs.starfarer.api.ui.TooltipMakerAPI
@@ -46,6 +47,8 @@ class TierIIIDriveSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 .addToTooltip(tooltip, title)
         }
     }
+
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
 
     override fun applyExoticToStats(
         id: String,

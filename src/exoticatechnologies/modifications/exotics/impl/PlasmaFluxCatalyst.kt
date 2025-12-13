@@ -14,6 +14,7 @@ import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
+import exoticatechnologies.util.exhaustive
 import org.json.JSONObject
 import java.awt.Color
 import java.util.*
@@ -40,27 +41,70 @@ class PlasmaFluxCatalyst(key: String, settings: JSONObject) : Exotic(key, settin
         expand: Boolean
     ) {
         if (expand) {
-            val maxCaps = getMaxCaps(member, mods, exoticData)
-            val maxVents = getMaxVents(member, mods, exoticData)
+            val maxCapsWithBonus = getMaxCapsWithBonus(member, mods, exoticData)
+            val maxVentsWithBonus = getMaxVentsWithBonus(member, mods, exoticData)
+            val crPenaltyMalus = getCRPenaltyMalus(member, mods, exoticData)
             StringUtils.getTranslation(key, "longDescription")
                 .format("effectLevel", getPositiveMult(member, mods, exoticData) * 100f)
-                .format("capacitorLimit", ceil((maxCaps / 3f).toDouble()))
-                .format("ventLimit", ceil((maxVents / 3f).toDouble()))
-                .format("crDecrease", 1)
+                .format("capacitorLimit", maxCapsWithBonus)
+                .format("ventLimit", maxVentsWithBonus)
+                .format("crDecrease", crPenaltyMalus)
                 .addToTooltip(tooltip, title)
         }
     }
 
-    fun getMaxCaps(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Int {
-        return ((FleetMemberUtils.getFleetCommander(member)?.stats?.maxCapacitorsBonus?.computeEffective(MAX_FLUX_EQUIPMENT[member.hullSpec.hullSize]!!.toFloat())
-            ?: MAX_FLUX_EQUIPMENT[member.hullSpec.hullSize]!!)
-            .toFloat() / getNegativeMult(member, mods, exoticData)).toInt()
+    private fun getMaxThings(member: FleetMemberAPI, things: PlasmaFluxCatalystThings): Int {
+        val maxFluxForHull = MAX_FLUX_EQUIPMENT[member.hullSpec.hullSize] ?: 0
+        val maxFluxFloat = maxFluxForHull.toFloat()
+        val maxThings = when (things) {
+            PlasmaFluxCatalystThings.VENTS -> FleetMemberUtils.getFleetCommander(member)?.stats?.maxVentsBonus
+            PlasmaFluxCatalystThings.CAPACITORS -> FleetMemberUtils.getFleetCommander(member)?.stats?.maxCapacitorsBonus
+        }.exhaustive
+        val maxThingsBonus = maxThings?.computeEffective(maxFluxFloat) ?: maxFluxFloat
+
+        val retVal = maxThingsBonus.toInt()
+
+        return retVal
     }
 
-    fun getMaxVents(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Int {
-        return ((FleetMemberUtils.getFleetCommander(member)?.stats?.maxVentsBonus?.computeEffective(MAX_FLUX_EQUIPMENT[member.hullSpec.hullSize]!!.toFloat())
-        ?: MAX_FLUX_EQUIPMENT[member.hullSpec.hullSize]!!)
-        .toFloat() / getNegativeMult(member, mods, exoticData)).toInt()
+    private fun getMaxCaps(member: FleetMemberAPI): Int {
+        return getMaxThings(member, PlasmaFluxCatalystThings.CAPACITORS)
+    }
+
+    private fun getMaxVents(member: FleetMemberAPI): Int {
+        return getMaxThings(member, PlasmaFluxCatalystThings.VENTS)
+    }
+
+    fun getCoefficient(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return 3f * getNegativeMult(member, mods, exoticData)
+    }
+
+    /**
+     * Returns the massaged value of ceil ( (maxCaps * positiveMult) / (coeff * negativeMult) )
+     */
+    fun getMaxCapsWithBonus(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        val maxCaps = getMaxCaps(member) * getPositiveMult(member, mods, exoticData)
+        // coeff already has the negative mult
+        val coeff = getCoefficient(member, mods, exoticData)
+        val retVal = ceil(maxCaps / coeff)
+
+        return retVal
+    }
+
+    /**
+     * Returns the massaged value of ceil ( (maxVents * positiveMult) / (coeff * negativeMult) )
+     */
+    fun getMaxVentsWithBonus(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        val maxVents = getMaxVents(member) * getPositiveMult(member, mods, exoticData)
+        // coeff already has the negative mult
+        val coeff = getCoefficient(member, mods, exoticData)
+        val retVal = ceil(maxVents / coeff)
+
+        return retVal
+    }
+
+    fun getCRPenaltyMalus(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+        return 1f * getNegativeMult(member, mods, exoticData)
     }
 
     override fun applyExoticToStats(
@@ -79,17 +123,19 @@ class PlasmaFluxCatalyst(key: String, settings: JSONObject) : Exotic(key, settin
 
         val numCapsStats = stats.variant.numFluxCapacitors
         val numVentsStats = stats.variant.numFluxVents
-        val maxCaps = getMaxCaps(member, mods, exoticData)
-        val maxVents = getMaxVents(member, mods, exoticData)
+        val maxCapsWithBonus = getMaxCapsWithBonus(member, mods, exoticData)
+        val maxVentsWithBonus = getMaxVentsWithBonus(member, mods, exoticData)
 
-        var crReduction = 0
-        if (numCapsStats > ceil((maxCaps / 3f).toDouble())) {
-            crReduction += (numCapsStats - ceil((maxCaps / 3f).toDouble())).toInt()
+        var crReduction = 0f
+        if (numCapsStats > maxCapsWithBonus) {
+            crReduction += (numCapsStats - maxCapsWithBonus).toInt()
         }
-        if (numVentsStats > ceil((maxVents / 3f).toDouble())) {
-            crReduction += (numVentsStats - ceil((maxVents / 3f).toDouble())).toInt()
+        if (numVentsStats > maxVentsWithBonus) {
+            crReduction += (numVentsStats - maxVentsWithBonus).toInt()
         }
         if (crReduction > 0) {
+            // After calculating base CR reduction (with 1x multiplier) lets multiply with actual CR penalty malus before applying
+            crReduction = crReduction * getCRPenaltyMalus(member, mods, exoticData)
             stats.maxCombatReadiness.modifyFlat(name, -crReduction / 100f, name)
         }
     }
@@ -120,3 +166,5 @@ class PlasmaFluxCatalyst(key: String, settings: JSONObject) : Exotic(key, settin
         }
     }
 }
+
+enum class PlasmaFluxCatalystThings{ VENTS, CAPACITORS }

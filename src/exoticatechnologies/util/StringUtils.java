@@ -38,7 +38,29 @@ public class StringUtils {
         }
     }
 
-    public static Translation getTranslation(String parent, String key) {
+    /**
+     * Method that iterates through the <i>list</i> and searches for <i>string</i> while ignoring case
+     * If such an element is found, it returns <b>true</b>, otherwise returns <b>false</b>. Also returns <b>false</b> if <i>string</i> is null
+     *
+     * @param list the list to search for
+     * @param string the string to look for
+     * @return whether the string was found in the list or not while ignoring case
+     */
+    public static boolean containsIgnoreCase(List<String> list, String string) {
+        if (string == null) {
+            return false;
+        }
+
+        for (String str : list) {
+            if (str != null && str.equalsIgnoreCase(string)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static synchronized Translation getTranslation(String parent, String key) {
         return new Translation(parent, key);
     }
 
@@ -54,7 +76,7 @@ public class StringUtils {
      * @param values the values
      * @return the string
      */
-    public static String formatString(String format, List<String> keys, List<String> values) {
+    public static synchronized String formatString(String format, List<String> keys, List<String> values) {
         if (keys.size() != values.size()) {
             return null;
         }
@@ -73,7 +95,7 @@ public class StringUtils {
         return new StringBuilder("${").append(key).append("}").toString();
     }
 
-    private static String formatValue(Object value) {
+    private static synchronized String formatValue(Object value) {
         if(value instanceof Float) {
             return Misc.getFormat().format(value);
         } else {
@@ -183,7 +205,6 @@ public class StringUtils {
         textPanel.setHighlightColorsInLastPara(highlightColors);
     }
 
-    @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
     public static class Translation {
         protected final String scope;
         protected final String key;
@@ -191,7 +212,12 @@ public class StringUtils {
         protected List<String> values = new ArrayList<>();
         protected Map<Integer, Color> colors = new HashMap<>();
 
-        public Translation format(String flag, Object value) {
+        protected Translation(String parent, String key) {
+            this.scope = parent;
+            this.key = key;
+        }
+
+        public synchronized Translation format(String flag, Object value) {
             formats.add(flag);
             values.add(StringUtils.formatValue(value));
 
@@ -314,7 +340,7 @@ public class StringUtils {
             return getModifier(value) + Misc.getRoundedValue(value.floatValue());
         }
 
-        public String toString() {
+        public synchronized String toString() {
             try {
                 String format = formatString(getString(scope, key), formats, values);
 
@@ -352,7 +378,7 @@ public class StringUtils {
             return StringUtils.addToTooltip(tooltip, this.toString(), pad, colors);
         }
 
-        public LabelAPI addToTooltip(TooltipMakerAPI tooltip, UIComponentAPI positionBelowThis) {
+        public synchronized LabelAPI addToTooltip(TooltipMakerAPI tooltip, UIComponentAPI positionBelowThis) {
             LabelAPI label = this.addToTooltip(tooltip, 0);
             UIComponentAPI prev = tooltip.getPrev();
             prev.getPosition().belowLeft(positionBelowThis, 2);

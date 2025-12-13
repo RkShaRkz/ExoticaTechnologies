@@ -59,6 +59,8 @@ class ReactiveDamperField(key: String, settings: JSONObject) : Exotic(key, setti
         }
     }
 
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
+
     override fun applyExoticToStats(
         id: String,
         stats: MutableShipStatsAPI,

@@ -80,7 +80,7 @@ public class ETModSettings {
 
             MAX_EXOTICS  = MagicSettings.getInteger(ETModPlugin.MOD_ID, MAX_EXOTICS_KEY);
 
-            productionBandwidthMults = MagicSettings.getFloatMap("industryBandwidthGenerationMultipliers", INDUSTRY_PRODUCTION_BANDWIDTH_MULT);
+            productionBandwidthMults = MagicSettings.getFloatMap(ETModPlugin.MOD_ID, INDUSTRY_PRODUCTION_BANDWIDTH_MULT);
         } catch (JSONException | IOException ex) {
             throw new RuntimeException(ex);
         }

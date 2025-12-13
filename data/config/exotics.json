@@ -4,8 +4,13 @@
     "tag": "weaponFeeders",
     "hints": [ "weapons" ],
     "exoticClass": "exoticatechnologies.modifications.exotics.impl.SpooledFeeders",
+    "minConditionsNeeded": 1,
     "conditions": [
-      { "id": "hullmods", "operator": "in", "expected": "safetyoverrides", "weightOnly":true, "weight": 2 }
+      #since safety overrides is garbage and cannot be installed on large ships, costs 45 OP and reduces range to 450
+      #i've decided to get rid of the following condition completely and replace it with something more fitting
+      #{ "id": "hullmods", "operator": "in", "expected": "safetyoverrides", "weightOnly":true, "weight": 2 }
+      { "id": "equippedBallistics", "operator": ">=", "expected": 3, "cannotApplyReason": "The ship must have at least 3 ballistics weapons.", "weight": 1 },
+      { "id": "equippedEnergy", "operator": ">=", "expected": 3, "cannotApplyReason": "The ship must have at least 3 energy weapons.", "weight": 1 }
     ]
   },
   "FullMetalSalvo": {
@@ -136,19 +141,31 @@
   },
   "AnomalousConjuration": {
     "name": "Anomalous Conjuration",
-    "exoticClass": "exoticatechnologies.modifications.exotics.impl.AnomalousConjuration"
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.AnomalousConjuration",
+    "conditions": [
+      {"id": "hullmods", "operator": "in", "expected": "automated", "cannotApplyReason": "The ship must be an automated ship."}
+    ]
   },
   "SubsumedAlphaCore": {
     "name": "Subsumed Alpha Core",
-    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedAlphaCore"
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedAlphaCore",
+    "conditions": [
+      {"id": "hullmods", "operator": "in", "expected": "automated", "cannotApplyReason": "The ship must be an automated ship."}
+    ]
   },
   "SubsumedBetaCore": {
     "name": "Subsumed Beta Core",
-    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedBetaCore"
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedBetaCore",
+    "conditions": [
+      {"id": "hullmods", "operator": "in", "expected": "automated", "cannotApplyReason": "The ship must be an automated ship."}
+    ]
   },
   "SubsumedGammaCore": {
     "name": "Subsumed Gamma Core",
-    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedGammaCore"
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.SubsumedGammaCore",
+    "conditions": [
+      {"id": "hullmods", "operator": "in", "expected": "automated", "cannotApplyReason": "The ship must be an automated ship."}
+    ]
   },
   "GuardianShield": {
     "name": "Guardian Shield",

@@ -26,6 +26,9 @@ import kotlin.math.roundToInt
  * Abstract base class for all Upgrade systems in the ExoticaTech mod.
  *
  * Remember to override [color] to change the item's name in the description title.
+ *
+ * **NOTE:** By default, Upgrades apply their effects to just the module to which they have been installed
+ * unless [shouldShareEffectToOtherModules] is overriden to return **true**
  */
 open class Upgrade(key: String, settings: JSONObject) : Modification(key, settings) {
     val resourceRatios: MutableMap<String, Float> = LinkedHashMap()
