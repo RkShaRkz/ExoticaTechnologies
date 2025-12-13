@@ -51,26 +51,21 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
         if (dialogPlugin is FleetInteractionDialogPluginImpl) {
             val context = dialogPlugin.context as FleetEncounterContext
 
-            // Since context.battle can be null, if we try allocating it to a non-nullable field - the game crashes
-            if (context.battle != null) {
-                val battle: BattleAPI = context.battle
-                val allFleets: MutableList<CampaignFleetAPI> = mutableListOf()
-                allFleets.addAll(battle.bothSides ?: listOf())
-                allFleets
-                        .filterNot { it == Global.getSector().playerFleet }
-                        .forEach {
-                            if (activeFleets.contains(it)) {
-                                return
-                            }
-                            dlog("Generating modifications for fleet.")
-                            activeFleets.add(it)
-                            applyExtraSystemsToFleet(it)
+            val battle: BattleAPI = context.battle
+            val allFleets: MutableList<CampaignFleetAPI> = mutableListOf()
+            allFleets.addAll(battle.bothSides ?: listOf())
+            allFleets
+                    .filterNot { it == Global.getSector().playerFleet }
+                    .forEach {
+                        if (activeFleets.contains(it)) {
+                            return
                         }
+                        dlog("Generating modifications for fleet.")
+                        activeFleets.add(it)
+                        applyExtraSystemsToFleet(it)
+                    }
 
-                FireAll.fire(null, dialog, dialog.plugin.memoryMap, "GeneratedESForFleet")
-            } else {
-                log.error("context.battle was null, modifications for it's participants were NOT generated and added to them")
-            }
+            FireAll.fire(null, dialog, dialog.plugin.memoryMap, "GeneratedESForFleet")
         }
 
         val defenderFleet = interactionTarget.memoryWithoutUpdate.getFleet("\$defenderFleet")
@@ -90,12 +85,7 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             dlog("Generating modifications for fleet.")
             activeFleets.add(interactionTarget)
             applyExtraSystemsToFleet(interactionTarget)
-            // Helga's SVC is crashing here ...
-            if (dialog.plugin.memoryMap != null) {
-                FireAll.fire(null, dialog, dialog.plugin.memoryMap, "GeneratedESForFleet")
-            } else {
-                log.error("dialog.plugin.memoryMap was null, modifications for it's participants might have been generated but FireAll.fire(...) is not being called")
-            }
+            FireAll.fire(null, dialog, dialog.plugin.memoryMap, "GeneratedESForFleet")
             return
         }
 
@@ -314,7 +304,7 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
 
     companion object {
         private const val debug = false
-        private val log = Logger.getLogger(CampaignEventListener::class.java)
+        private val log = Logger.getLogger(Companion::class.java)
         private val submarketIdsToCheckForSpecialItems: MutableList<String> =
                 mutableListOf(Submarkets.SUBMARKET_BLACK, Submarkets.SUBMARKET_OPEN, Submarkets.GENERIC_MILITARY)
         val activeFleets: MutableList<CampaignFleetAPI> = ArrayList()
