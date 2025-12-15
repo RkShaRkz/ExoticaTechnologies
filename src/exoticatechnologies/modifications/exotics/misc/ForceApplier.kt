@@ -17,7 +17,8 @@ object ForceApplier {
         direction: Vector2f,
         momentum: Float,
         elasticCollision: Boolean,
-        modifyAngularVelocity: Boolean = true
+        modifyAngularVelocity: Boolean = true,
+        applyImplicitMomentumScaling: Boolean = true
     ) {
         log("--> applyMomentum()")
         // This whole thing is weird, but necessary since arguments are being reassigned for some reason
@@ -45,8 +46,12 @@ object ForceApplier {
                     mass = max(1.0, ship.massWithModules.toDouble()).toFloat()
                 }
             }
-            // Momentum is far too weak otherwise
-            momentum *= 100f
+            // Proceed to apply implicit momentum scaling which we only want to avoid
+            // under very-super-special conditions
+            if (applyImplicitMomentumScaling) {
+                // Momentum is far too weak otherwise
+                momentum *= 100f
+            }
             log("Actual momentum ${momentum}")
             // Doing some vector calculate
             val BPtoMC = entity?.let { Vector2f.sub(it.location, pointOfImpact, null) }

@@ -284,14 +284,17 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                     collisionPoint?.let { collision ->
                         if (!nearbyShip.isStation && !(nearbyShip.isStationModule && nearbyShip.parentStation.isStation)) {
                             // This is the normal case, when we pull everyone to our ship, scaled with positive effect mult
-                            val momentum = getScaledPullInEffectMomentumStrength(member, mods, exoticData)
+                            // and finally we will also add the ship's summed mass so that it at least gets *some* push towards us
+                            // regardless of how big it is
+                            val momentum = getScaledPullInEffectMomentumStrength(member, mods, exoticData) + nearbyShip.massWithModules
                             ForceApplier.applyMomentum(
                                 entity = nearbyShip,
                                 pointOfImpact = collision,
                                 direction = Vector2f.sub(ship.location, nearbyShip.location, null),
                                 momentum = momentum,
                                 elasticCollision = false,
-                                modifyAngularVelocity = false
+                                modifyAngularVelocity = false,
+                                applyImplicitMomentumScaling = true
                             )
                         } else {
                             // This is the "inverse" case, when we try pulling in an immovable object - so we should push ourselves back a bit
@@ -305,6 +308,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                                 direction = Vector2f.sub(nearbyShip.location, ship.location, null),
                                 momentum = momentum,
                                 elasticCollision = true,
+                                applyImplicitMomentumScaling = true
                             )
                         }
                     }
