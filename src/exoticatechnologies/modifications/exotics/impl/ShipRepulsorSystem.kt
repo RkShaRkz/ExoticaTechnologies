@@ -458,7 +458,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             log("--> pushOutShipsWithinRadius()")
             // Look through all ships within radius, and apply momentum
             val momentumFactor: Float = getPushOutEffectMomentumFactor(member)
-            val momentumStrength: Float = getPushOutStrength(member, ship)
             val radius: Float = getRadiusAmount(member, mods, exoticData)
 
             val potentiallyAffectedShips = getPotentialTargets(member, mods, exoticData)
@@ -483,7 +482,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             ForceApplier.applyMomentum(
                                     entity = nearbyShip,
                                     pointOfImpact = collision,
-//                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),   //this attracts
                                     direction = Vector2f.sub(nearbyShip.location, ship.location, null),
                                     momentum = momentum,
                                     elasticCollision = true,
@@ -548,6 +546,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             // This is the "inverse" case, when we try pushing out an immovable object - so we should push ourselves back a bit
                             // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
                             // And finally, we will scale the strength * factor with negative effect mult
+                            val momentumStrength: Float = getPushOutStrength(member, ship)
                             val momentum = (-momentumStrength / 2f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
                             ForceApplier.applyMomentum(
                                     entity = ship.parentStation,

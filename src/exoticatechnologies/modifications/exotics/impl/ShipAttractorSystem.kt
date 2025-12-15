@@ -284,15 +284,13 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                     collisionPoint?.let { collision ->
                         if (!nearbyShip.isStation && !(nearbyShip.isStationModule && nearbyShip.parentStation.isStation)) {
                             // This is the normal case, when we pull everyone to our ship, scaled with positive effect mult
-                            nearbyShip.velocity.set(ship.velocity)
                             val momentum = getScaledPullInEffectMomentumStrength(member, mods, exoticData)
                             ForceApplier.applyMomentum(
                                 entity = nearbyShip,
                                 pointOfImpact = collision,
                                 direction = Vector2f.sub(ship.location, nearbyShip.location, null),
                                 momentum = momentum,
-                                elasticCollision = true,
-                                // We will modify the angular velocity after just pushing it back
+                                elasticCollision = false,
                                 modifyAngularVelocity = false
                             )
                         } else {
@@ -304,8 +302,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                             ForceApplier.applyMomentum(
                                 entity = ship.parentStation,
                                 pointOfImpact = collision,
-//                                    direction = Vector2f.sub(nearbyShip.location, ship.location, null),  //this probably repulses?
-                                direction = Vector2f.sub(ship.location, nearbyShip.location, null),   //this attracts
+                                direction = Vector2f.sub(nearbyShip.location, ship.location, null),
                                 momentum = momentum,
                                 elasticCollision = true,
                             )

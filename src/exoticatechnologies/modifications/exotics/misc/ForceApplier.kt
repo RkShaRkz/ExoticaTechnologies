@@ -11,7 +11,14 @@ object ForceApplier {
     private const val LOGS_ENABLED = false
     private val logger = Logger.getLogger(ForceApplier::class.java)
 
-    fun applyMomentum(entity: CombatEntityAPI?, pointOfImpact: Vector2f?, direction: Vector2f, momentum: Float, elasticCollision: Boolean, modifyAngularVelocity: Boolean = true) {
+    fun applyMomentum(
+        entity: CombatEntityAPI?,
+        pointOfImpact: Vector2f?,
+        direction: Vector2f,
+        momentum: Float,
+        elasticCollision: Boolean,
+        modifyAngularVelocity: Boolean = true
+    ) {
         log("--> applyMomentum()")
         // This whole thing is weird, but necessary since arguments are being reassigned for some reason
         var entity = entity
