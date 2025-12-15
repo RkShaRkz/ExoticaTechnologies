@@ -578,8 +578,6 @@ fun Vector2f.rotate(angle: Float, useFastTrig: Boolean = true): Vector2f {
     if (angle == 0f) return this.clone()
 
     val angleRadians = Math.toRadians(angle.toDouble())
-//    val cosine = if(useFastTrig) { FastTrigUtils.cos(angleRadians)} else { cos(angleRadians) }.toFloat()
-//    val sine = if (useFastTrig) { FastTrigUtils.sin(angleRadians) } else { sin(angleRadians) }.toFloat()
     val cosine = if(useFastTrig) { FastTrigUtils.cos(angleRadians)} else { cos(angleRadians) }
     val sine = if (useFastTrig) { FastTrigUtils.sin(angleRadians) } else { sin(angleRadians) }
 
@@ -743,6 +741,25 @@ fun getChildModuleVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantA
         val moduleVariant = fleetMemberAPI.variant.getModuleVariant(slot)
         retVal.add(moduleVariant)
     }
+    return retVal.toList()
+}
+
+/**
+ * Method that returns a sorted list of all child module variants belonging to the passed-in [fleetMemberAPI] along with
+ * the root module's ([fleetMemberAPI]'s) variant. The main module's variant will be last in the list.
+ *
+ * **NOTE:** **MUST** be called from the root module
+ *
+ * @param fleetMemberAPI the [FleetMemberAPI] to look up module variants for
+ * @return a list containing [ShipVariantAPI] variants belonging to all modules
+ */
+fun getAllModulesVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantAPI> {
+    val retVal = mutableListOf<ShipVariantAPI>()
+    // Add all child modules first
+    retVal.addAll(getChildModuleVariantList(fleetMemberAPI))
+    // And add own module variant last
+    retVal.add(fleetMemberAPI.variant)
+
     return retVal.toList()
 }
 
