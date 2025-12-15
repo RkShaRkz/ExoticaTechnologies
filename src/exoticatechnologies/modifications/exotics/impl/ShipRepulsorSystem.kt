@@ -193,7 +193,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         override fun getBaseCooldownDuration() = getScaledCooldownDuration(member, mods, exoticData)
 
         override fun shouldActivateAI(amount: Float): Boolean {
-            //TODO i dont know what to do here so just say 'no' for now
             activationIntervalUtil.advance(amount)
             return if (activationIntervalUtil.intervalElapsed()) {
                 evaluateSituation()
