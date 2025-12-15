@@ -55,7 +55,7 @@ object ForceApplier {
             log("Actual momentum ${momentum}")
             // Doing some vector calculate
             val BPtoMC = entity?.let { Vector2f.sub(it.location, pointOfImpact, null) }
-                    ?: throw RuntimeException("entity was null while assigning to BPtoMC -- this should not be happening. Look into GuardianShield -> ForceApplier::applyMomentum()")
+                    ?: throw RuntimeException("entity was null while assigning to BPtoMC -- this should not be happening. Look into ForceApplier::applyMomentum()")
             val forceV = Vector2f()
             direction.normalise(forceV)
             forceV.scale(momentum)
