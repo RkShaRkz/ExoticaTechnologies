@@ -709,13 +709,17 @@ object CircleUtils {
                             // bump limit so they all fit
 //                            (engine as CombatEngine).smoothParticles.limit = particlePoints.size
                             val particleColor = particleColors.first()
-                            engine.addSmoothParticle(
-                                point,
-                                Vector2f(0f, 0f),
-                                particleSize,
-                                particleBrightness,
-                                particleDuration,
-                                particleColor
+                            EngineParticlePainter.addParticle(
+                                engine = engine,
+                                particleType = ParticleType.SMOOTH_PARTICLE,
+                                particleParams = ParticleParams.Smooth.Basic(
+                                    location = point,
+                                    velocity = Vector2f(0f, 0f),
+                                    size = particleSize,
+                                    brightness = particleBrightness,
+                                    duration = particleDuration,
+                                    color = particleColor
+                                )
                             )
                             // Revert limit after drawing
 //                            (engine as CombatEngine).smoothParticles.limit = originalLimit
@@ -731,13 +735,17 @@ object CircleUtils {
                                     particleColors.last()
                                 }
 
-                                engine.addSmoothParticle(
-                                    point,
-                                    Vector2f(0f, 0f),
-                                    particleSize,
-                                    particleBrightness,
-                                    particleDuration,
-                                    color
+                                EngineParticlePainter.addParticle(
+                                    engine = engine,
+                                    particleType = ParticleType.SMOOTH_PARTICLE,
+                                    particleParams = ParticleParams.Smooth.Basic(
+                                        location = point,
+                                        velocity = Vector2f(0f, 0f),
+                                        size = particleSize,
+                                        brightness = particleBrightness,
+                                        duration = particleDuration,
+                                        color = color
+                                    )
                                 )
                             }
                         }
