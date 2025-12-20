@@ -502,14 +502,18 @@ object CircleUtils {
                         Color.CYAN to Color.WHITE
                     }
 
-                    engine.spawnEmpArcVisual(
-                        p1,
-                        ship,
-                        p2,
-                        ship,
-                        arcThickness,
-                        fringe,
-                        core
+                    EngineParticlePainter.spawnEmpArc(
+                        engine = engine,
+                        arcType = EmpArcType.VISUAL,
+                        arcParams = EmpArcParams.VisualArc(
+                            from = p1,
+                            fromAnchor = ship,
+                            to = p2,
+                            toAnchor = ship,
+                            thickness = arcThickness,
+                            fringe = fringe,
+                            core = core
+                        )
                     )
                 }
 
@@ -522,14 +526,19 @@ object CircleUtils {
                         SwirlType.OUTWARD -> rings.first()[index]
                     }.exhaustive
                     // Draw the emp visual
-                    engine.spawnEmpArcVisual(
-                        innermost,
-                        ship,
-                        ship.location,
-                        ship,
-                        arcThickness,
-                        fringe,
-                        core
+
+                    EngineParticlePainter.spawnEmpArc(
+                        engine = engine,
+                        arcType = EmpArcType.VISUAL,
+                        arcParams = EmpArcParams.VisualArc(
+                            from = innermost,
+                            fromAnchor = ship,
+                            to = ship.location,
+                            toAnchor = ship,
+                            thickness = arcThickness,
+                            fringe = fringe,
+                            core = core
+                        )
                     )
                 }
             }
