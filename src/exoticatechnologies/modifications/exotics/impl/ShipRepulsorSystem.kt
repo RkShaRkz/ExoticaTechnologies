@@ -213,10 +213,12 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             // Otherwise - do nothing for this evaluation cycle
 
             // First, grab all ships in radius, and check if we have some really close ones
-            val targetShipsInRadius = getPotentialTargets(member, mods, exoticData)
-            val reallyCloseShips = targetShipsInRadius
+            val allTargetsInRadius = getPotentialTargets(member, mods, exoticData)
+            val targetsInRadiusCloserThanActivationRange = allTargetsInRadius
+                .filter { nearbyShip -> Misc.getDistance(ship.location, nearbyShip.location) <= REALLY_CLOSE_ACTIVATION_RANGE }
+
+            val reallyCloseShips = targetsInRadiusCloserThanActivationRange
                     .filter { nearbyShip -> nearbyShip.isFighter.not() }
-                    .filter { nearbyShip -> Misc.getDistance(ship.location, nearbyShip.location) < REALLY_CLOSE_ACTIVATION_RANGE }
 
             // Criteria 1 - enemy non-fighter ships up close
             val haveCloseShips = reallyCloseShips.isNotEmpty()
@@ -225,18 +227,18 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             // Proceed to check flux
             val ourFluxTracker = ship.fluxTracker
             val currentFluxLevel = ourFluxTracker.currFlux / ourFluxTracker.maxFlux
-            val anyShipsInRadius = targetShipsInRadius.isNotEmpty()
+            val anyShipsInRadius = allTargetsInRadius.isNotEmpty()
 
             // Criteria 2 - we're overfluxing, push them away to vent
             if (anyShipsInRadius && currentFluxLevel >= ACTIVATION_FLUX_LEVEL) return true
 
-            val howManyShipsInRadius = targetShipsInRadius.filter { ship -> ship.isFighter.not() }.size
+            val howManyShipsInRadius = allTargetsInRadius.filter { ship -> ship.isFighter.not() }.size
 
             // Criteria 3 - 6+ non-wing ships in radius
             if (howManyShipsInRadius > MIN_SHIPS_TO_ACTIVATE) return true
 
             // Evaluate ships in radius
-            val shipsInRadiusMassSum = targetShipsInRadius.map { ship ->
+            val shipsInRadiusMassSum = allTargetsInRadius.map { ship ->
                 // grab all sections of ship, map into individual module masses and sum - effectivelly mapping 'ship' into it's summed mass
                 getAllShipSections(ship).map { module -> module.mass }.sum()
             }.sum()
@@ -245,15 +247,12 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             // Criteria 4 - enemies in radius have more mass than us
             if (shipsInRadiusMassSum > myMass) return true
 
-            val reallyCloseTargets = targetShipsInRadius
-                    .filter { nearbyShip -> Misc.getDistance(ship.location, nearbyShip.location) < REALLY_CLOSE_ACTIVATION_RANGE }
-
-            // Criteria 5 - any targets up close
-            val haveCloseTargets = reallyCloseTargets.isNotEmpty()
+            // Criteria 5 - any targets up close (at or closer than REALLY_CLOSE_ACTIVATION_RANGE)
+            val haveCloseTargets = targetsInRadiusCloserThanActivationRange.isNotEmpty()
             if (haveCloseTargets) return true
 
             // Criteria 6 - 6+ targets in radius
-            val howManyTargetsInRadius = targetShipsInRadius.size
+            val howManyTargetsInRadius = allTargetsInRadius.size
             if (howManyTargetsInRadius > MIN_SHIPS_TO_ACTIVATE) return true
 
             // None of the criterias were fulfilled so far, return false for this evaluation cycle
