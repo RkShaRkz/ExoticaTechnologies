@@ -72,6 +72,7 @@ object CircleUtils {
      * 0 degrees = north, 90 degrees = east, 180 degrees = south, 270 degrees = west.
      * Which is completely different from the geometric defaults of:
      * 0 degrees = east, 90 degrees = north, 180 degrees = west, 270 degrees = south.
+     * @param ringRotationDegreesListAngleType which kind of angles ([AngleDegreeType]) does the [ringRotationsDegrees] contain and represent. Defaults to [AngleDegreeType.USER_CENTRIC]
      * @param globalRotationDegrees the global rotation to add to every point.
      * E.g. using ship's facing here will always make the first generated point be in same relative location/angle to the ship rather than always starting at zero degrees. **Defaults to 0**
      * **NOTE:** since ship.facing is already coming in geometric coordinate system, or rather 0 being right, up being 90, 180 being left this parameter will not be treated
@@ -91,6 +92,7 @@ object CircleUtils {
         maxRadius: Float,
         generateInwards: Boolean = false,
         ringRotationsDegrees: List<Float>,
+        ringRotationDegreesListAngleType: AngleDegreeType = AngleDegreeType.USER_CENTRIC,
         globalRotationDegrees: Float = 0f,
         generateParticles: Boolean = false,
         particleSegments: Int,
@@ -103,9 +105,18 @@ object CircleUtils {
         // (north = 0deg, east = 90deg, south = 180deg, west = 270deg)
         // into actual geometric angles which is
         // (east = 0deg, north = 90deg, west = 180deg, south = 270deg)
-        val remappedRingRotations = ringRotationsDegrees.map {userCentricAngle ->
-            remapAngleToGeomericCoordinateSystem(userCentricAngle)
-        }
+        val remappedRingRotations = when (ringRotationDegreesListAngleType) {
+            AngleDegreeType.USER_CENTRIC -> {
+                // If user-centric, we need to remap
+                ringRotationsDegrees.map { userCentricAngle ->
+                    remapAngleToTrigonometricCoordinateSystem(userCentricAngle)
+                }
+            }
+            AngleDegreeType.TRIGONOMETRIC -> {
+                // If trigonometric, just accept them as-is
+                ringRotationsDegrees
+            }
+        }.exhaustive
 
         // Step sizes
         val radiusStep = if (rings > 1) (maxRadius - minRadius) / (rings - 1) else 0f
@@ -151,26 +162,59 @@ object CircleUtils {
     }
 
     /**
-     * Method for converting caller's user-intuitive expected system of
+     * Enum class describing the angle/degree type as either [USER_CENTRIC] or [TRIGONOMETRIC]
+     *
+     * The [USER_CENTRIC] system is a system where 0 is north, 90 is east, 180 is south, 270 is west and rotations increase **counter-clockwise**.
+     *
+     * The [TRIGONOMETRIC] system is a system where 0 is east, 90 is north, 180 is west, 270 is south and rotations increase **clockwise**.
+     *
+     * @see remapAngleToTrigonometricCoordinateSystem
+     * @see USER_CENTRIC
+     * @see TRIGONOMETRIC
+     */
+    enum class AngleDegreeType {
+        /**
+         * Denotes this angle to be in user-centric ("azimuth" / "bearing") system where:
+         * - 0 is north
+         * - 90 is east
+         * - 180 is south
+         * - 270 is west
+         */
+        USER_CENTRIC,
+
+        /**
+         * Denotes this angle to be in trigonometric ("standard position" / "cartesian") system where:
+         * - 0 is east
+         * - 90 is north
+         * - 180 is west
+         * - 270 is south
+         */
+        TRIGONOMETRIC
+    }
+
+    /**
+     * Method for converting caller's user-intuitive ("Azimuth" / "Bearing") expected system of
      * 0 degrees being north,
      * 90 degrees being east,
      * 180 degrees being south
      * 270 degrees being west
+     * where rotations increase **clockwise**
      *
-     * into actual mathematically correct *actual* geometric angle coordinate system which is
+     * into actual mathematically correct *actual* trigonometric ("Standard Position" / "Cartesian") angle coordinate system which is
      * east being 0 degrees,
      * north being 90 degrees
      * west being 180 degrees
-     * south being 270 degrees.
+     * south being 270 degrees
+     * where rotations increase **couter-clockwise**
      *
      * Essentially remapping the upper-right Q1, lower-right Q2, lower-left Q3, upper-left Q4 into actual
      * upper-right Q1, upper-left Q2, lower-left Q3, lower-right Q4
      *
      * @param degrees the user-intuitive degree based in north being 0-degrees, east being 90-degrees, south being 180-degrees system
      *
-     * @return the actual geometrically correct degree based in east being 0-degrees, north being 90-degrees, west being 180-degrees system
+     * @return the actual trigonometric correct degree based in east being 0-degrees, north being 90-degrees, west being 180-degrees system
      */
-    fun remapAngleToGeomericCoordinateSystem(degrees: Float): Float {
+    fun remapAngleToTrigonometricCoordinateSystem(degrees: Float): Float {
         // Convert caller's "north=0" system into trig's "east=0" system
         return (90f - degrees + 360f) % 360f
     }
