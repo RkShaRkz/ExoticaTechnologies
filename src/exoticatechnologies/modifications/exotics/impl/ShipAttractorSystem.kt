@@ -163,6 +163,15 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             val haveShipsOutsideOfMostDamagingRange = shipsWithinRangeOutsideOfBestRange.isNotEmpty()
             if (haveShipsOutsideOfMostDamagingRange) return true
 
+            // In case we did not return, lets start working on criteria 2 - majority of ships moving away
+            val enemyShipCount = shipsInRadius.count()
+            val enemyShipsRunningAway = shipsInRadius
+                .map { enemyShip -> enemyShip.isMovingAwayFromShip(ship) }
+                .filter { it }
+                .count()
+
+            // Criteria 2 - majority of ships running away
+            if (enemyShipsRunningAway > enemyShipCount / 2) return true
 
 
 

@@ -1,7 +1,6 @@
 package exoticatechnologies.util
 
 import com.fs.starfarer.api.Global
-import com.fs.starfarer.api.campaign.CoreUITabId
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.combat.WeaponAPI
@@ -13,7 +12,6 @@ import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
-import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.reflect.ReflectionUtils
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -109,6 +107,8 @@ fun Any?.safeEquals(other: Any?): Boolean {
     return this == other
 }
 
+// ShipAPI-related methods below
+
 /**
  * Returns the [Vector2f] of where the ship is looking (facing) at
  * @return the ship's forward vector, similar to [com.fs.starfarer.api.util.Misc.getUnitVectorAtDegreeAngle] used with the ship's [ShipAPI.getFacing]
@@ -188,6 +188,55 @@ fun ShipAPI.distanceToShip(otherShip: ShipAPI): Float {
     return (this.location.x - otherShip.location.x) * (this.location.x - otherShip.location.x) + (this.location.y - otherShip.location.y) * (this.location.y - otherShip.location.y)
 }
 
+/**
+ * Returns whether [this] ship is moving away from [otherShip]
+ *
+ * **NOTE:** the method first calculates a vector of
+ * ```kotlin
+ *     toOtherShip = otherShip.location - this.location
+ * ```
+ * and then checks whether the dot-product of [otherShip]'s velocity with `toOtherShip` vector is positive.
+ *
+ * If it is **positive**, it is moving away from [this]; if it is **negative** it is moving towards [this]
+ *
+ * **BEWARE** that this method is **not symmetrical**, just because [this] is moving away from [otherShip] **does not**
+ * mean that [otherShip] is also "moving away" from this, especially in the case of it tailing/chasing us
+ *
+ * @param otherShip the "other ship" we want to determine whether [this] ship is moving away from
+ *
+ * @return whether [this] ship is moving away from [otherShip]
+ */
+fun ShipAPI.isMovingAwayFromShip(otherShip: ShipAPI): Boolean {
+    val toOtherShip = otherShip.location.sub(this.location)
+    val dot = Vector2f.dot(otherShip.velocity, toOtherShip)
+    return dot > 0f
+
+}
+
+/**
+ * Determines whether two ships are moving apart from each other.
+ *
+ * This method calculates the relative velocity of [shipB] with respect to [shipA]
+ * and projects it onto the line connecting the two ships. If the projection is positive,
+ * the distance between them is increasing (they are separating). If negative, the distance
+ * is decreasing (they are closing in).
+ *
+ * **NOTE:** unlike [ShipAPI.isMovingAwayFromShip], this method **is symmetrical**,
+ * since it answers a different question - "is the distance between these two ships increasing?"
+ *
+ * @param shipA the first ship
+ * @param shipB the second ship
+ * @return true if the ships are moving away from each other (distance increasing),
+ *         false if they are moving closer together (distance decreasing or unchanged)
+ */
+
+fun areShipsSeparating(shipA: ShipAPI, shipB: ShipAPI): Boolean {
+    val deltaPos = Vector2f.sub(shipB.location, shipA.location, null)
+    val deltaVel = Vector2f.sub(shipB.velocity, shipA.velocity, null)
+    return Vector2f.dot(deltaVel, deltaPos) > 0f
+}
+
+// FleetMemberAPI-related methods below
 
 /**
  * Checks whether the ship has a hullmod installed on it (built-in or not)
