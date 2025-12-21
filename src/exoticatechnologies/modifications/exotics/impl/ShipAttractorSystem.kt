@@ -147,7 +147,6 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             // If any criteria is met, we will do an early return and avoid evaluating the rest of them
             // Otherwise - do nothing for this evaluation cycle
 
-            //TODO come up with activating criteria for the attractor
             val shipsInRadius = getPotentialTargets(member, mods, exoticData)
                 .filter { target -> target.isFighter.not() }
 
@@ -173,6 +172,28 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             // Criteria 2 - majority of ships running away
             if (enemyShipsRunningAway > enemyShipCount / 2) return true
 
+            // In case we did not return, lets work on criteria 3 - vulnerable ships detected
+            val vulnerableShipsInRange = shipsInRadius.filter { enemyShip -> isVulnerable(enemyShip) }
+
+            // Criteria 3 - there are vulnerable ships present
+            val anyVulnerableShipsInRange = vulnerableShipsInRange.isNotEmpty()
+            if (anyVulnerableShipsInRange) return true
+
+            // In case we did not return, try the last case - "more allies than enemies"
+            val alliesInRange = CombatUtils.getShipsWithinRange(ship.location, getRadiusAmount(member, mods, exoticData))
+                // make sure it only contains allies
+                .filter { filterShip -> filterShip.owner == ship.owner}
+                // make sure we're not targetting ourselves
+                .filter { module -> module.fleetMember != member && module.parentStation != ship && module != ship }
+                // make sure we're not targetting child modules
+                .filter { module -> module.parentStation == null }
+                // and make sure we're not counting our own fighters
+                .filter { target -> target.isFighter.not() }
+
+            // Criteria 4 - there are more allied ships than enemy ships
+            val enemyShips = shipsInRadius.count()
+            val allyShips = alliesInRange.count()
+            if (allyShips >= enemyShips) return true
 
 
             // None of the criterias were fulfilled so far, return false for this evaluation cycle
@@ -207,6 +228,30 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                 // no maximum was found, fallback to 0
                 0f
             }
+        }
+
+        /**
+         * Determines if a ship is vulnerable. Excluding wings and not calling this method for wings is on the caller.
+         *
+         * **NOTE:** dead ships (and wings) are **not** considered vulnerable
+         *
+         * A ship is considered vulnerable if:
+         * - hullLevel is below 0.3
+         * - fluxLevel is above 0.9
+         * - is overloaded or venting
+         * - engines are flamed out
+         *
+         * @param ship the ship to evaluate
+         * @return true if the ship is vulnerable, false otherwise
+         */
+        fun isVulnerable(ship: ShipAPI): Boolean {
+            if (ship.isFighter || !ship.isAlive) return false
+
+            return ship.hullLevel < 0.3f ||
+                ship.fluxLevel > 0.9f ||
+                ship.fluxTracker.isOverloaded ||
+                ship.fluxTracker.isVenting ||
+                ship.engineController.isFlamedOut
         }
 
 
