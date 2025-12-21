@@ -23,13 +23,17 @@ object DrawUtils {
         var x = fromPoint.x
         var y = fromPoint.y
         for (i in 0..segments) {
-            combatEngine.addSmoothParticle(
-                    Vector2f(x, y),               // location
-                    Vector2f(0f, 0f),       // velocity
-                    size,                         // particle size
-                    brightness,                   // brightness
-                    duration,                     // lifetime
-                    color                         // particle color
+            EngineParticlePainter.addParticle(
+                engine = combatEngine,
+                particleType = ParticleType.SMOOTH_PARTICLE,
+                particleParams = ParticleParams.Smooth.Basic(
+                    location = Vector2f(x, y),
+                    velocity = Vector2f(0f, 0f),
+                    size = size,
+                    brightness = brightness,
+                    duration = duration,
+                    color = color
+                )
             )
             x += dx
             y += dy
