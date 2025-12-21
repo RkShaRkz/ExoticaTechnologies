@@ -426,14 +426,9 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
     companion object {
         private const val COST_CREDITS: Float = 300000f
         private const val ITEM = "et_attractoritem"
-        private const val LOGS_ENABLED = true   //TODO
+        private const val LOGS_ENABLED = false
 
         private const val PULL_IN_STRENGTH = 1000f
         private const val COOLDOWN_DURATION = 30f
-
-        // activation constants
-        private const val REALLY_CLOSE_ACTIVATION_RANGE = 250f
-        private const val ACTIVATION_FLUX_LEVEL = 0.8f
-        private const val MIN_SHIPS_TO_ACTIVATE = 6
     }
 }
