@@ -6,6 +6,7 @@ import com.fs.starfarer.api.campaign.*
 import com.fs.starfarer.api.campaign.CampaignEventListener.FleetDespawnReason
 import com.fs.starfarer.api.campaign.econ.MonthlyReport
 import com.fs.starfarer.api.campaign.listeners.EconomyTickListener
+import com.fs.starfarer.api.campaign.rules.MemoryAPI
 import com.fs.starfarer.api.combat.EngagementResultAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.fleet.FleetMemberType
@@ -17,7 +18,6 @@ import com.fs.starfarer.api.impl.campaign.ids.Entities
 import com.fs.starfarer.api.impl.campaign.ids.MemFlags
 import com.fs.starfarer.api.impl.campaign.ids.Submarkets
 import com.fs.starfarer.api.impl.campaign.ids.Tags
-import com.fs.starfarer.api.impl.campaign.rulecmd.FireAll
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial.PerShipData
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial.ShipRecoverySpecialData
 import com.fs.starfarer.api.impl.campaign.shared.SharedData
@@ -33,16 +33,18 @@ import exoticatechnologies.modifications.ShipModFactory.generateRandom
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.ExoticData
+import exoticatechnologies.util.FireAllKotlin
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.Utilities
+import exoticatechnologies.util.shouldLog
 import lombok.extern.log4j.Log4j
+import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import kotlin.math.roundToInt
 
 
 @Log4j
-class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(permaRegister), EveryFrameScript,
-        EconomyTickListener {
+class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(permaRegister), EveryFrameScript, EconomyTickListener {
     private val cleaningInterval = IntervalUtil(15f, 15f)
 
     override fun reportShownInteractionDialog(dialog: InteractionDialogAPI) {
@@ -55,17 +57,32 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             val allFleets: MutableList<CampaignFleetAPI> = mutableListOf()
             allFleets.addAll(battle.bothSides ?: listOf())
             allFleets
-                    .filterNot { it == Global.getSector().playerFleet }
-                    .forEach {
-                        if (activeFleets.contains(it)) {
-                            return
-                        }
-                        dlog("Generating modifications for fleet.")
-                        activeFleets.add(it)
-                        applyExtraSystemsToFleet(it)
+                .filterNot { it == Global.getSector().playerFleet }
+                .forEach {
+                    if (activeFleets.contains(it)) {
+                        return
                     }
+                    dlog("Generating modifications for fleet.")
+                    activeFleets.add(it)
+                    applyExtraSystemsToFleet(it)
+                }
 
-            FireAll.fire(null, dialog, dialog.plugin.memoryMap, "GeneratedESForFleet")
+            // Grab memory map, and fire if non-null, log warning if was null
+            val memoryMap = FireAllKotlin.getMemoryMap(dialog)
+            if (memoryMap != null) {
+                FireAllKotlin.fire(
+                    ruleId = null,
+                    dialog = dialog,
+                    memoryMap = memoryMap,
+                    params = "GeneratedESForFleet"
+                )
+            } else {
+                // log since it was null
+                log(
+                    logMsg = "Did not generate exoticas for fleet due to memoryMap being null!",
+                    logLevel = Level.WARN
+                )
+            }
         }
 
         val defenderFleet = interactionTarget.memoryWithoutUpdate.getFleet("\$defenderFleet")
@@ -85,7 +102,20 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
             dlog("Generating modifications for fleet.")
             activeFleets.add(interactionTarget)
             applyExtraSystemsToFleet(interactionTarget)
-            FireAll.fire(null, dialog, dialog.plugin.memoryMap, "GeneratedESForFleet")
+            val memoryMap = FireAllKotlin.getMemoryMap(dialog)
+            if (memoryMap != null) {
+                FireAllKotlin.fire(
+                    ruleId = null,
+                    dialog = dialog,
+                    memoryMap = memoryMap,
+                    params = "GeneratedESForFleet"
+                )
+            } else {
+                log(
+                    logMsg = "Did not generate exoticas for fleet named ${interactionTarget.nameWithFaction} due to memoryMap being null!",
+                    logLevel = Level.WARN
+                )
+            }
             return
         }
 
@@ -126,13 +156,13 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
         }
 
         if (Entities.DEBRIS_FIELD_SHARED == interactionTarget.customEntityType
-                && interactionTarget.memoryWithoutUpdate.contains(MemFlags.SALVAGE_SPECIAL_DATA)
-                && interactionTarget.memoryWithoutUpdate[MemFlags.SALVAGE_SPECIAL_DATA] is ShipRecoverySpecialData
+            && interactionTarget.memoryWithoutUpdate.contains(MemFlags.SALVAGE_SPECIAL_DATA)
+            && interactionTarget.memoryWithoutUpdate[MemFlags.SALVAGE_SPECIAL_DATA] is ShipRecoverySpecialData
         ) {
 
             val data = interactionTarget.memoryWithoutUpdate[MemFlags.SALVAGE_SPECIAL_DATA] as ShipRecoverySpecialData
             if (data.ships != null
-                    && data.ships.isNotEmpty()
+                && data.ships.isNotEmpty()
             ) {
 
                 val derelictVariantMap: MutableMap<String, ShipModifications> = LinkedHashMap()
@@ -175,9 +205,9 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
     }
 
     override fun reportFleetDespawned(
-            fleet: CampaignFleetAPI,
-            reason: FleetDespawnReason,
-            param: Any?
+        fleet: CampaignFleetAPI,
+        reason: FleetDespawnReason,
+        param: Any?
     ) {
         dlog(String.format("Fleet %s has despawned.", fleet.nameWithFaction))
         activeFleets.remove(fleet)
@@ -196,24 +226,24 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
                 mods.bandwidth *= (0.5f + 0.5f * ShipModFactory.random.nextFloat())
 
                 mods.exotics.exoticData
-                        .filter { (_, data) -> data.exotic.canDropFromCombat }
-                        .filter { (_, data) -> ShipModFactory.random.nextFloat() >= data.exotic.getSalvageChance(8f) }
-                        .forEach { (_, data) -> mods.removeExotic(data.exotic) }
+                    .filter { (_, data) -> data.exotic.canDropFromCombat }
+                    .filter { (_, data) -> ShipModFactory.random.nextFloat() >= data.exotic.getSalvageChance(8f) }
+                    .forEach { (_, data) -> mods.removeExotic(data.exotic) }
 
                 mods.getUpgradeMap()
-                        .forEach { (upg, level) ->
-                            val mult = (0.5f + 0.5f * ShipModFactory.random.nextFloat()) * (1 + upg.salvageChance)
+                    .forEach { (upg, level) ->
+                        val mult = (0.5f + 0.5f * ShipModFactory.random.nextFloat()) * (1 + upg.salvageChance)
 
-                            mods.putUpgrade(upg, (mult.coerceAtMost(1f) * level).roundToInt().coerceAtLeast(1))
-                        }
+                        mods.putUpgrade(upg, (mult.coerceAtMost(1f) * level).roundToInt().coerceAtLeast(1))
+                    }
             }
         }
 
         val potentialDrops = getDrops(result, npcMembers)
         result.battle.getPrimary(result.battle.nonPlayerSide).memoryWithoutUpdate.set(
-                "\$exotica_drops",
-                potentialDrops,
-                1f
+            "\$exotica_drops",
+            potentialDrops,
+            1f
         )
 
         val playerResult = if (result.didPlayerWin()) result.winnerResult else result.loserResult
@@ -302,19 +332,31 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
         }
     }
 
+    /**
+     * Method that logs messages only above [Level.WARN]
+     */
+    private fun log(logMsg: String, logLevel: Level) {
+        shouldLog(
+            logMsg = logMsg,
+            logger = log,
+            logLevel = logLevel,
+            minLogLevel = Level.WARN
+        )
+    }
+
     companion object {
         private const val debug = false
-        private val log = Logger.getLogger(Companion::class.java)
+        private val log = Logger.getLogger(CampaignEventListener::class.java)
         private val submarketIdsToCheckForSpecialItems: MutableList<String> =
-                mutableListOf(Submarkets.SUBMARKET_BLACK, Submarkets.SUBMARKET_OPEN, Submarkets.GENERIC_MILITARY)
+            mutableListOf(Submarkets.SUBMARKET_BLACK, Submarkets.SUBMARKET_OPEN, Submarkets.GENERIC_MILITARY)
         val activeFleets: MutableList<CampaignFleetAPI> = ArrayList()
             get() = ArrayList(field).also { it.add(Global.getSector().playerFleet) }
 
         var mergeCheck = false
 
         private fun getDrops(
-                result: EngagementResultAPI,
-                members: List<FleetMemberAPI>
+            result: EngagementResultAPI,
+            members: List<FleetMemberAPI>
         ): Pair<Map<String, MutableMap<Int, Int>>, Map<ExoticData, Int>> {
             val upgradesMap: MutableMap<String, MutableMap<Int, Int>> = HashMap()
             val exotics: MutableMap<ExoticData, Int> = HashMap()
@@ -372,27 +414,27 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
 
         private fun checkNearbyFleetsForFM(fmId: String): FleetMemberAPI? {
             return Global.getSector().currentLocation.fleets
-                    .map { getFromFleet(fmId, it.fleetData) }
-                    .firstOrNull()
+                .map { getFromFleet(fmId, it.fleetData) }
+                .firstOrNull()
         }
 
         private fun checkStorageMarketsForFM(fmId: String): FleetMemberAPI? {
             Global.getSector().allLocations
-                    .flatMap { it.allEntities }
-                    .filter { it.market != null }
-                    .flatMap { it.market.submarketsCopy }
-                    .map { it.cargoNullOk }
-                    .filterNotNull()
-                    .forEach { storage ->
-                        var fm = getFromFleet(fmId, storage.mothballedShips)
-                        if (fm != null) {
-                            return fm
-                        }
-                        fm = getFromFleet(fmId, storage.fleetData)
-                        if (fm != null) {
-                            return fm
-                        }
+                .flatMap { it.allEntities }
+                .filter { it.market != null }
+                .flatMap { it.market.submarketsCopy }
+                .map { it.cargoNullOk }
+                .filterNotNull()
+                .forEach { storage ->
+                    var fm = getFromFleet(fmId, storage.mothballedShips)
+                    if (fm != null) {
+                        return fm
                     }
+                    fm = getFromFleet(fmId, storage.fleetData)
+                    if (fm != null) {
+                        return fm
+                    }
+                }
             return null
         }
 
@@ -406,7 +448,7 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
                     continue
                 }
                 if (!fleet.isAlive
-                        || fleet.containingLocation != playerFleet.containingLocation
+                    || fleet.containingLocation != playerFleet.containingLocation
                 ) {
                     removedFleet = true
                 }
@@ -467,8 +509,8 @@ class CampaignEventListener(permaRegister: Boolean) : BaseCampaignEventListener(
         private fun isInFleet(fmId: String, fleet: CampaignFleetAPI?): Boolean {
             fleet?.let {
                 return isInFleet(
-                        fmId,
-                        fleet.fleetData
+                    fmId,
+                    fleet.fleetData
                 )
             }
             return false

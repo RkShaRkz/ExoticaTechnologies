@@ -95,7 +95,6 @@ class UtilTests {
         Assert.assertEquals(false, test2)
     }
 
-
     @Test
     fun test_when_decrementing_40_from_20_for_size_72_using_wraparoundmod_then_we_get_52() {
         val size = 72
@@ -110,5 +109,4 @@ class UtilTests {
         // Expected: -20 wrapped into 52
         Assert.assertEquals(52, result)
     }
-
 }
