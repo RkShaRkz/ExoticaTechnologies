@@ -178,6 +178,16 @@ fun ShipAPI.hasSModdedBuiltInHullmod(hullModId: String): Boolean {
     return Misc.getCurrSpecialModsList(this.variant).map { hullmods -> hullmods.id }.containsIgnoreCase(hullModId)
 }
 
+/**
+ * Returns distance from [this] ship to [otherShip]
+ *
+ * @param otherShip the other [ShipAPI] to calculate distance to
+ * @return the distance between this ship and other ship
+ */
+fun ShipAPI.distanceToShip(otherShip: ShipAPI): Float {
+    return (this.location.x - otherShip.location.x) * (this.location.x - otherShip.location.x) + (this.location.y - otherShip.location.y) * (this.location.y - otherShip.location.y)
+}
+
 
 /**
  * Checks whether the ship has a hullmod installed on it (built-in or not)

@@ -128,6 +128,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
 
         override fun getBaseCooldownDuration() = getScaledCooldownDuration(member, mods, exoticData)
 
+
         override fun shouldActivateAI(amount: Float): Boolean {
             activationIntervalUtil.advance(amount)
             return if (activationIntervalUtil.intervalElapsed()) {
@@ -139,20 +140,66 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
 
         private fun evaluateSituation(): Boolean {
             // If interval elapsed, we are going to do a few checks to determine if we should activate:
-            // 1. if we have enemies within 250 range of us (excluding wings) - activate
-            // 2. if our flux is at 80+% of flux capacity and there are ships in radius - activate
-            // 3. if there is 6+ of potential targets in radius (excluding wings) - activate
-            // 4. if the mass of ships in radius is bigger than our mass - activate
-            // 5. any enemies (wings included) within 250 range - activate
-            // 6. 6+ any targets (wings included) in range - activate
+            // 1. if we have enemies within system range but outside of weighted effective weapon range (excluding wings) - activate
+            // 2. majority of ships are moving away (excluding wings) - activate
+            // 3. if there are vulnerable ships present (excluding wings) - activate
+            // 4. allies outnumber enemies nearby (excluding wings) - activate
             // If any criteria is met, we will do an early return and avoid evaluating the rest of them
             // Otherwise - do nothing for this evaluation cycle
 
             //TODO come up with activating criteria for the attractor
+            val shipsInRadius = getPotentialTargets(member, mods, exoticData)
+                .filter { target -> target.isFighter.not() }
+
+            // Calculate our 'most damaging' range and see how many targets are within range but outside most damaging range
+            val largestDamageRange = getLargestDamageContributingRange(ship)
+            val shipsWithinRangeOutsideOfBestRange = shipsInRadius.filter { targetShip ->
+                val distanceToUs = targetShip.distanceToShip(ship)
+
+                return@filter distanceToUs > largestDamageRange
+            }
+
+            // Criteria 1 - have ships within range but outside of our most-damaging range
+            val haveShipsOutsideOfMostDamagingRange = shipsWithinRangeOutsideOfBestRange.isNotEmpty()
+            if (haveShipsOutsideOfMostDamagingRange) return true
+
+
+
 
             // None of the criterias were fulfilled so far, return false for this evaluation cycle
             return false
         }
+
+        private fun getLargestDamageContributingRange(ship: ShipAPI): Float {
+            // Create a range to "weapon damage potential" map
+            val rangeDamageMap = mutableMapOf<Float, Float>()
+            // For all weapons on installing ship, "calculate" it's DPS and derive potential damage over 10 seconds
+            for (weapon in getAllShipWeapons(ship)) {
+                // If weapon is broken, skip it
+                if (weapon.isDisabled || weapon.isPermanentlyDisabled) continue
+                // "sustainedDps" might make sense but not really because it evaluates over "ship fires for infinite amount of time"
+//                weapon.derivedStats.sustainedDps
+                // Otherwise, grab it's DPS, and calculate the "damage contribution" over 10 seconds
+                val weaponDps = weapon.derivedStats.dps
+                val weapon10secPotential = weaponDps * 10f
+
+                val weaponRange = weapon.range
+                // Add to range in the map
+                val currentRangeDamageValue = rangeDamageMap[weaponRange] ?: 0f
+                // Update map
+                rangeDamageMap[weaponRange] = currentRangeDamageValue + weapon10secPotential
+            }
+
+            // After all weapons were processed, grab the key with the highest value
+            val largestEntry = rangeDamageMap.maxByOrNull { it.value }
+            return if (largestEntry != null) {
+                largestEntry.key
+            } else {
+                // no maximum was found, fallback to 0
+                0f
+            }
+        }
+
 
         override fun getDisplayText() = "Ship Attractor System"
 
