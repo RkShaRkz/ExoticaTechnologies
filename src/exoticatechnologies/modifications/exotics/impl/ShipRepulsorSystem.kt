@@ -549,8 +549,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             ForceApplier.applyMomentum(
                                     entity = ship.parentStation,
                                     pointOfImpact = collision,
-//                                    direction = Vector2f.sub(nearbyShip.location, ship.location, null),  //this probably repulses?
-                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),   //this attracts
+                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),
                                     momentum = momentum,
                                     elasticCollision = true,
                             )
