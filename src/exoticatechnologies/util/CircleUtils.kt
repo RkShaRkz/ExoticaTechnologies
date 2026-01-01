@@ -84,6 +84,8 @@ object CircleUtils {
      *
      * @return an instance of a [Swirl]. See [Swirl.draw] and [Swirl.drawParticles]
      */
+    //TODO add support for "anchored swirl" capability in here by having an anchor: Optional<CombatEntityAPI>
+    // and then decide whether we generate a "fixed swirl" or "anchored swirl" depending on if it's empty or not
     fun generateSwirl(
         center: Vector2f,
         rings: Int,
@@ -272,6 +274,8 @@ object CircleUtils {
      *
      * @return a list of points along the curve
      */
+    //TODO add support for "anchored swirl" capability in here by having an anchor: Optional<CombatEntityAPI>
+    // and then decide whether we generate a "fixed swirl" or "anchored swirl" depending on if it's empty or not
     fun generateSwirlPoints(
         pInner: Vector2f,
         pOuter: Vector2f,
@@ -417,7 +421,9 @@ object CircleUtils {
         PREVIOUS_ARM_SIZE_MODE
     }
 
-
+    //TODO right now, the Swirl is really just a fixed-location "instantaneous" swirl
+    // Add capability for anchored swirls, which will store "displacement from anchor" rather than absolute points in worldspace
+    // which will then just calculate their *real* location by adding themselves to the anchor
     data class Swirl(
         private val rings: List<List<Vector2f>>,
         private val swirlType: SwirlType,
@@ -858,6 +864,70 @@ object CircleUtils {
                     }
                 }
             }
+        }
+    }
+
+
+    //TODO add support for "anchored concentric circles" capability in here by having an anchor: Optional<CombatEntityAPI>
+    // and then decide whether we generate a "fixed concentric circles" or "anchored concentric circles" depending on if it's empty or not
+    fun generateConcentricCircles(
+        center: Vector2f,
+        radii: List<Float>,
+        pointsPerRing: Int,
+        generateInwards: Boolean = false,
+        globalRotationDegrees: Float = 0f
+    ): ConcentricCircles {
+        val circles = mutableListOf<List<Vector2f>>()
+        val angleStepDegrees = 360.0 / pointsPerRing
+
+        for (radius in radii) {
+            val ringPoints = mutableListOf<Vector2f>()
+            for (i in 0 until pointsPerRing) {
+                val angleDegrees = (angleStepDegrees * i) + globalRotationDegrees
+                val angleRadians = Math.toRadians(angleDegrees)
+                val x = center.x + radius * cos(angleRadians).toFloat()
+                val y = center.y + radius * sin(angleRadians).toFloat()
+                ringPoints.add(Vector2f(x, y))
+            }
+            circles.add(ringPoints)
+        }
+
+        return ConcentricCircles(
+            rings = circles,
+            generateInwards = generateInwards,
+            globalRotationDegrees = globalRotationDegrees
+        )
+    }
+
+    /**
+     * Container for concentric circle geometry used for visual effects.
+     *
+     * Holds an arbitrary number of rings (each a pair of left/right point lists),oh no wait
+     * and provides draw methods for EMP arcs (debug) and particles (production).
+     */
+    data class ConcentricCircles(
+        private val rings: List<Pair<List<Vector2f>, List<Vector2f>>>,
+        private val generateInwards: Boolean,
+        private val globalRotationDegrees: Float,
+        private val generateParticles: Boolean,
+        private val particleSegments: Int,
+        private val particleDrawInterval: Float
+    ) {
+        init {
+            if (generateParticles) {
+                // Precompute particle paths or any setup needed
+                // TODO: implement particle initialization
+            }
+        }
+
+
+        fun draw(ship: ShipAPI) {
+            TODO("Implement EMP arc drawing based on rings")
+        }
+
+
+        fun drawParticles(ship: ShipAPI, elapsed: Float) {
+            TODO("Implement particle drawing based on rings")
         }
     }
 
