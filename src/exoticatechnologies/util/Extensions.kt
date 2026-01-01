@@ -848,6 +848,10 @@ fun runningFromExoticaTechnologiesScreen(): Boolean {
 val <T> T.exhaustive: T
     get() = this
 
+fun <T, V> pairOf(first: T, second: V): Pair<T, V> {
+    return Pair(first, second)
+}
+
 fun log(logMsg: String, logger: Logger, logLevel: Level = Level.DEBUG) {
     with(logger) {
         when (logLevel) {

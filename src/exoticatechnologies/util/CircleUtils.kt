@@ -868,6 +868,19 @@ object CircleUtils {
     }
 
 
+    /**
+     * Method for generating a [ConcentricCircles]
+     *
+     * @param center the center of all concentric circles.
+     * @param radii a list of growing (or shrinking) radiuses to use for circles. See [generateInwards]
+     * @param pointsPerRing how many points per ring should there be. Angle between the points is very dependant on this.
+     * @param generateInwards whether the circles should generate "inwards" (shrinking circles) or "outwards" (expanding circles).
+     * This should align with how you generated the [radii] list. There are no checks for growing/shrinking lists for appropriate types.
+     * @param globalRotationDegrees the "global" rotation degrees of the circle, defaults to 0.
+     * @param generateParticles whether particles should also be generated or not, defaults to [false].
+     * @param particleDrawInterval the default interval used for the [ConcentricCircles.intervalUtil]. Defaults to 0.1
+     * @param particleDrawDuration how long should the whole particle "drawing" of these concentric circles last, in seconds. Defaults to 1
+     */
     //TODO add support for "anchored concentric circles" capability in here by having an anchor: Optional<CombatEntityAPI>
     // and then decide whether we generate a "fixed concentric circles" or "anchored concentric circles" depending on if it's empty or not
     fun generateConcentricCircles(
@@ -875,7 +888,10 @@ object CircleUtils {
         radii: List<Float>,
         pointsPerRing: Int,
         generateInwards: Boolean = false,
-        globalRotationDegrees: Float = 0f
+        globalRotationDegrees: Float = 0f,
+        generateParticles: Boolean = false,
+        particleDrawInterval: Float = 0.1f,
+        particleDrawDuration: Float = 1f
     ): ConcentricCircles {
         val circles = mutableListOf<List<Vector2f>>()
         val angleStepDegrees = 360.0 / pointsPerRing
@@ -892,17 +908,27 @@ object CircleUtils {
             circles.add(ringPoints)
         }
 
+        val dotPairs = circles
+            .map { dotList ->
+                val midSize = dotList.size / 2
+
+                pairOf(dotList.take(midSize), dotList.drop(midSize))
+            }
+
         return ConcentricCircles(
-            rings = circles,
+            rings = dotPairs,
             generateInwards = generateInwards,
-            globalRotationDegrees = globalRotationDegrees
+            globalRotationDegrees = globalRotationDegrees,
+            generateParticles = generateParticles,
+            particleDrawInterval = particleDrawInterval,
+            particleDrawingDuration = particleDrawDuration
         )
     }
 
     /**
      * Container for concentric circle geometry used for visual effects.
      *
-     * Holds an arbitrary number of rings (each a pair of left/right point lists),oh no wait
+     * Holds an arbitrary number of rings (each a pair of left/right point lists),
      * and provides draw methods for EMP arcs (debug) and particles (production).
      */
     data class ConcentricCircles(
@@ -910,14 +936,70 @@ object CircleUtils {
         private val generateInwards: Boolean,
         private val globalRotationDegrees: Float,
         private val generateParticles: Boolean,
-        private val particleSegments: Int,
-        private val particleDrawInterval: Float
+//        private val particleSegments: Int,    //TODO delete
+        private val particleDrawInterval: Float,
+        private val particleDrawingDuration: Float
     ) {
+        private val circleParticles: List<CircleParticles>
+        private val intervalUtil: MultiIntervalUtil
+
         init {
-            if (generateParticles) {
-                // Precompute particle paths or any setup needed
-                // TODO: implement particle initialization
+            circleParticles = if (generateParticles) {
+                // Lets assume each ring has an equal duration - but only counting "gaps".
+                // E.g. five concentric circles only have 4 gaps in between them
+                val ringDuration = particleDrawingDuration / (rings.size - 1)
+
+                // Just throw ring[i] to ring[i++] particle
+                // We cannot use "in rings.indices" here because then we will hit an OOB when p2 tries to access ring+1
+                val mutableCircleList = mutableListOf<CircleParticles>()
+                for (ring in 0 until rings.size - 1) {
+                    val mutableCircleParticlesList = mutableListOf<CircleParticle>()
+                    val p1 = rings[ring]
+                    val p2 = rings[ring + 1]
+
+                    val (leftDots1, rightDots1) = p1
+                    val concentricCircle1 = leftDots1 + rightDots1
+                    val (leftDots2, rightDots2) = p2
+                    val concentricCircle2 = leftDots2 + rightDots2
+
+                    // And generate moving particles from cc1 to cc2
+                    for (pointIndex in concentricCircle1.indices) {
+                        val point1 = concentricCircle1[pointIndex]
+                        val point2 = concentricCircle2[pointIndex]
+
+                        val velocityVector = calculateVelocityVector(
+                            fromVector = point1,
+                            toVector = point2,
+                            time = ringDuration
+                        )
+                        mutableCircleParticlesList.add(
+                            CircleParticle(
+                                fromVector = point1,
+                                toVector = point2,
+                                velocityVector = velocityVector
+                            )
+                        )
+                    }
+                    // And transform the mutable list into a concrete CircleParticle class
+                    val circleParticles = CircleParticles(
+                        particlePoints = mutableCircleParticlesList,
+                        // While this might seem odd, the real explanation is this:
+                        // If we have 4 rings which should last 1 second total, and each ring lasts 0.25sec
+                        // the first ring should have 0 delay, the second ring should have 0.25sec delay,
+                        // third should have 0.5sec and fourth should have 0.75sec - so using the ring index checks out.
+                        delayInSec = ring * ringDuration
+                    )
+
+                    mutableCircleList.add(circleParticles)
+                }
+
+                // And after we have generated all CircleParticle instances, return an immutable list of them
+                mutableCircleList.toList()
+            } else {
+                // If no particles should be generated, return empty list
+                emptyList<CircleParticles>()
             }
+            intervalUtil = MultiIntervalUtil(particleDrawInterval)
         }
 
 
@@ -929,6 +1011,22 @@ object CircleUtils {
         fun drawParticles(ship: ShipAPI, elapsed: Float) {
             TODO("Implement particle drawing based on rings")
         }
+
+        inner class CircleParticles(
+            private val particlePoints: MutableList<CircleParticle>,
+            private val delayInSec: Float
+        ) {
+            private var armSize: Int = 0
+            private var isFinished = false
+
+
+
+        }
+        data class CircleParticle(
+            private val fromVector: Vector2f,
+            private val toVector: Vector2f,
+            private val velocityVector: Vector2f
+        )
     }
 
 }
