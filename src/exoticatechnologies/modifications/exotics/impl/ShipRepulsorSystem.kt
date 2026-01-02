@@ -187,6 +187,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
     ): MagicSubsystem(ship) {
         // check for activation every 3 seconds
         private val activationIntervalUtil = IntervalUtil(2.95f, 3.05f)
+        private var visualCircle: CircleUtils.ConcentricCircles? = null
 
         override fun getBaseActiveDuration() = 1f
 
@@ -297,7 +298,65 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             return potentiallyAffectedShips
         }
 
+
+        fun onVisualsFinished(visualThatFinished: CircleUtils.ConcentricCircles) {
+            visualCircle = null
+            // And reset the smooth particle limit back to original
+//            setSmoothParticleLimit(newLimit = ORIGINAL_PARTICLE_LIMIT)
+        }
+
+        override fun advance(amount: Float, isPaused: Boolean) {
+            if (isPaused.not()) {
+                // If not paused, draw particles on the circles if we have it
+                visualCircle?.let { circle ->
+                    circle.drawParticles(
+                        amount = amount,
+                        particleSize = 64f,
+                        particlesToDrawPerInterval = 6,
+                        particleColors = listOf(
+                            Color.WHITE.brighter().brighter(),
+//                            Color.WHITE,
+//                            Color.LIGHT_GRAY.brighter().brighter(),
+//                            Color.LIGHT_GRAY,
+//                            Color.DARK_GRAY,
+//                            Color.DARK_GRAY.darker().darker()
+                        ),
+                    )
+                    // If all circles have finished, get rid of visualCircle
+                    if (circle.hasFinished()) {
+                        onVisualsFinished(circle)
+                    }
+                }
+            }
+        }
+
         private fun showVisualFlair() {
+            val center = ship.location
+            val fullRange = getRadiusAmount(member, mods, exoticData)
+            val radiusList = listOf(
+//                ship.collisionRadius * 1.5f,
+                ship.collisionRadius,
+                ship.collisionRadius * 2f,
+                fullRange / 2,
+                fullRange,
+
+            )
+
+            val concentricCircles = CircleUtils.generateConcentricCircles(
+                center = center,
+                radii = radiusList,
+                pointsPerRing = 60,
+                generateInwards = false,
+                globalRotationDegrees = ship.facing,
+                generateParticles = true,
+                particleDrawInterval = 0.1f,
+                particleDrawDuration = 1f
+            )
+            // We will not call concentricCircles.draw() to avoid tanking FPS
+            // The "particle over time" part will be done separately in advance() ...
+        }
+
+        private fun showVisualFlair2() {
             // generate dots
             val center = ship.location
             val fullRange = getRadiusAmount(member, mods, exoticData)

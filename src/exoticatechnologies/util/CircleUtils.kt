@@ -406,7 +406,7 @@ object CircleUtils {
     }
 
     /**
-     * Enum class describing the "contiuous drain" and how many particles should be pre-drained before drawing
+     * Enum class describing the "continuous drain" and how many particles should be pre-drained before drawing
      */
     enum class ContinuousDrainMode {
         /**
@@ -942,6 +942,8 @@ object CircleUtils {
     ) {
         private val circleParticles: List<CircleParticles>
         private val intervalUtil: MultiIntervalUtil
+        @Volatile
+        private var particleAccumulator: Float = 0f
 
         init {
             circleParticles = if (generateParticles) {
@@ -1008,8 +1010,39 @@ object CircleUtils {
         }
 
 
-        fun drawParticles(ship: ShipAPI, elapsed: Float) {
-            TODO("Implement particle drawing based on rings")
+        fun drawParticles(
+            amount: Float,
+            particleSize: Float = 12f,
+            particleDuration: Float = 0.25f,
+            particlesToDrawPerInterval: Int = 1,
+            particleColors: List<Color>,
+        ) {
+            // Bump the accumulator, the intervalUtil and draw if anything is drawable
+            particleAccumulator += amount
+            intervalUtil.advance(amount)
+            intervalUtil.onIntervalElapsed {
+                // Filter circles that are not finished and that have waited enough
+                val drawableCircles = circleParticles.filter {
+                    it.hasFinished().not() && it.getDelay() <= particleAccumulator
+                }
+                // Then, draw them out
+                drawableCircles.forEach { circleParticles ->
+                    circleParticles.draw(
+                        particleSize = particleSize,
+                        particleDuration = particleDuration,
+                        particleColors = particleColors
+                    )
+                }
+            }
+        }
+
+        /**
+         * Method for checking whether all of this [ConcentricCircles]'s particle circles ([CircleParticles]) have finished or not
+         *
+         * @return whether all particle circles have finished or not
+         */
+        fun hasFinished(): Boolean {
+            return circleParticles.all { it.hasFinished() }
         }
 
         inner class CircleParticles(
@@ -1019,13 +1052,92 @@ object CircleUtils {
             private var armSize: Int = 0
             private var isFinished = false
 
+            fun getDelay(): Float = delayInSec
 
+            /**
+             * Draws the circle
+             *
+             * @param particleSize the particle size to use. Defaults to 12f.
+             * @param particleDuration the lifetime of a single particle, in seconds. Defaults to 0.25f
+             * @param particleColors a one-element list of colors
+             * @param particleBrightness particle brightness to use. Defaults to 1f
+             */
+            fun draw(
+                particleSize: Float = 12f,
+                particleDuration: Float = 0.25f,
+                particleColors: List<Color>,
+                particleBrightness: Float = 1f,
+            ) {
+                if (particlePoints.isNotEmpty()) {
+
+                    // Fetch the original smooth particle limit
+                    val engine = Global.getCombatEngine()
+                    for (point in particlePoints) {
+                        val color = particleColors.last()
+
+//                        EngineParticlePainter.addParticle(
+//                            engine = engine,
+//                            particleType = ParticleType.SMOOTH_PARTICLE,
+//                            particleParams = ParticleParams.Smooth.Basic(
+//                                location = point.fromVector,
+//                                velocity = point.velocityVector,
+//                                size = particleSize,
+//                                brightness = particleBrightness,
+//                                duration = particleDuration,
+//                                color = color
+//                            )
+//                        )
+                        EngineParticlePainter.addParticle(
+                            engine = engine,
+                            particleType = ParticleType.SWIRLY_NEBULA_PARTICLE,
+                            particleParams = ParticleParams.Nebula.Swirly.Plain(
+                                location = point.fromVector,
+                                velocity = point.velocityVector,
+                                size = particleSize,
+                                color = color,
+                                endSizeMult = 2f,
+                                rampUpFraction = 1.25f,
+                                fullBrightnessFraction = particleBrightness,
+                                totalDuration = particleDuration,
+                                expandAsSqrt = false
+                            )
+                        )
+                    }
+                    // And drain all particle elements from this CircleParticles instance
+                    particlePoints.clear()
+                } else {
+                    isFinished = true
+                }
+            }
+
+            /**
+             * Method that checks whether this particle arm has finished or not.
+             * A particle arm is considered "finished" when it has exhausted all of it's points
+             *
+             * @return whether this arm has finished or not
+             */
+            fun hasFinished(): Boolean {
+                return isFinished
+            }
+
+            /**
+             * Method that removes [pointsToRemove] first points from this arm.
+             * If the method tries to remove more points than we have in [particlePoints] it will remove as many
+             * as it can and then do nothing.
+             */
+            fun removePoints(pointsToRemove: Int) {
+                repeat(pointsToRemove) {
+                    if (particlePoints.isNotEmpty()) {
+                        particlePoints.removeAt(0)
+                    }
+                }
+            }
 
         }
         data class CircleParticle(
-            private val fromVector: Vector2f,
-            private val toVector: Vector2f,
-            private val velocityVector: Vector2f
+            val fromVector: Vector2f,
+            val toVector: Vector2f,
+            val velocityVector: Vector2f
         )
     }
 
