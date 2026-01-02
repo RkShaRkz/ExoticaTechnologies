@@ -879,7 +879,9 @@ object CircleUtils {
      * @param globalRotationDegrees the "global" rotation degrees of the circle, defaults to 0.
      * @param generateParticles whether particles should also be generated or not, defaults to [false].
      * @param particleDrawInterval the default interval used for the [ConcentricCircles.intervalUtil]. Defaults to 0.1
-     * @param particleDrawDuration how long should the whole particle "drawing" of these concentric circles last, in seconds. Defaults to 1
+     * @param particleDrawDuration how long should the whole particle "drawing" of all of these concentric circles last, in seconds. Defaults to 1
+     * This parameter is also in charge of "how fast should particles move between rings" as well as the lifetime of each particle.
+     * **NOTE**: particleDrawDuration of 1 for 5 rings will end up being 0.25 for each particle due to internal calculations. See [ConcentricCircles.particleDrawingDuration]
      */
     //TODO add support for "anchored concentric circles" capability in here by having an anchor: Optional<CombatEntityAPI>
     // and then decide whether we generate a "fixed concentric circles" or "anchored concentric circles" depending on if it's empty or not
@@ -1018,6 +1020,7 @@ object CircleUtils {
             particleSize: Float = 12f,
             particleDuration: Float = particleDrawingDuration / (rings.size - 1),
             particleColors: List<Color>,
+            particleBrightness: Float = 1f
         ) {
             // Bump the accumulator, the intervalUtil and draw if anything is drawable
             particleAccumulator += amount
@@ -1032,7 +1035,8 @@ object CircleUtils {
                     circleParticles.draw(
                         particleSize = particleSize,
                         particleDuration = particleDuration,
-                        particleColors = particleColors
+                        particleColors = particleColors,
+                        particleBrightness = particleBrightness
                     )
                 }
             }
@@ -1051,7 +1055,6 @@ object CircleUtils {
             private val particlePoints: MutableList<CircleParticle>,
             private val delayInSec: Float
         ) {
-            private var armSize: Int = 0
             private var isFinished = false
 
             fun getDelay(): Float = delayInSec
@@ -1071,8 +1074,6 @@ object CircleUtils {
                 particleBrightness: Float = 1f,
             ) {
                 if (particlePoints.isNotEmpty()) {
-
-                    // Fetch the original smooth particle limit
                     val engine = Global.getCombatEngine()
                     for (point in particlePoints) {
                         val color = particleColors.last()

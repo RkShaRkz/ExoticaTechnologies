@@ -301,8 +301,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
         fun onVisualsFinished(visualThatFinished: CircleUtils.ConcentricCircles) {
             visualCircle = null
-            // And reset the smooth particle limit back to original
-//            setSmoothParticleLimit(newLimit = ORIGINAL_PARTICLE_LIMIT)
         }
 
         override fun advance(amount: Float, isPaused: Boolean) {
@@ -312,7 +310,9 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     circle.drawParticles(
                         amount = amount,
                         particleSize = 128f,
-                        particleDuration = 0.75f,
+                        // Even though this should be alot shorter since all 4 circles should last for exactly 1 second
+                        // I think this looks more visually appealing
+                        particleDuration = 1.5f,
                         particleColors = listOf(
                             Color.WHITE.brighter().brighter(),
                         ),
