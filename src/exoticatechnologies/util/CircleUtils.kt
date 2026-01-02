@@ -1013,8 +1013,7 @@ object CircleUtils {
         fun drawParticles(
             amount: Float,
             particleSize: Float = 12f,
-            particleDuration: Float = 0.25f,
-            particlesToDrawPerInterval: Int = 1,
+            particleDuration: Float = particleDrawingDuration / (rings.size - 1),
             particleColors: List<Color>,
         ) {
             // Bump the accumulator, the intervalUtil and draw if anything is drawable
@@ -1075,31 +1074,16 @@ object CircleUtils {
                     for (point in particlePoints) {
                         val color = particleColors.last()
 
-//                        EngineParticlePainter.addParticle(
-//                            engine = engine,
-//                            particleType = ParticleType.SMOOTH_PARTICLE,
-//                            particleParams = ParticleParams.Smooth.Basic(
-//                                location = point.fromVector,
-//                                velocity = point.velocityVector,
-//                                size = particleSize,
-//                                brightness = particleBrightness,
-//                                duration = particleDuration,
-//                                color = color
-//                            )
-//                        )
                         EngineParticlePainter.addParticle(
                             engine = engine,
-                            particleType = ParticleType.SWIRLY_NEBULA_PARTICLE,
-                            particleParams = ParticleParams.Nebula.Swirly.Plain(
+                            particleType = ParticleType.SMOOTH_PARTICLE,
+                            particleParams = ParticleParams.Smooth.Basic(
                                 location = point.fromVector,
                                 velocity = point.velocityVector,
                                 size = particleSize,
-                                color = color,
-                                endSizeMult = 2f,
-                                rampUpFraction = 1.25f,
-                                fullBrightnessFraction = particleBrightness,
-                                totalDuration = particleDuration,
-                                expandAsSqrt = false
+                                brightness = particleBrightness,
+                                duration = particleDuration,
+                                color = color
                             )
                         )
                     }

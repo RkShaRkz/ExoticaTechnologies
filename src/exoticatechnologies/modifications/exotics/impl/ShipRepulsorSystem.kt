@@ -312,7 +312,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     circle.drawParticles(
                         amount = amount,
                         particleSize = 64f,
-                        particlesToDrawPerInterval = 6,
                         particleColors = listOf(
                             Color.WHITE.brighter().brighter(),
 //                            Color.WHITE,
@@ -342,14 +341,16 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
 
             )
 
-            val concentricCircles = CircleUtils.generateConcentricCircles(
+            visualCircle = CircleUtils.generateConcentricCircles(
                 center = center,
                 radii = radiusList,
-                pointsPerRing = 60,
+//                pointsPerRing = 60,
+//                pointsPerRing = 90,
+                pointsPerRing = 180,
                 generateInwards = false,
                 globalRotationDegrees = ship.facing,
                 generateParticles = true,
-                particleDrawInterval = 0.1f,
+                particleDrawInterval = 0.05f,
                 particleDrawDuration = 1f
             )
             // We will not call concentricCircles.draw() to avoid tanking FPS
