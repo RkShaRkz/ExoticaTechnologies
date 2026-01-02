@@ -403,13 +403,18 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             val diffMassHitpoints = myMassHitpoints - enemyMassHitpoints
                             var avoidScaling = false
                             val rotationalMomentum = if(diffMassHitpoints > 0) {
+                                // diffMassHitpoints > 0 case, we're definitelly heavier/sturdier than target,
+                                // so apply debilitating rotational effect
                                 momentumFactor * (diffMassHitpoints / differenceInMassRatio) * rotationalDirection
                             } else {
+                                // diffMassHitpoints <= 0 case, check if we're in ALLOW_COEF
+                                //
                                 // If we're in the ALLOW_COEF, let it go, otherwise just return 0 os we can't spin up ships far out of our league.
                                 // We need to abs() it because it's already negative, so whatever the ratio comes out, it's certainly going
                                 // to be less than a small positive number ...
                                 val diffMassHitpointRatio = abs(diffMassHitpoints / myMassHitpoints)
                                 if (diffMassHitpointRatio <= getScaledAllowCoefficient(member, mods, exoticData)) {
+                                    // We are in ALLOW_COEF, so apply *some* rotational debilitating effect
                                     if (diffMassHitpointRatio != 0f) {
                                         // Special case 1 - if we're not exactly the same, but are within allowed ratio,
                                         // use identical formula as above regardless of diffMassHitpoints being positive or negative
@@ -422,6 +427,8 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                                         (Math.random() * ZERO_DIFF_ROTATION_VALUE).toFloat() * rotationalDirection
                                     }
                                 } else {
+                                    // We are completely outside of ALLOW_COEF, so apply no debilitating effect
+                                    // since the ship is much heavier than us (to ships outside of our league)
                                     0f
                                 }
                             }

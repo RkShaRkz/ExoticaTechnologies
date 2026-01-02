@@ -232,28 +232,62 @@ object CircleUtils {
      * Internally, it uses the identity atan2(sin(Δθ), cos(Δθ)) to guarantee
      * the result lies within [-π, π].
      *
-     * @param dTheta The raw angular difference in radians (may be outside [-π, π]).
-     * @return The normalized angular difference in radians, guaranteed to be within [-π, π].
-     *
      * Example:
      * ```
      * normalizeAngularDelta(Math.PI + 0.1)   // ≈ -3.04159 (just under -π)
      * normalizeAngularDelta(-4.0)            // ≈ 2.28319 (wrapped into [-π, π])
      * ```
+     *
+     * Use this method for **relative rotations** where the "shortest path" to a target is required.
+     * If you need an **absolute rotation**, use [normalizeRawAngularDelta]
+     *
+     *
+     * This method is suitable to use for "turn X degrees" situations, when we need to rotate (displace) a certain amount
+     * of degrees to reach some state; e.g. if we're facing North (0-degrees) and want to face West (270-degrees) we have
+     * two choices - turn 270 degrees (clockwise), or turn -90 degrees (counter-clockwise) - this method returns the
+     * **shortest signed path (angular delta)** to achieve a desired state/rotation, in radians
+     *
+     * @param dTheta The raw angular difference in radians (may be outside [-π, π]).
+     * @return The normalized angular difference in radians, guaranteed to be within [-π, π].
      */
     fun normalizeAngularDelta(dTheta: Double): Double {
         // returns in [-π, π]
         return Math.atan2(Math.sin(dTheta), Math.cos(dTheta))
     }
 
+    /**
+     * Normalizes the angular difference between two angles to the range [0, 2π).
+     *
+     * This method calculates the angular distance from thetaInner to thetaOuter
+     * in a strictly counterclockwise direction, ensuring the result is always
+     * non-negative. It is typically used for absolute orientations or
+     * compass-style headings where negative values are not desired.
+     *
+     *
+     * Example:
+     * ```
+     * normalizeRawAngularDelta(0.0, 0.5 * Math.PI) // ≈ 1.5π (wrapped positively)
+     * normalizeRawAngularDelta(0.5 * Math.PI, 0.0) // ≈ 0.5π
+     * ```
+     *
+     * Use this method for **absolute rotations** where a consistent, positive representation of a heading is required.
+     * If you need an **relative rotation**, use [normalizeAngularDelta].
+     *
+     *
+     * This method is suitable to use for "face/facing X direction" situations, when we need to face (or are facing)
+     * an absolute orientation, represented as an absolute "compass" value.
+     *
+     * @param thetaOuter The target or outer angle in radians.
+     * @param thetaInner The reference or inner angle in radians.
+     * @return The normalized difference in radians within the interval [0, 2π).
+     */
     fun normalizeRawAngularDelta(thetaOuter: Double, thetaInner: Double): Double {
-        val twoPi = (2 * Math.PI).toFloat()
+        val twoPi = (2 * Math.PI)
         var delta = thetaOuter - thetaInner
         // normalize into [0, 2π) instead of (–π, π]
         delta = (delta % twoPi + twoPi) % twoPi
         return delta
     }
-
 
 
     /**
