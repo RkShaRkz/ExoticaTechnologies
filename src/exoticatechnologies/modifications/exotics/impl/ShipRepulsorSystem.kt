@@ -312,6 +312,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                     circle.drawParticles(
                         amount = amount,
                         particleSize = 128f,
+                        particleDuration = 0.75f,
                         particleColors = listOf(
                             Color.WHITE.brighter().brighter(),
                         ),
@@ -343,7 +344,8 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 globalRotationDegrees = ship.facing,
                 generateParticles = true,
                 particleDrawInterval = 0.05f,
-                particleDrawDuration = 1f
+                particleDrawDuration = 1f,
+                particlesUseDelay = false
             )
             // We will not call concentricCircles.draw() to avoid tanking FPS
             // The "particle over time" part will be done separately in advance() ...
