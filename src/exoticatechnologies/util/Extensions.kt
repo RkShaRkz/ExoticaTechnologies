@@ -658,9 +658,12 @@ fun Vector2f.rotate(angle: Float, useFastTrig: Boolean = true): Vector2f {
 fun Vector2f.rotateAroundPivot(pivotPoint: Vector2f, angle: Float, useFastTrig: Boolean = true): Vector2f {
     if (angle == 0f) return this.clone()
 
-    val temp = this.sub(pivotPoint)        // translate relative to pivot
-    val rotated = temp.rotate(angle, useFastTrig = useFastTrig)       // rotate around origin
-    return rotated.add(pivotPoint)         // translate back
+    // translate relative to pivot
+    val temp = this.sub(pivotPoint)
+    // rotate around origin
+    val rotated = temp.rotate(angle, useFastTrig = useFastTrig)
+    // translate back
+    return rotated.add(pivotPoint)
 }
 
 

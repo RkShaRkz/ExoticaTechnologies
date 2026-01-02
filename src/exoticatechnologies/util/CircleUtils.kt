@@ -331,13 +331,12 @@ object CircleUtils {
                     pInner.y + (pOuter.y - pInner.y) * 0.75f
                 )
                 // Tangential offset to induce swirl by rotating control point around center
-                // quick and dirty hack but meh
-                // oh shit, the center won't necessarily be 0,0, we need to rotate around pivot aaargh
-                // UPDATE: ok, since all of these vectors are ship.location relative, we don't need to rotate around pivot...
+                //
+                // Now, since all of these vectors are ship.location relative, we don't *need* to rotate around pivot,
+                // however, if we *do* have some "center" - then we should rotate around pivot, with it being the pivot point
+                // because that means we aren't rotating around (0,0) but some other point which is the "center" of the swirl
                 val c1Rot: Vector2f
                 val c2Rot: Vector2f
-//                val c1Rot = c1.rotateAroundPivot(pivotPoint = center, angle = bezierAngle)
-//                val c2Rot = c2.rotateAroundPivot(pivotPoint = center, angle = -bezierAngle)
                 if (center != null) {
                     c1Rot = c1.rotateAroundPivot(pivotPoint = center, angle = bezierAngle)
                     c2Rot = c2.rotateAroundPivot(pivotPoint = center, angle = -bezierAngle)
@@ -381,7 +380,7 @@ object CircleUtils {
 
                 // Spiral parameters: r = a * e^(bθ)
                 val a = rInner
-                // Calculate and normalize the thetaOuter - thetaInner
+                // Calculate and normalize the thetaOuter - thetaInner to be in [-pi, pi] range
                 val dTheta = normalizeAngularDelta(thetaOuter - thetaInner)
 
                 val b = ln(rOuter / rInner) / dTheta
@@ -626,8 +625,6 @@ object CircleUtils {
                     )
                 }
             }
-
-            // Now that we're done with the emp arcs - draw the particles if allowed
         }
 
         /**
@@ -655,6 +652,8 @@ object CircleUtils {
             particleArmsToDraw: Int,
             continuousDrain: ContinuousDrainMode?
         ) {
+            // Validate color list
+            if (particleColors.isEmpty()) throw IllegalArgumentException("particleColors list must NOT be empty")
             // Drawing particles is rather simple. Feed the amount into the interval util, if amount has passed -
             // call draw on each SwirlArmParticles instance. They will automatically remove the drawn point.
             intervalUtil.advance(amount)
@@ -757,7 +756,7 @@ object CircleUtils {
         }
 
         /**
-         * Method for checking whether all of this [Swirl]'s particle arms ([SwirlArmParticles] have finished or not
+         * Method for checking whether all of this [Swirl]'s particle arms ([SwirlArmParticles]) have finished or not
          *
          * @return whether all particle arms have finished or not
          */
@@ -797,10 +796,6 @@ object CircleUtils {
                         ParticleDrawMode.ONE_AT_A_TIME -> {
                             val point = particlePoints.removeAt(0)
                             val engine = Global.getCombatEngine()
-                            // Fetch the original smooth particle limit
-//                            val originalLimit = (engine as CombatEngine).smoothParticles.limit
-                            // bump limit so they all fit
-//                            (engine as CombatEngine).smoothParticles.limit = particlePoints.size
                             val particleColor = particleColors.first()
                             EngineParticlePainter.addParticle(
                                 engine = engine,
@@ -814,8 +809,6 @@ object CircleUtils {
                                     color = particleColor
                                 )
                             )
-                            // Revert limit after drawing
-//                            (engine as CombatEngine).smoothParticles.limit = originalLimit
                         }
                         ParticleDrawMode.WHOLE_ARM -> {
                             // Fetch the original smooth particle limit
