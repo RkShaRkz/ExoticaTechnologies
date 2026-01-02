@@ -311,14 +311,9 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 visualCircle?.let { circle ->
                     circle.drawParticles(
                         amount = amount,
-                        particleSize = 64f,
+                        particleSize = 128f,
                         particleColors = listOf(
                             Color.WHITE.brighter().brighter(),
-//                            Color.WHITE,
-//                            Color.LIGHT_GRAY.brighter().brighter(),
-//                            Color.LIGHT_GRAY,
-//                            Color.DARK_GRAY,
-//                            Color.DARK_GRAY.darker().darker()
                         ),
                     )
                     // If all circles have finished, get rid of visualCircle
@@ -333,7 +328,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             val center = ship.location
             val fullRange = getRadiusAmount(member, mods, exoticData)
             val radiusList = listOf(
-//                ship.collisionRadius * 1.5f,
                 ship.collisionRadius,
                 ship.collisionRadius * 2f,
                 fullRange / 2,
@@ -344,8 +338,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             visualCircle = CircleUtils.generateConcentricCircles(
                 center = center,
                 radii = radiusList,
-//                pointsPerRing = 60,
-//                pointsPerRing = 90,
                 pointsPerRing = 180,
                 generateInwards = false,
                 globalRotationDegrees = ship.facing,
