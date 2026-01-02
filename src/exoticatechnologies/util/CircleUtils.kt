@@ -891,7 +891,8 @@ object CircleUtils {
         globalRotationDegrees: Float = 0f,
         generateParticles: Boolean = false,
         particleDrawInterval: Float = 0.1f,
-        particleDrawDuration: Float = 1f
+        particleDrawDuration: Float = 1f,
+        particlesUseDelay: Boolean = false
     ): ConcentricCircles {
         val circles = mutableListOf<List<Vector2f>>()
         val angleStepDegrees = 360.0 / pointsPerRing
@@ -921,7 +922,8 @@ object CircleUtils {
             globalRotationDegrees = globalRotationDegrees,
             generateParticles = generateParticles,
             particleDrawInterval = particleDrawInterval,
-            particleDrawingDuration = particleDrawDuration
+            particleDrawingDuration = particleDrawDuration,
+            particleRingsUseDelay = particlesUseDelay
         )
     }
 
@@ -938,7 +940,8 @@ object CircleUtils {
         private val generateParticles: Boolean,
 //        private val particleSegments: Int,    //TODO delete
         private val particleDrawInterval: Float,
-        private val particleDrawingDuration: Float
+        private val particleDrawingDuration: Float,
+        private val particleRingsUseDelay: Boolean
     ) {
         private val circleParticles: List<CircleParticles>
         private val intervalUtil: MultiIntervalUtil
@@ -989,7 +992,7 @@ object CircleUtils {
                         // If we have 4 rings which should last 1 second total, and each ring lasts 0.25sec
                         // the first ring should have 0 delay, the second ring should have 0.25sec delay,
                         // third should have 0.5sec and fourth should have 0.75sec - so using the ring index checks out.
-                        delayInSec = ring * ringDuration
+                        delayInSec = if (particleRingsUseDelay) { ring * ringDuration } else { 0f }
                     )
 
                     mutableCircleList.add(circleParticles)
