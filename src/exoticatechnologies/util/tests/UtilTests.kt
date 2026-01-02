@@ -38,7 +38,9 @@ class UtilTests {
         val exception = Exception()
         val stringifiedStacktrace = StacktraceUtils.unwindStacktrace(exception.stackTrace)
 
+        println("exception.printStackTrace():")
         exception.printStackTrace()
+        println("System.err.println(\"Stacktrace:\\n\"+stringifiedStacktrace):")
         System.err.println("Stacktrace:\n"+stringifiedStacktrace)
 
         Assert.assertNotNull(stringifiedStacktrace)
@@ -49,7 +51,9 @@ class UtilTests {
         val exception = Exception()
         val stringifiedStacktrace = StacktraceUtils.unwindStacktraceFromException(exception)
 
+        println("exception.printStackTrace():")
         exception.printStackTrace()
+        println("System.err.println(stringifiedStacktrace):")
         System.err.println(stringifiedStacktrace)
 
         Assert.assertNotNull(stringifiedStacktrace)
@@ -60,7 +64,9 @@ class UtilTests {
         val throwable = Throwable("Hello from my test Throwable")
         val stringifiedStacktrace = StacktraceUtils.unwindStacktraceFromException(throwable)
 
+        println("throwable.printStackTrace():")
         throwable.printStackTrace()
+        println("System.err.println(stringifiedStacktrace):")
         System.err.println(stringifiedStacktrace)
 
         Assert.assertNotNull(stringifiedStacktrace)
