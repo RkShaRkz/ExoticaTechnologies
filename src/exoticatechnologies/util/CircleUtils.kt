@@ -1017,7 +1017,7 @@ object CircleUtils {
 
         fun drawParticles(
             amount: Float,
-            particleSize: Float = 12f,
+            particleSizeList: List<Float> = listOf(12f),
             particleDuration: Float = particleDrawingDuration / (rings.size - 1),
             particleColors: List<Color>,
             particleBrightness: Float = 1f
@@ -1031,7 +1031,8 @@ object CircleUtils {
                     it.hasFinished().not() && it.getDelay() <= particleAccumulator
                 }
                 // Then, draw them out
-                drawableCircles.forEach { circleParticles ->
+                drawableCircles.forEachIndexed { index, circleParticles ->
+                    val particleSize = particleSizeList.getOrElse(index) { _ -> 12f }
                     circleParticles.draw(
                         particleSize = particleSize,
                         particleDuration = particleDuration,

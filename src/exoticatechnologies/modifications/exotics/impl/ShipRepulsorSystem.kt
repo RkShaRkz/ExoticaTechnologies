@@ -1,6 +1,5 @@
 package exoticatechnologies.modifications.exotics.impl
 
-import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.campaign.CampaignFleetAPI
 import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.ShipAPI
@@ -22,10 +21,7 @@ import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
-import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
 
 class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     private val logger: Logger = Logger.getLogger(ShipRepulsorSystem::class.java)
@@ -299,7 +295,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         }
 
 
-        fun onVisualsFinished(visualThatFinished: CircleUtils.ConcentricCircles) {
+        private fun onVisualsFinished(visualThatFinished: CircleUtils.ConcentricCircles) {
             visualCircle = null
         }
 
@@ -309,9 +305,9 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 visualCircle?.let { circle ->
                     circle.drawParticles(
                         amount = amount,
-                        particleSize = 128f,
+                        particleSizeList = listOf(32f, 64f, 128f),
                         // Even though this should be alot shorter since all 4 circles should last for exactly 1 second
-                        // I think this looks more visually appealing
+                        // I think this looks more visually appealing - even if it's not quite respecting the time
                         particleDuration = 1.5f,
                         particleColors = listOf(
                             Color.WHITE.brighter().brighter(),
@@ -349,161 +345,6 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             )
             // We will not call concentricCircles.draw() to avoid tanking FPS
             // The "particle over time" part will be done separately in advance() ...
-        }
-
-        private fun showVisualFlair2() {
-            // generate dots
-            val center = ship.location
-            val fullRange = getRadiusAmount(member, mods, exoticData)
-            // Lets draw the first ring at 1.5x collision radius so it's more visible, 1x is kinda "too close"
-            val stage1distance = ship.collisionRadius * 1.5f
-            val stage1DotsPair = generateDots(center, stage1distance)
-
-            val stage1left = stage1DotsPair.first
-            val stage1right = stage1DotsPair.second
-            // the first stage will draw emp arcs from left/right start to end
-            // start of stage1
-            for (index in 0 until stage1left.size -1) {
-                val fromL = stage1left[index]
-                val toL = stage1left[index+1]
-                Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                fromL,
-                                ship,
-                                toL,
-                                ship,
-                                6f,
-                                Color.BLUE.darker().darker(),
-                                Color.WHITE
-                        )
-
-                val fromR = stage1right[index]
-                val toR = stage1right[index+1]
-                Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                fromR,
-                                ship,
-                                toR,
-                                ship,
-                                6f,
-                                Color.BLUE.darker().darker(),
-                                Color.WHITE
-                        )
-            }
-            // end of stage1
-            val stage2distance = fullRange / 2
-            val stage2dotsPair = generateDots(center, stage2distance)
-
-            val stage2left = stage2dotsPair.first
-            val stage2LeftReversed = stage2left.asReversed()
-            val stage2right = stage2dotsPair.second
-            val stage2CW = stage2right + stage2LeftReversed
-            val stage2CCW = stage2CW.asReversed()
-            val stage1CW = stage1right + stage1left.asReversed()
-
-            // stage2 will draw a full circle going from index0-35 and index35-0
-            // along with stage1[i] to stage2[i]
-            // start of stage2
-            for (index in 0 until stage2CW.size - 1) {
-                val CW1 = stage2CW[index]
-                val CW2 = stage2CW[index+1]
-                Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                CW1,
-                                ship,
-                                CW2,
-                                ship,
-                                6f,
-                                Color.BLUE.darker(),
-                                Color.WHITE.darker()
-                        )
-
-                val CCW1 = stage2CCW[index]
-                val CCW2 = stage2CCW[index+1]
-                Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                CCW1,
-                                ship,
-                                CCW2,
-                                ship,
-                                6f,
-                                Color.BLUE.darker(),
-                                Color.WHITE.darker()
-                        )
-            }
-            for (index in 0 until stage2CW.size) {
-                val from = stage1CW[index]
-                val to = stage2CW[index]
-                Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                from,
-                                ship,
-                                to,
-                                ship,
-                                6f,
-                                Color.BLUE.darker(),
-                                Color.WHITE.darker()
-                        )
-            }
-            // end of stage2
-
-            // stage3 will just do CCW arcs between stage2ccw and stage3ccw
-            val stage3distance = fullRange
-            val stage3dotsPair = generateDots(center, stage3distance)
-            val stage3CCW = stage3dotsPair.second + stage3dotsPair.first.asReversed()
-            for (index in 0 until stage3CCW.size) {
-                val from = stage2CCW[index]
-                val to = stage3CCW[index]
-                Global
-                        .getCombatEngine()
-                        .spawnEmpArcVisual(
-                                from,
-                                ship,
-                                to,
-                                ship,
-                                6f,
-                                Color.BLUE.darker(),
-                                Color.WHITE.darker()
-                        )
-            }
-        }
-
-        //TODO move to CircleUtils, make the numDots a parameter and make the angleDeg depend on 360/numDots
-        /**
-         * Generates a pair of lists, going from 0-360 degrees with 10-degree increments, clockwise.
-         * The left list is reversed so that it represents CCW rotation from 0 to 180
-         *
-         * @return a pair of lists, first one being the 0-180 "right" list, second one being the reversed 180-360 "left" list
-         *
-         * @param center the center from which dots should diverge
-         * @param distance how far from the center should the dots be
-         */
-        private fun generateDots(center: Vector2f, distance: Float): Pair<List<Vector2f>, List<Vector2f>> {
-            val leftDots = mutableListOf<Vector2f>()
-            val rightDots = mutableListOf<Vector2f>()
-            val numDots = 36
-            for (i in 0 until numDots) {
-//            for (i in 0 ..numDots) {
-                val angleDeg = i * 10f
-                val angleRad = angleDeg * PI.toFloat() / 180f
-                val x = center.x + distance * cos(angleRad)
-                val y = center.y + distance * sin(angleRad)
-//                dots.add(Vector2f(x, y))
-                if (i < numDots / 2) {
-                    rightDots.add(Vector2f(x,y))
-                } else {
-                    leftDots.add(Vector2f(x,y))
-                }
-            }
-            // Now, since rightDots go from top to bottom and leftDots go from bottom to top, reverse the leftDots
-            leftDots.reverse()
-
-            return Pair(leftDots, rightDots)
         }
 
         private fun pushOutShipsWithinRadius() {
