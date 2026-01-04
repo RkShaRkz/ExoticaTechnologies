@@ -423,6 +423,19 @@ fun getAllShipSections(ship: ShipAPI): List<ShipAPI> {
 }
 
 /**
+ * Returns the root module of a ship.
+ *
+ * If this ship is a multimodule ship, the method will return the main module regardless of which module it's called on.
+ * If this ship is not a multimodule ship, this method will just return [this], which also happens to be the root module.
+ *
+ * @return the root (main) module of this ship
+ */
+fun ShipAPI.getRootModule(): ShipAPI {
+    // A bit of a hack but no point in reinventing the wheel now ...
+    return getAllShipSections(this).last()
+}
+
+/**
  * Returns whether the [ship] is a multi-module (or belongs to a multi-module) ship.
  * Internally calls [getAllShipSections] so you might not want to call this in every frame
  *

@@ -447,11 +447,12 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
                             // And finally, we will scale the strength * factor with negative effect mult
                             val momentumStrength: Float = getPushOutStrength(member, ship)
-                            val momentum = (-momentumStrength / 2f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
+                            val momentum = (momentumStrength / 2f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
+                            val inverseDirection = Vector2f.sub(ship.location, nearbyShip.location, null)
                             ForceApplier.applyMomentum(
-                                    entity = ship.parentStation,
+                                    entity = ship.getRootModule(),
                                     pointOfImpact = collision,
-                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),
+                                    direction = inverseDirection,
                                     momentum = momentum,
                                     elasticCollision = true,
                             )
