@@ -640,18 +640,36 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 drone?.let {
                     val momentumFactor: Float = getShieldPushOutEffectMomentumFactor(ship.hullSize, member, mods, exoticData)
 
-                    for (ship in AIUtils.getNearbyEnemies(it, it.collisionRadius)) {
-                        if (MathUtils.getDistance(ship.location, it.location) < ship.collisionRadius + it.getCollisionRadius()) { //hmm, I needs to override the no negative result thing here.
-                            val pointToTest = VectorUtils.clampLength(Vector2f.sub(it.getLocation(), ship.location, null), it.getShieldRadiusEvenIfNoShield())
-                            val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(it.getLocation(), pointToTest, ship)
+                    for (nearbyEnemyShip in AIUtils.getNearbyEnemies(it, it.collisionRadius)) {
+                        if (MathUtils.getDistance(nearbyEnemyShip.location, it.location) < nearbyEnemyShip.collisionRadius + it.getCollisionRadius()) { //hmm, I needs to override the no negative result thing here.
+                            val pointToTest = VectorUtils.clampLength(Vector2f.sub(it.getLocation(), nearbyEnemyShip.location, null), it.getShieldRadiusEvenIfNoShield())
+                            val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(it.getLocation(), pointToTest, nearbyEnemyShip)
                             collisionPoint?.let { collision ->
-                                if (!ship.isStation && !(ship.isStationModule && ship.parentStation.isStation)) {
-                                    ship.velocity.set(it.getVelocity())
+                                if (!nearbyEnemyShip.isStation && !(nearbyEnemyShip.isStationModule && nearbyEnemyShip.parentStation.isStation)) {
+                                    // Normal case, when we try pushing out non-station ships out of the guardian shield
+                                    nearbyEnemyShip.velocity.set(it.getVelocity())
                                     val momentum = amount * 10f * momentumFactor
-                                    ForceApplier.applyMomentum(ship, collision, Vector2f.sub(it.getLocation(), ship.location, null), momentum, true)
+                                    ForceApplier.applyMomentum(
+                                        entity = nearbyEnemyShip,
+                                        pointOfImpact = collision,
+                                        direction = Vector2f.sub(ship.location, nearbyEnemyShip.location, null),
+                                        momentum = momentum,
+                                        elasticCollision = true
+                                    )
                                 } else {
-                                    val momentum = amount * -0.5f * 1 / momentumFactor
-                                    ForceApplier.applyMomentum(it.getParentStation(), collision, Vector2f.sub(ship.location, it.getLocation(), null), momentum, true)
+                                    // Inverse case when we try pushing out an "immovable object" - a station
+                                    // so instead we push ourselves back, larger ships being less affected by this
+                                    // This is dependant on the inverse of 'momentumFactor' multiplied by negativeMult
+                                    val negativeMomentumFactor = (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
+                                    val momentum = amount * 5f * negativeMomentumFactor
+                                    ForceApplier.applyMomentum(
+                                        // Apply to the drone-host ship's root module so we get pushed back
+                                        entity = ship.getRootModule(),
+                                        pointOfImpact = collision,
+                                        direction = Vector2f.sub(nearbyEnemyShip.location, ship.location, null),
+                                        momentum = momentum,
+                                        elasticCollision = true
+                                    )
                                 }
                             }
                         }
