@@ -305,10 +305,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                 visualCircle?.let { circle ->
                     circle.drawParticles(
                         amount = amount,
-                        particleSizeList = listOf(32f, 64f, 128f),
-                        // Even though this should be alot shorter since all 4 circles should last for exactly 1 second
-                        // I think this looks more visually appealing - even if it's not quite respecting the time
-                        particleDuration = 1.5f,
+                        particleSizeList = listOf(48f, 96f, 192f),
                         particleColors = listOf(
                             Color.WHITE.brighter().brighter(),
                         ),
@@ -448,11 +445,10 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
                             // And finally, we will scale the strength * factor with negative effect mult
                             val momentumStrength: Float = getPushOutStrength(member, ship)
                             val momentum = (momentumStrength / 2f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
-                            val inverseDirection = Vector2f.sub(ship.location, nearbyShip.location, null)
                             ForceApplier.applyMomentum(
                                     entity = ship.getRootModule(),
                                     pointOfImpact = collision,
-                                    direction = inverseDirection,
+                                    direction = Vector2f.sub(ship.location, nearbyShip.location, null),
                                     momentum = momentum,
                                     elasticCollision = true,
                             )
