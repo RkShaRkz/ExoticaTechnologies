@@ -316,7 +316,7 @@ object CircleUtils {
         pOuter: Vector2f,
         particleSegments: Int,
         center: Vector2f? = null,
-        bezierTightnessConstant: Float = 0.5f,
+        bezierTightnessConstant: Float = 0.33f,
         workMode: SwirlGenerationWorkMode,
     ): List<Vector2f> {
         val points = mutableListOf<Vector2f>()
@@ -326,51 +326,40 @@ object CircleUtils {
                 val cx = center?.x ?: 0f
                 val cy = center?.y ?: 0f
 
-                // 1. Calculate polar coordinates for start and end
+                // 1. Polar coordinates
+                // even though we need Doubles for atan2, we still need these to remain Float to fit into Vector2f
                 val dx0 = pInner.x - cx
                 val dy0 = pInner.y - cy
                 val r0 = sqrt(dx0 * dx0 + dy0 * dy0)
                 val theta0 = atan2(dy0.toDouble(), dx0.toDouble()).toFloat()
 
+                // Exactly the same thing here as well
                 val dx3 = pOuter.x - cx
                 val dy3 = pOuter.y - cy
                 val r3 = sqrt(dx3 * dx3 + dy3 * dx3)
                 val theta3 = atan2(dy3.toDouble(), dx3.toDouble()).toFloat()
 
-                // 2. Determine handle length based on distance between rings
-                val dist = sqrt((pOuter.x - pInner.x).pow(2) + (pOuter.y - pInner.y).pow(2))
-                // The 'bezierTightnessConstant' is a constant to control how "pushed out" the curve handles are.
-                // 0.3f is subtle, 0.5f is a standard balanced arc, 0.8f is very loopy.
-                // Think of the "curve handles" as invisible strings (handles) pulling the curve, which are actually
-                // just tangent vectors
-                //
-                // Small handleLength (e.g. 0.1 x distance) = invisible 'strings' are short, they don't pull with enough "strength"
-                // so the swirl looks like a straight line between two points
-                // Medium handleLength (e.g. 0.5 x distance) = invisible 'strings' might be in a 'sweet spot' to create a smooth
-                // balanced arc similar to a perfect quarter-circle aka a nice swirl
-                // Large handleLength (e.g. 1.5 x distance) = invisible 'strings' are very long and pull the swirl so hard that
-                // it will loop out past the points, creating a deep loop / bulbous shape. It will either look wiggly or have a 'pregnant belly'
-                val handleLength = dist * bezierTightnessConstant
+                // 2. Calculate the angular sweep (the "gap" between points)
+                val dTheta = normalizeAngularDelta((theta3 - theta0).toDouble()).toFloat()  //TODO normalizeRawAngluarDelta perhaps?
+//                val dTheta = normalizeRawAngularDelta(theta3.toDouble(), theta0.toDouble()).toFloat()
 
-                // 3. Direction check
-                // This ensures the curve bends in the direction of the rotation
-                val dTheta = normalizeAngularDelta((theta3 - theta0).toDouble()).toFloat()
-                val direction = if (dTheta >= 0) 1f else -1f
+                // 3. Move the control points along the ANGLE, not a straight line
+                // This keeps them at the correct radius and kills the "hills"
+                val angleOffset = dTheta * bezierTightnessConstant
 
-                // 4. Calculate Control Points (P1 and P2)
-                // We use the circle tangent: perpendicular to the radial vector.
-                // Tangent at theta is (-sin(theta), cos(theta))
+                // P1 stays at the inner radius (r0), but moves forward in angle
                 val c1 = Vector2f(
-                    pInner.x + handleLength * -sin(theta0) * direction,
-                    pInner.y + handleLength * cos(theta0) * direction
+                    cx + r0 * cos(theta0 + angleOffset),
+                    cy + r0 * sin(theta0 + angleOffset)
                 )
 
+                // P2 stays at the outer radius (r3), but moves backward in angle
                 val c2 = Vector2f(
-                    pOuter.x - handleLength * -sin(theta3) * direction,
-                    pOuter.y - handleLength * cos(theta3) * direction
+                    cx + r3 * cos(theta3 - angleOffset),
+                    cy + r3 * sin(theta3 - angleOffset)
                 )
 
-                // 5. Generate the 4-point (Cubic) Bezier curve points
+                // 4. Cubic Bezier sampling
                 for (i in 0..particleSegments) {
                     val t = i.toFloat() / particleSegments
                     val invT = 1f - t
