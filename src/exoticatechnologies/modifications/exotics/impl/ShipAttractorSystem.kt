@@ -365,7 +365,6 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
         private fun pullInShipsWithinRadius() {
             log("--> pullInShipsWithinRadius()")
             // Look through all ships within radius, and apply momentum
-            val momentumFactor: Float = getPullInEffectMomentumFactor(member)
             val radius: Float = getRadiusAmount(member, mods, exoticData)
 
             val potentiallyAffectedShips = getPotentialTargets(member, mods, exoticData)
@@ -398,17 +397,21 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                                 applyImplicitMomentumScaling = true
                             )
                         } else {
-                            // This is the "inverse" case, when we try pulling in an immovable object - so we should push ourselves back a bit
+                            // This is the "inverse" case, when we try pulling in an immovable object - so we should pull ourselves in a bit
                             // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
-                            // And finally, we will scale the strength * factor with negative effect mult
-                            val momentumStrength: Float = getPullInStrength(member)
-                            val momentum = (-momentumStrength / 2f) * (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
+                            // So we will scale the strength * factor with negative effect mult, perhaps too harsh but it is what it is
+                            val negativeMomentum =
+                                getPullInEffectMomentumFactor(member = member) *
+                                    getPullInStrength(member = member) *
+                                    getNegativeMult(member, mods, exoticData)
+
                             ForceApplier.applyMomentum(
-                                entity = ship.parentStation,
+                                entity = ship.getRootModule(),
                                 pointOfImpact = collision,
                                 direction = Vector2f.sub(nearbyShip.location, ship.location, null),
-                                momentum = momentum,
-                                elasticCollision = true,
+                                momentum = negativeMomentum,
+                                elasticCollision = false,
+                                modifyAngularVelocity = false,
                                 applyImplicitMomentumScaling = true
                             )
                         }
