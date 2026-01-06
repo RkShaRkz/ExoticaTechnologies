@@ -303,7 +303,8 @@ object CircleUtils {
      * @param pOuter the ending point of the curve (outer ring point)
      * @param particleSegments number of segments to sample along the curve; higher values produce smoother curves but more points
      * @param center the actual 'center' to pivot around; if points are already relative to some center, leave as null - depending on this rotations will either be done "in place" or "around pivot"
-     * @param bezierAngle the optional angle to use for bezier control points to control swirl intensity, unused if [workMode] isn't [SwirlGenerationWorkMode.BEZIER]. **IF SET TO ZERO** the curve will degenerate to a straight line
+     * @param bezierTightnessConstant the optional "tightness constant"" for bezier control points to control swirl intensity, unused if [workMode] isn't [SwirlGenerationWorkMode.BEZIER].
+     * Lesser is "flatter", higher is more "loopy" or "circular". Defaults to 0.5
      * @param workMode whether to use bezier curving or logarithmic curving. See [SwirlGenerationWorkMode]
      *
      * @return a list of points along the curve
@@ -315,46 +316,76 @@ object CircleUtils {
         pOuter: Vector2f,
         particleSegments: Int,
         center: Vector2f? = null,
-        bezierAngle: Float = 30f,
+        bezierTightnessConstant: Float = 0.5f,
         workMode: SwirlGenerationWorkMode,
     ): List<Vector2f> {
         val points = mutableListOf<Vector2f>()
 
         when (workMode) {
             SwirlGenerationWorkMode.BEZIER -> {
-                val c1 = Vector2f(
-                    pInner.x + (pOuter.x - pInner.x) * 0.25f,
-                    pInner.y + (pOuter.y - pInner.y) * 0.25f
-                )
-                val c2 = Vector2f(
-                    pInner.x + (pOuter.x - pInner.x) * 0.75f,
-                    pInner.y + (pOuter.y - pInner.y) * 0.75f
-                )
-                // Tangential offset to induce swirl by rotating control point around center
-                //
-                // Now, since all of these vectors are ship.location relative, we don't *need* to rotate around pivot,
-                // however, if we *do* have some "center" - then we should rotate around pivot, with it being the pivot point
-                // because that means we aren't rotating around (0,0) but some other point which is the "center" of the swirl
-                val c1Rot: Vector2f
-                val c2Rot: Vector2f
-                if (center != null) {
-                    c1Rot = c1.rotateAroundPivot(pivotPoint = center, angle = bezierAngle)
-                    c2Rot = c2.rotateAroundPivot(pivotPoint = center, angle = -bezierAngle)
-                } else {
-                    c1Rot = c1.rotate(angle = bezierAngle)
-                    c2Rot = c2.rotate(angle = -bezierAngle)
-                }
+                val cx = center?.x ?: 0f
+                val cy = center?.y ?: 0f
 
+                // 1. Calculate polar coordinates for start and end
+                val dx0 = pInner.x - cx
+                val dy0 = pInner.y - cy
+                val r0 = sqrt(dx0 * dx0 + dy0 * dy0)
+                val theta0 = atan2(dy0.toDouble(), dx0.toDouble()).toFloat()
+
+                val dx3 = pOuter.x - cx
+                val dy3 = pOuter.y - cy
+                val r3 = sqrt(dx3 * dx3 + dy3 * dx3)
+                val theta3 = atan2(dy3.toDouble(), dx3.toDouble()).toFloat()
+
+                // 2. Determine handle length based on distance between rings
+                val dist = sqrt((pOuter.x - pInner.x).pow(2) + (pOuter.y - pInner.y).pow(2))
+                // The 'bezierTightnessConstant' is a constant to control how "pushed out" the curve handles are.
+                // 0.3f is subtle, 0.5f is a standard balanced arc, 0.8f is very loopy.
+                // Think of the "curve handles" as invisible strings (handles) pulling the curve, which are actually
+                // just tangent vectors
+                //
+                // Small handleLength (e.g. 0.1 x distance) = invisible 'strings' are short, they don't pull with enough "strength"
+                // so the swirl looks like a straight line between two points
+                // Medium handleLength (e.g. 0.5 x distance) = invisible 'strings' might be in a 'sweet spot' to create a smooth
+                // balanced arc similar to a perfect quarter-circle aka a nice swirl
+                // Large handleLength (e.g. 1.5 x distance) = invisible 'strings' are very long and pull the swirl so hard that
+                // it will loop out past the points, creating a deep loop / bulbous shape. It will either look wiggly or have a 'pregnant belly'
+                val handleLength = dist * bezierTightnessConstant
+
+                // 3. Direction check
+                // This ensures the curve bends in the direction of the rotation
+                val dTheta = normalizeAngularDelta((theta3 - theta0).toDouble()).toFloat()
+                val direction = if (dTheta >= 0) 1f else -1f
+
+                // 4. Calculate Control Points (P1 and P2)
+                // We use the circle tangent: perpendicular to the radial vector.
+                // Tangent at theta is (-sin(theta), cos(theta))
+                val c1 = Vector2f(
+                    pInner.x + handleLength * -sin(theta0) * direction,
+                    pInner.y + handleLength * cos(theta0) * direction
+                )
+
+                val c2 = Vector2f(
+                    pOuter.x - handleLength * -sin(theta3) * direction,
+                    pOuter.y - handleLength * cos(theta3) * direction
+                )
+
+                // 5. Generate the 4-point (Cubic) Bezier curve points
                 for (i in 0..particleSegments) {
                     val t = i.toFloat() / particleSegments
-                    val x = (1 - t).pow(3) * pInner.x +
-                        3 * (1 - t).pow(2) * t * c1Rot.x +
-                        3 * (1 - t) * t.pow(2) * c2Rot.x +
+                    val invT = 1f - t
+
+                    // Cubic Bezier Formula: (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
+                    val x = invT.pow(3) * pInner.x +
+                        3 * invT.pow(2) * t * c1.x +
+                        3 * invT * t.pow(2) * c2.x +
                         t.pow(3) * pOuter.x
-                    val y = (1 - t).pow(3) * pInner.y +
-                        3 * (1 - t).pow(2) * t * c1Rot.y +
-                        3 * (1 - t) * t.pow(2) * c2Rot.y +
+
+                    val y = invT.pow(3) * pInner.y +
+                        3 * invT.pow(2) * t * c1.y +
+                        3 * invT * t.pow(2) * c2.y +
                         t.pow(3) * pOuter.y
+
                     points.add(Vector2f(x, y))
                 }
             }
@@ -517,7 +548,8 @@ object CircleUtils {
                                 SwirlGenerationWorkMode.BEZIER -> null
                                 SwirlGenerationWorkMode.LOGARITHMIC -> center
                             }.exhaustive,
-                            bezierAngle = 30f,
+//                            bezierTightnessConstant = 0.5f,
+                            bezierTightnessConstant = 0.3f,
                             workMode = particleGenerationWorkMode
                         )
                         // And add them to the arm

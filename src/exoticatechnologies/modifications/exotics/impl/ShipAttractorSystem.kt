@@ -338,7 +338,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                 globalRotationDegrees = ship.facing,
                 generateParticles = true,
                 particleSegments = 16,
-                particleGenerationWorkMode = CircleUtils.SwirlGenerationWorkMode.LOGARITHMIC,
+                particleGenerationWorkMode = CircleUtils.SwirlGenerationWorkMode.BEZIER,
                 particleDrawInterval = 0.05f
             )
             // Draw the instantaneous part of the swirl
