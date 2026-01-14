@@ -212,7 +212,7 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
             // First, grab all ships in radius, and check if we have some really close ones
             val allTargetsInRadius = getPotentialTargets(member, mods, exoticData)
             val targetsInRadiusCloserThanActivationRange = allTargetsInRadius
-                .filter { nearbyShip -> Misc.getDistance(ship.location, nearbyShip.location) <= REALLY_CLOSE_ACTIVATION_RANGE }
+                .filter { nearbyShip -> ship.location.distanceTo(nearbyShip.location) <= REALLY_CLOSE_ACTIVATION_RANGE }
 
             val reallyCloseShips = targetsInRadiusCloserThanActivationRange
                     .filter { nearbyShip -> nearbyShip.isFighter.not() }
