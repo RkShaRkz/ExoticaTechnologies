@@ -679,7 +679,29 @@ fun Vector2f.rotateAroundPivot(pivotPoint: Vector2f, angle: Float, useFastTrig: 
     return rotated.add(pivotPoint)
 }
 
+/**
+ * Replacement for [Misc.getDistance] which can work in tests.
+ *
+ * Calculates distance between [this] vector and [otherVector]
+ *
+ * @param otherVector the other vector to calculate distance to
+ * @return the distance between [this] and [otherVector]
+ */
+fun Vector2f.distanceTo(otherVector: Vector2f): Float {
+    return sqrt((this.x - otherVector.x) * (this.x - otherVector.x) + (this.y - otherVector.y) * (this.y - otherVector.y)).toFloat()
+}
 
+/**
+ * Replacement for [Misc.getDistanceSq] which can work in tests.
+ *
+ * Calculates squared distance between [this] vector and [otherVector]
+ *
+ * @param otherVector the other vector to calculate distance to
+ * @return the squared distance between [this] and [otherVector]
+ */
+fun Vector2f.distanceSquaredTo(otherVector: Vector2f): Float {
+    return (this.x - otherVector.x) * (this.x - otherVector.x) + (this.y - otherVector.y) * (this.y - otherVector.y)
+}
 
 /**
  * Calculates velocity vector which will take us from [fromVector] to [toVector] in [time] amount of time,
@@ -697,7 +719,7 @@ fun Vector2f.rotateAroundPivot(pivotPoint: Vector2f, angle: Float, useFastTrig: 
  */
 fun calculateVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Float): Vector2f {
     val direction = getDirectionVector(fromVector, toVector)
-    val distance = Misc.getDistance(fromVector, toVector)
+    val distance = fromVector.distanceTo(toVector)
     val speed = distance / time
 
     return direction.mul(speed / distance)

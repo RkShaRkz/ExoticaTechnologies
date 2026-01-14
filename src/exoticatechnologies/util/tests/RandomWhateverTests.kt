@@ -1,6 +1,8 @@
 package exoticatechnologies.util.tests
 
 import com.fs.starfarer.api.combat.*
+import exoticatechnologies.util.calculateVelocityVector
+import exoticatechnologies.util.getVelocityVector
 import exoticatechnologies.util.tests.utils.WeaponAPIUtils.createAnonymousWeaponAPI
 import org.junit.Assert
 import org.junit.Test
@@ -140,6 +142,35 @@ class RandomWhateverTests {
                     dps = 75f
                 )
             )
+        }
+    }
+
+    class VectorVelocityTests {
+        @Test
+        fun `compare velocity methods with 10 unit distance`() {
+            val from = Vector2f(0f, 0f)
+            val to = Vector2f(10f, 0f)
+            val time = 2.0f
+
+            // Standard method: displacement / time = (10, 0) / 2 = (5, 0)
+            val result1 = getVelocityVector(from, to, time)
+
+            // Flawed method: direction * (speed / distance)
+            // direction = (1, 0), speed = 10 / 2 = 5, distance = 10
+            // result = (1, 0) * (5 / 10) = (0.5, 0)
+            val result2 = calculateVelocityVector(from, to, time)
+
+            // Verifying standard physics (should be 5.0)
+            Assert.assertEquals("getVelocityVector should result in x=5.0", 5.0f, result1.x)
+
+            // Verifying the flaw in calculateVelocityVector (results in 0.5)
+            // Google insists that `calculateVelocityVector()` is broken, and this test is there to prove that it's not broken
+            // the fact that both methods return the exact same results is more worrying, but out of scope of this test
+            Assert.assertNotEquals("calculateVelocityVector results in x=0.5 because it divides by distance twice", 0.5f, result2.x)
+
+            // This assertion proves they are not equal
+            // Except Google was wrong like I kept telling him, and the methods are exactly the same. Different kind of problem though.
+            Assert.assertEquals(result1.x, result2.x)
         }
     }
 }
