@@ -19,16 +19,14 @@ import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.bandwidth.Bandwidth;
 import exoticatechnologies.modifications.exotics.ExoticSpecialItemPlugin;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
-import exoticatechnologies.modifications.exotics.GenericExoticItemPlugin;
 import exoticatechnologies.modifications.stats.impl.logistics.CrewSalaryEffect;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
 import exoticatechnologies.refit.RefitButtonAdder;
 import exoticatechnologies.ui.impl.shop.ShopManager;
 import exoticatechnologies.ui.impl.shop.overview.OverviewPanelUIPlugin;
-import exoticatechnologies.util.AnonymousLogger;
-import exoticatechnologies.util.ETFleetData;
 import exoticatechnologies.util.FleetMemberUtils;
 import exoticatechnologies.util.Utilities;
+import exoticatechnologies.util.reflect.interceptors.FleetDataScuttleInterceptor;
 import lombok.extern.log4j.Log4j;
 import lunalib.lunaSettings.LunaSettings;
 import lunalib.lunaSettings.LunaSettingsListener;
@@ -48,6 +46,7 @@ public class ETModPlugin extends BaseModPlugin {
 
     @Override
     public void onApplicationLoad() {
+//        FleetDataScuttleInterceptor.INSTANCE.setupInterceptor();
         ETModSettings.loadModSettings();
 
         if (HAVE_LUNALIB) {
@@ -64,6 +63,7 @@ public class ETModPlugin extends BaseModPlugin {
         FactionConfigLoader.load();
         // And cleanup the HullmodExoticHandler's map
         HullmodExoticHandler.INSTANCE.reinitialize();
+        /*
         ETFleetData.setOnScuttleListener(new ETFleetData.OnScuttleListener() {
             @Override
             public void onPreScuttle(FleetMemberAPI fleetMember) {
@@ -75,6 +75,7 @@ public class ETModPlugin extends BaseModPlugin {
                 AnonymousLogger.INSTANCE.log("--> onPostScuttle() fired "+fleetMember.getShipName());
             }
         });
+         */
     }
 
     @Override
@@ -99,6 +100,8 @@ public class ETModPlugin extends BaseModPlugin {
         Utilities.mergeChipsIntoCrate(Global.getSector().getPlayerFleet().getCargo());
         // And cleanup the HullmodExoticHandler's map
         HullmodExoticHandler.INSTANCE.reinitialize();
+
+        FleetDataScuttleInterceptor.INSTANCE.setupInterceptor();
     }
 
     public static String getSectorSeedString() {

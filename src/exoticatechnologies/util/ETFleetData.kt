@@ -34,8 +34,5 @@ class ETFleetData(@Transient val originalFleetData: FleetData): FleetData(
         }
     }
 
-    interface OnScuttleListener {
-        fun onPreScuttle(fleetMember: FleetMemberAPI?)
-        fun onPostScuttle(fleetMember: FleetMemberAPI?)
-    }
+
 }

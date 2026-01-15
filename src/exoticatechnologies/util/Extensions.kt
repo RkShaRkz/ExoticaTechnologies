@@ -746,6 +746,20 @@ fun log(logMsg: String, logger: Logger, logLevel: Level = Level.DEBUG) {
     }
 }
 
+fun log(logMsg: String, exception: Throwable? = null, logger: Logger, logLevel: Level = Level.DEBUG) {
+    with(logger) {
+        when (logLevel) {
+            Level.DEBUG -> this.debug(logMsg, exception)
+            Level.INFO -> this.info(logMsg, exception)
+            Level.WARN -> this.warn(logMsg, exception)
+            Level.ERROR -> this.error(logMsg, exception)
+            Level.FATAL -> this.fatal(logMsg, exception)
+
+            else -> { /* do nothing */ }
+        }.exhaustive
+    }
+}
+
 fun shouldLog(logMsg: String, logger: Logger, logLevel: Level, minLogLevel: Level = Level.ALL) {
     // We won't log any logLevels below the minimum one
     if (logLevel.isGreaterOrEqual(minLogLevel).not()) return;

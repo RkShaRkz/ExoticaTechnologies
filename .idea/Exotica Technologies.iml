@@ -120,5 +120,6 @@
     <orderEntry type="library" exported="" name="lombok" level="project" />
     <orderEntry type="library" exported="" name="log4j.apache.extras" level="project" />
     <orderEntry type="library" name="tests" level="project" />
+    <orderEntry type="library" exported="" name="javassist-3.18.1-GA" level="project" />
   </component>
 </module>
