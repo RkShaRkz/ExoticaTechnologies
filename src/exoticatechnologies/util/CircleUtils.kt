@@ -295,7 +295,7 @@ object CircleUtils {
      * Generates a list of sampled points forming a "swirl" curve between two [Vector2f] points.
      *
      * Depending on [workMode] the curve is either:
-     * - **BEZIER**: A cubic Bézier curve between [pInner] and [pOuter], with control points rotated by [bezierAngle] to
+     * - **BEZIER**: A chord-based cubic Bézier curve between [pInner] and [pOuter], with control points rotated by [bezierBendAngleRadians] to
      * cause curvature.
      * - **LOGARITHMIC**: A logarithmic spiral segment between [pInner] and [pOuter], computed in polar coordinates using `r = a * e^(bθ)`.
      *
@@ -308,6 +308,10 @@ object CircleUtils {
      * Lesser is "flatter", higher is more "loopy" or "circular". **Defaults to 1/3f**
      * @param bezierBendAngleRadians the optional "bend angle" for bezier curves, unused if [workMode] isn't [SwirlGenerationWorkMode.BEZIER]
      * Lesser is "flatter", higher is more "loopy" or "circular". Try to stick in the [0.3, 0.6] range. **Defaults to 0.45f**
+     * @param bezierAdaptiveTightnessDampeningFactor the optional "bezier tightness dampening factor" for bezier chords/handles, unused if [workMode] isn't [SwirlGenerationWorkMode.BEZIER]
+     * The idea with this one is that the longer the handle gets, the smaller the fraction of [bezierTightnessConstant] will be applied to it.
+     * This is used so that longer chords do not end up looking "hilly"/"humpy" and become 'flatter' due to using a smaller tightness constant.
+     * **Defaults to 0.00007f**
      * @param workMode whether to use bezier curving or logarithmic curving. See [SwirlGenerationWorkMode]
      *
      * @return a list of points along the curve
@@ -321,13 +325,14 @@ object CircleUtils {
         center: Vector2f? = null,
         bezierTightnessConstant: Float = 1/3f,
         bezierBendAngleRadians: Float = 0.45f,
+        bezierAdaptiveTightnessDampeningFactor: Float = 0.00007f,
         workMode: SwirlGenerationWorkMode,
     ): List<Vector2f> {
         val points = mutableListOf<Vector2f>()
 
         when (workMode) {
             SwirlGenerationWorkMode.BEZIER -> {
-                //TODO plug the center back in here
+                //TODO should I plug the center back in here ?
 
                 // 1. Basic vectors
                 val chordX = pOuter.x - pInner.x
@@ -353,8 +358,16 @@ object CircleUtils {
                 val ctrlDir2X = dirX * cosB + dirY * sinB
                 val ctrlDir2Y = -dirX * sinB + dirY * cosB
 
-                // 4. Handle Length
-                val hLen = chordLen * bezierTightnessConstant
+                // 4. Handle Length with Adaptive Tightness
+                // We use a small dampening factor (0.001) so it really kicks in on those long outer segments.
+                // Example:
+                // With factor of 0.00007:
+                // - chord of length 100 will use (1 / (1 + 100 * 0.00007)) ≈ 0.993 factor of original tightness (~0.331)
+                // - chord of length 1000 will use (1 / 1 + 1000 * 0.00007) ≈ 0.934 factor of original tightness (~0.311)
+                // - chord of length 2500 will use (1 / 1 + 2500 * 0.00007) ≈ 0.851 factor of original tightness (~0.283)
+                // As a reminder: the lesser the 'tightness constant', the flatter the line will be
+                val adaptiveTightness = bezierTightnessConstant * (1.0f / (1.0f + chordLen * bezierAdaptiveTightnessDampeningFactor))
+                val hLen = chordLen * adaptiveTightness
 
                 val c1 = Vector2f(pInner.x + ctrlDir1X * hLen, pInner.y + ctrlDir1Y * hLen)
                 val c2 = Vector2f(pOuter.x - ctrlDir2X * hLen, pOuter.y - ctrlDir2Y * hLen)
@@ -429,7 +442,7 @@ object CircleUtils {
      */
     enum class SwirlGenerationWorkMode {
         /**
-         * Use a Bezier curve rotated with some angle around points
+         * Use a chord-based Bezier curve rotated with some angle around points
          */
         BEZIER,
 
