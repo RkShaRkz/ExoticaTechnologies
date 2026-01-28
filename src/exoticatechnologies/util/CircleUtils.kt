@@ -335,7 +335,7 @@ object CircleUtils {
 
                 val dx3 = pOuter.x - cx
                 val dy3 = pOuter.y - cy
-                val r3 = sqrt(dx3 * dx3 + dy3 * dx3)
+                val r3 = sqrt(dx3 * dx3 + dy3 * dy3)
                 val theta3 = atan2(dy3.toDouble(), dx3.toDouble()).toFloat()
 
                 // 2. Calculate the angular sweep (dTheta)
@@ -792,7 +792,7 @@ object CircleUtils {
         fun debugParticles() {
             // Might as well let this method sit here I suppose
 //            setSmoothParticleLimit(newLimit = 4000)
-            (Global.getCombatEngine() as CombatEngine).smoothParticles.limit = 16000
+            (Global.getCombatEngine() as CombatEngine).smoothParticles.limit = 64000
             for (swirlArm in particlePoints) {
                 swirlArm.draw(
                     particleSize = 64f,
