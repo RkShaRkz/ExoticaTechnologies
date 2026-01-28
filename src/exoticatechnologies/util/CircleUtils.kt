@@ -303,9 +303,11 @@ object CircleUtils {
      * @param pInner the starting point of the curve (innermost ring point)
      * @param pOuter the ending point of the curve (outer ring point)
      * @param particleSegments number of segments to sample along the curve; higher values produce smoother curves but more points
-     * @param center the actual 'center' to pivot around; if points are already relative to some center, leave as null - depending on this rotations will either be done "in place" or "around pivot"
+     * @param center the actual 'center' to pivot around; if points are already relative to some center, leave as null - depending on this rotations will either be done "in place" or "around pivot", unused when [workMode] is [SwirlGenerationWorkMode.BEZIER]
      * @param bezierTightnessConstant the optional "tightness constant"" for bezier control points to control swirl intensity, unused if [workMode] isn't [SwirlGenerationWorkMode.BEZIER].
-     * Lesser is "flatter", higher is more "loopy" or "circular". Defaults to 0.5
+     * Lesser is "flatter", higher is more "loopy" or "circular". **Defaults to 1/3f**
+     * @param bezierBendAngleRadians the optional "bend angle" for bezier curves, unused if [workMode] isn't [SwirlGenerationWorkMode.BEZIER]
+     * Lesser is "flatter", higher is more "loopy" or "circular". Try to stick in the [0.3, 0.6] range. **Defaults to 0.45f**
      * @param workMode whether to use bezier curving or logarithmic curving. See [SwirlGenerationWorkMode]
      *
      * @return a list of points along the curve
@@ -317,67 +319,51 @@ object CircleUtils {
         pOuter: Vector2f,
         particleSegments: Int,
         center: Vector2f? = null,
-        bezierTightnessConstant: Float = 0.33f,
+        bezierTightnessConstant: Float = 1/3f,
+        bezierBendAngleRadians: Float = 0.45f,
         workMode: SwirlGenerationWorkMode,
     ): List<Vector2f> {
         val points = mutableListOf<Vector2f>()
 
         when (workMode) {
             SwirlGenerationWorkMode.BEZIER -> {
-                val cx = center?.x ?: 0f
-                val cy = center?.y ?: 0f
+                //TODO plug the center back in here
 
-                // 1. Polar coordinates for start and end points (P0 and P3)
-                val dx0 = pInner.x - cx
-                val dy0 = pInner.y - cy
-                val r0 = sqrt(dx0 * dx0 + dy0 * dy0)
-                val theta0 = atan2(dy0.toDouble(), dx0.toDouble()).toFloat()
+                // 1. Basic vectors
+                val chordX = pOuter.x - pInner.x
+                val chordY = pOuter.y - pInner.y
+                val chordLen = sqrt(chordX * chordX + chordY * chordY)
 
-                val dx3 = pOuter.x - cx
-                val dy3 = pOuter.y - cy
-                val r3 = sqrt(dx3 * dx3 + dy3 * dy3)
-                val theta3 = atan2(dy3.toDouble(), dx3.toDouble()).toFloat()
+                // 2. The "Swirl Direction"
+                // Instead of polar math, we find the direction from Inner to Outer
+                // and "bend" it.
+                val dirX = chordX / chordLen
+                val dirY = chordY / chordLen
 
-                // 2. Calculate the angular sweep (dTheta)
-                val dTheta = normalizeAngularDelta((theta3 - theta0).toDouble()).toFloat()
+                // 3. The "Bend" (The secret sauce)
+                // To turn a straight line into a swirl, we rotate the direction vector
+                // by a small amount. 0.3 to 0.5 radians is usually perfect.
+                val cosB = cos(bezierBendAngleRadians)
+                val sinB = sin(bezierBendAngleRadians)
 
-                // 3. Calculate 'b' (growth factor) similar to logarithmic one
-                // that should hopefully get rid of the "pinwheel" staggered lines (ribs)
-                val b = if (dTheta.absoluteValue > 1e-5) { ln(r3 / r0) / dTheta } else { 0f }
+                // Rotate the direction to get the handle directions
+                val ctrlDir1X = dirX * cosB - dirY * sinB
+                val ctrlDir1Y = dirX * sinB + dirY * cosB
 
-                // 4. Determine the handle length
-                // We use a fraction of the chord distance (straight line between points)
-                // to keep it stable.
-                val chord = sqrt((pOuter.x - pInner.x).pow(2) + (pOuter.y - pInner.y).pow(2))
-                val handleLength = chord * bezierTightnessConstant
+                val ctrlDir2X = dirX * cosB + dirY * sinB
+                val ctrlDir2Y = -dirX * sinB + dirY * cosB
 
-                // 5. Calculate Tangent Angles
-                // The direction of the spiral tangent is: theta + direction * pitch
-                // 'atan(b)' is the angle the spiral 'climbs' away from a circle
-                val climbAngle = atan(b)
+                // 4. Handle Length
+                val hLen = chordLen * bezierTightnessConstant
 
-                // P1 (c1) pulls the curve OUTWARD from the start
-                // At Phi0, we move FORWARD along the spiral
-                val phi0 = theta0 + (PI / 2.0).toFloat() * sign(dTheta) + climbAngle * sign(dTheta)
-                val c1 = Vector2f(
-                    pInner.x + cos(phi0) * handleLength,
-                    pInner.y + sin(phi0) * handleLength
-                )
+                val c1 = Vector2f(pInner.x + ctrlDir1X * hLen, pInner.y + ctrlDir1Y * hLen)
+                val c2 = Vector2f(pOuter.x - ctrlDir2X * hLen, pOuter.y - ctrlDir2Y * hLen)
 
-                // P2 (c2) pulls the curve INWARD toward the end
-                // At Phi3, we come in from the BACKWARD direction
-                val phi3 = theta3 + (PI / 2.0).toFloat() * sign(dTheta) + climbAngle * sign(dTheta)
-                val c2 = Vector2f(
-                    pOuter.x - cos(phi3) * handleLength,
-                    pOuter.y - sin(phi3) * handleLength
-                )
-
-                // 6. Cubic Bezier sampling using formula: (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
+                // 5. Cubic Bezier sampling using formula: (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
                 for (i in 0..particleSegments) {
                     val t = i.toFloat() / particleSegments
                     val invT = 1f - t
 
-                    // Standard Cubic Bezier Formula
                     val x = invT.pow(3) * pInner.x +
                         3 * invT.pow(2) * t * c1.x +
                         3 * invT * t.pow(2) * c2.x +
@@ -550,8 +536,7 @@ object CircleUtils {
                                 SwirlGenerationWorkMode.BEZIER -> null
                                 SwirlGenerationWorkMode.LOGARITHMIC -> center
                             }.exhaustive,
-//                            bezierTightnessConstant = 0.5f,
-                            bezierTightnessConstant = 0.3f,
+                            bezierBendAngleRadians = 0.35f,
                             workMode = particleGenerationWorkMode
                         )
                         // And add them to the arm
