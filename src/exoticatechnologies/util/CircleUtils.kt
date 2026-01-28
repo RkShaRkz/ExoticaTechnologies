@@ -1,5 +1,6 @@
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.ShipAPI
+import com.fs.starfarer.combat.CombatEngine
 import exoticatechnologies.util.*
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
@@ -326,45 +327,66 @@ object CircleUtils {
                 val cx = center?.x ?: 0f
                 val cy = center?.y ?: 0f
 
-                // 1. Polar coordinates
-                // even though we need Doubles for atan2, we still need these to remain Float to fit into Vector2f
+                // 1. Polar coordinates for start and end points (P0 and P3)
                 val dx0 = pInner.x - cx
                 val dy0 = pInner.y - cy
                 val r0 = sqrt(dx0 * dx0 + dy0 * dy0)
                 val theta0 = atan2(dy0.toDouble(), dx0.toDouble()).toFloat()
 
-                // Exactly the same thing here as well
                 val dx3 = pOuter.x - cx
                 val dy3 = pOuter.y - cy
                 val r3 = sqrt(dx3 * dx3 + dy3 * dx3)
                 val theta3 = atan2(dy3.toDouble(), dx3.toDouble()).toFloat()
 
-                // 2. Calculate the angular sweep (the "gap" between points)
-                val dTheta = normalizeAngularDelta((theta3 - theta0).toDouble()).toFloat()  //TODO normalizeRawAngluarDelta perhaps?
-//                val dTheta = normalizeRawAngularDelta(theta3.toDouble(), theta0.toDouble()).toFloat()
+                // 2. Calculate the angular sweep (dTheta)
+                val dTheta = normalizeAngularDelta((theta3 - theta0).toDouble()).toFloat()
 
-                // 3. Move the control points along the ANGLE, not a straight line
-                // This keeps them at the correct radius and kills the "hills"
-                val angleOffset = dTheta * bezierTightnessConstant
+                //TODO delete this
+//                if (dTheta == 0f) {
+//                    points.add(pInner)
+//                    return points
+//                }
 
-                // P1 stays at the inner radius (r0), but moves forward in angle
+                // 3. Calculate handle distance using the circular approximation heuristic
+                // Use a dynamic K value based on the angle span
+                val angleTan = tan(dTheta / 4f).absoluteValue // Angle is in radians
+                val k = (4f / 3f) * angleTan
+
+                // Ensure the constant is reasonable, fall back to default if necessary
+                val finalTightness = if (k.isFinite()) k else bezierTightnessConstant
+
+                val handleLength0 = r0 * finalTightness
+                val handleLength3 = r3 * finalTightness
+
+
+                // 4. Position handles relative to the center and angle (Back to radial approach)
+                // We need the tangent direction at P0 and P3.
+
+                // Tangent direction at theta: (cos(theta + PI/2), sin(theta + PI/2)) or use sin/cos swap
+                // T0 = (-sin(theta0), cos(theta0))
+                // T3 = (-sin(theta3), cos(theta3))
+
+                // C1 (P1 in the formula) points OUTWARD along the P0 tangent
                 val c1 = Vector2f(
-                    cx + r0 * cos(theta0 + angleOffset),
-                    cy + r0 * sin(theta0 + angleOffset)
+                    pInner.x - sin(theta0) * handleLength0,
+                    pInner.y + cos(theta0) * handleLength0
                 )
 
-                // P2 stays at the outer radius (r3), but moves backward in angle
+                // C2 (P2 in the formula) points INWARD (opposite direction) along the P3 tangent
                 val c2 = Vector2f(
-                    cx + r3 * cos(theta3 - angleOffset),
-                    cy + r3 * sin(theta3 - angleOffset)
+                    pOuter.x + sin(theta3) * handleLength3,
+                    pOuter.y - cos(theta3) * handleLength3
                 )
 
-                // 4. Cubic Bezier sampling
-                for (i in 0..particleSegments) {
-                    val t = i.toFloat() / particleSegments
+                // Use particleSegments for resolution now
+                //TODO get rid of the useless variable
+                val curveResolution = particleSegments
+
+                // 5. Cubic Bezier sampling using formula: (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
+                for (i in 0..curveResolution) {
+                    val t = i.toFloat() / curveResolution
                     val invT = 1f - t
 
-                    // Cubic Bezier Formula: (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
                     val x = invT.pow(3) * pInner.x +
                         3 * invT.pow(2) * t * c1.x +
                         3 * invT * t.pow(2) * c2.x +
@@ -773,6 +795,27 @@ object CircleUtils {
                         Unit
                     }
                 }.exhaustive
+            }
+        }
+
+        fun debugParticles() {
+            // Might as well let this method sit here I suppose
+//            setSmoothParticleLimit(newLimit = 4000)
+            (Global.getCombatEngine() as CombatEngine).smoothParticles.limit = 16000
+            for (swirlArm in particlePoints) {
+                swirlArm.draw(
+                    particleSize = 64f,
+                    particleDuration = 5f,
+                    particleColors = listOf(
+                        Color.WHITE.brighter().brighter(),
+                        Color.WHITE,
+                        Color.LIGHT_GRAY.brighter().brighter(),
+                        Color.LIGHT_GRAY,
+                        Color.DARK_GRAY,
+                        Color.DARK_GRAY.darker().darker()
+                    ),
+                    particleDrawMode = CircleUtils.ParticleDrawMode.WHOLE_ARM
+                )
             }
         }
 

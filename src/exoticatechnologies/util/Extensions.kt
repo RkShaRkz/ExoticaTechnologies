@@ -500,10 +500,16 @@ fun FleetMemberAPI.isMultiModuleShip(): Boolean {
  *
  * @param fromVector the vector from which we want to start pointing
  * @param toVector the vector to which we want to point to
- * @return vector pointing from [fromVector] to [toVector]
+ * @param isNormalized whether the resulting vector should be normalized or not. Defaults to [false]
+ * @return vector pointing from [fromVector] to [toVector], which is normalized or not depending on [isNormalized]
  */
-fun getDirectionVector(fromVector: Vector2f, toVector: Vector2f): Vector2f {
-    return toVector.sub(fromVector)
+fun getDirectionVector(fromVector: Vector2f, toVector: Vector2f, isNormalized: Boolean = false): Vector2f {
+    val directionVector = toVector.sub(fromVector)
+    return if(isNormalized) {
+        directionVector.normalized()
+    } else {
+        directionVector
+    }
 }
 
 
