@@ -341,52 +341,35 @@ object CircleUtils {
                 // 2. Calculate the angular sweep (dTheta)
                 val dTheta = normalizeAngularDelta((theta3 - theta0).toDouble()).toFloat()
 
-                //TODO delete this
-//                if (dTheta == 0f) {
-//                    points.add(pInner)
-//                    return points
-//                }
+                // 3. Calculate 'b' (Growth) and 'pitch' (Tilt) similar to logarithmic one
+                // that should hopefully get rid of the "pinwheel" staggered lines (ribs)
+                val b = if (dTheta.absoluteValue > 1e-5) { ln(r3 / r0) / dTheta } else { 0f }
+                val pitchAngle = atan2(1f, b)
 
-                // 3. Calculate handle distance using the circular approximation heuristic
-                // Use a dynamic K value based on the angle span
-                val angleTan = tan(dTheta / 4f).absoluteValue // Angle is in radians
-                val k = (4f / 3f) * angleTan
+                // 4. Handle length based on arc distance.
+                // 1/3 is the magic number for smoothness, but lets use the bezierTightness parameter
+                val arcLength = r0 * dTheta.absoluteValue
+                val handleLength = arcLength * bezierTightnessConstant
 
-                // Ensure the constant is reasonable, fall back to default if necessary
-                val finalTightness = if (k.isFinite()) k else bezierTightnessConstant
-
-                val handleLength0 = r0 * finalTightness
-                val handleLength3 = r3 * finalTightness
-
-
-                // 4. Position handles relative to the center and angle (Back to radial approach)
-                // We need the tangent direction at P0 and P3.
-
-                // Tangent direction at theta: (cos(theta + PI/2), sin(theta + PI/2)) or use sin/cos swap
-                // T0 = (-sin(theta0), cos(theta0))
-                // T3 = (-sin(theta3), cos(theta3))
-
-                // C1 (P1 in the formula) points OUTWARD along the P0 tangent
+                // 5. Set Control Points using the Pitch Angle
+                // P1 (c1) pulls the curve OUTWARD from the start
                 val c1 = Vector2f(
-                    pInner.x - sin(theta0) * handleLength0,
-                    pInner.y + cos(theta0) * handleLength0
+                    pInner.x + cos(theta0 + pitchAngle) * handleLength,
+                    pInner.y + sin(theta0 + pitchAngle) * handleLength
                 )
 
-                // C2 (P2 in the formula) points INWARD (opposite direction) along the P3 tangent
+                // P2 (c2) pulls the curve INWARD toward the end
                 val c2 = Vector2f(
-                    pOuter.x + sin(theta3) * handleLength3,
-                    pOuter.y - cos(theta3) * handleLength3
+                    pOuter.x - cos(theta3 + pitchAngle) * handleLength,
+                    pOuter.y - sin(theta3 + pitchAngle) * handleLength
                 )
 
-                // Use particleSegments for resolution now
-                //TODO get rid of the useless variable
-                val curveResolution = particleSegments
-
-                // 5. Cubic Bezier sampling using formula: (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
-                for (i in 0..curveResolution) {
-                    val t = i.toFloat() / curveResolution
+                // 6. Cubic Bezier sampling using formula: (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
+                for (i in 0..particleSegments) {
+                    val t = i.toFloat() / particleSegments
                     val invT = 1f - t
 
+                    // Standard Cubic Bezier Formula
                     val x = invT.pow(3) * pInner.x +
                         3 * invT.pow(2) * t * c1.x +
                         3 * invT * t.pow(2) * c2.x +
