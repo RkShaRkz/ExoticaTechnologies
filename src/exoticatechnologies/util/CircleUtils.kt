@@ -341,27 +341,35 @@ object CircleUtils {
                 // 2. Calculate the angular sweep (dTheta)
                 val dTheta = normalizeAngularDelta((theta3 - theta0).toDouble()).toFloat()
 
-                // 3. Calculate 'b' (Growth) and 'pitch' (Tilt) similar to logarithmic one
+                // 3. Calculate 'b' (growth factor) similar to logarithmic one
                 // that should hopefully get rid of the "pinwheel" staggered lines (ribs)
                 val b = if (dTheta.absoluteValue > 1e-5) { ln(r3 / r0) / dTheta } else { 0f }
-                val pitchAngle = atan2(1f, b)
 
-                // 4. Handle length based on arc distance.
-                // 1/3 is the magic number for smoothness, but lets use the bezierTightness parameter
-                val arcLength = r0 * dTheta.absoluteValue
-                val handleLength = arcLength * bezierTightnessConstant
+                // 4. Determine the handle length
+                // We use a fraction of the chord distance (straight line between points)
+                // to keep it stable.
+                val chord = sqrt((pOuter.x - pInner.x).pow(2) + (pOuter.y - pInner.y).pow(2))
+                val handleLength = chord * bezierTightnessConstant
 
-                // 5. Set Control Points using the Pitch Angle
+                // 5. Calculate Tangent Angles
+                // The direction of the spiral tangent is: theta + direction * pitch
+                // 'atan(b)' is the angle the spiral 'climbs' away from a circle
+                val climbAngle = atan(b)
+
                 // P1 (c1) pulls the curve OUTWARD from the start
+                // At Phi0, we move FORWARD along the spiral
+                val phi0 = theta0 + (PI / 2.0).toFloat() * sign(dTheta) + climbAngle * sign(dTheta)
                 val c1 = Vector2f(
-                    pInner.x + cos(theta0 + pitchAngle) * handleLength,
-                    pInner.y + sin(theta0 + pitchAngle) * handleLength
+                    pInner.x + cos(phi0) * handleLength,
+                    pInner.y + sin(phi0) * handleLength
                 )
 
                 // P2 (c2) pulls the curve INWARD toward the end
+                // At Phi3, we come in from the BACKWARD direction
+                val phi3 = theta3 + (PI / 2.0).toFloat() * sign(dTheta) + climbAngle * sign(dTheta)
                 val c2 = Vector2f(
-                    pOuter.x - cos(theta3 + pitchAngle) * handleLength,
-                    pOuter.y - sin(theta3 + pitchAngle) * handleLength
+                    pOuter.x - cos(phi3) * handleLength,
+                    pOuter.y - sin(phi3) * handleLength
                 )
 
                 // 6. Cubic Bezier sampling using formula: (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
