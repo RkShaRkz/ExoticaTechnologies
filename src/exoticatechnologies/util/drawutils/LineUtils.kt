@@ -60,7 +60,9 @@ object LineUtils {
         particleSpacing: Float? = null
     ): ArcSelection {
 
-        // 1. First, convert facing to Trig
+        // 1. Standardize everything to Trigonometric (Engine) space
+        // We treat the "Offset" as a rotation. In USER_CENTRIC, +30 is a CW rotation.
+        // After remapping, the rotation will naturally follow the correct direction.
         val trigonometricFacing = when(degreeType) {
             AngleDegreeType.USER_CENTRIC -> {
                 // Usercentric needs remapping
@@ -74,13 +76,18 @@ object LineUtils {
 
         // 2. Apply offsets based on coordinate system rotation
         // now that we have the trigonometric facing, everything below is straightforward and streamlined
+        // If degreeType is USER_CENTRIC, the offsets are CW, so we subtract them from the trigFacing.
+        // If degreeType is TRIGONOMETRIC, the offsets are CCW, so we add them.
         val (finalLeftAngle, finalRightAngle) = when(degreeType) {
             AngleDegreeType.USER_CENTRIC -> {
                 // User Centric: + is Clockwise (so subtract from trigonometric facing)
+                // In North=0 CW system: Left (-30) is CCW, Right (30) is CW.
+                // Remapping standardizes the 'starting line', subtraction standardizes the CW rotation.
                 (trigonometricFacing - leftOffset) to (trigonometricFacing - rightOffset)
             }
             AngleDegreeType.TRIGONOMETRIC -> {
                 // Trigonometric: + is Counter-Clockwise (so add to trigonometric facing)
+                // In East=0 CCW system: Left (30) is CCW, Right (-30) is CW.
                 (trigonometricFacing + leftOffset) to (trigonometricFacing + rightOffset)
             }
         }.exhaustive
@@ -105,71 +112,6 @@ object LineUtils {
         return ArcSelection(origin, leftLine, rightLine, length)
     }
 
-
-    /**
-     * Generates an ArcSelection by trusting the provided left and right boundaries.
-     *
-     * @param origin The origin point of the arc
-     * @param facing The base facing in the coordinate system specified by [degreeType]
-     * @param leftOffset The offset that defines the "Left" boundary (relative to facing)
-     * @param rightOffset The offset that defines the "Right" boundary (relative to facing)
-     * @param degreeType The coordinate system for both the [facing] and the offsets.
-     */
-    fun generateArc2(
-        origin: Vector2f,
-        facing: Float,
-        leftOffset: Float,
-        rightOffset: Float,
-        length: Float,
-        degreeType: AngleDegreeType,
-        generateParticles: Boolean = false,
-        particleSegments: Int? = null,
-        particleSpacing: Float? = null
-    ): ArcSelection {
-
-        // 1. Standardize everything to Trigonometric (Engine) space
-        // We treat the "Offset" as a rotation. In USER_CENTRIC, +30 is a CW rotation.
-        // After remapping, the rotation will naturally follow the correct direction.
-        val trigFacing = if (degreeType == AngleDegreeType.USER_CENTRIC) {
-            remapAngleToTrigonometricCoordinateSystem(facing)
-        } else {
-            facing
-        }
-
-        // 2. Apply offsets.
-        // If degreeType is USER_CENTRIC, the offsets are CW, so we subtract them from the trigFacing.
-        // If degreeType is TRIGONOMETRIC, the offsets are CCW, so we add them.
-        val (finalLeftAngle, finalRightAngle) = when(degreeType) {
-            AngleDegreeType.USER_CENTRIC -> {
-                // In North=0 CW system: Left (-30) is CCW, Right (30) is CW.
-                // Remapping standardizes the 'starting line', subtraction standardizes the CW rotation.
-                (trigFacing - leftOffset) to (trigFacing - rightOffset)
-            }
-            AngleDegreeType.TRIGONOMETRIC -> {
-                // In East=0 CCW system: Left (30) is CCW, Right (-30) is CW.
-                (trigFacing + leftOffset) to (trigFacing + rightOffset)
-            }
-        }
-
-        // 3. Generate the lines using the trusted angles
-        val leftLine = generateStraightLine(
-            start = origin,
-            info = StraightLineInfo(length, finalLeftAngle, AngleDegreeType.TRIGONOMETRIC),
-            generateParticles = generateParticles,
-            particleSegments = particleSegments,
-            particleSpacing = particleSpacing
-        )
-
-        val rightLine = generateStraightLine(
-            start = origin,
-            info = StraightLineInfo(length, finalRightAngle, AngleDegreeType.TRIGONOMETRIC),
-            generateParticles = generateParticles,
-            particleSegments = particleSegments,
-            particleSpacing = particleSpacing
-        )
-
-        return ArcSelection(origin, leftLine, rightLine, length)
-    }
 
     /**
      * Generates a list of equidistant points along a vector.
@@ -241,8 +183,8 @@ object LineUtils {
 
     data class ArcSelection(
         val origin: Vector2f,
-        val leftLine: LineUtils.StraightLine,
-        val rightLine: LineUtils.StraightLine,
+        val leftLine: StraightLine,
+        val rightLine: StraightLine,
         val length: Float
     ) {
         fun isWithinArc(target: ShipAPI): Boolean {
