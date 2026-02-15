@@ -537,6 +537,17 @@ fun getVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Float): Ve
 }
 
 /**
+ * Calculates the cross-product of two vectors [first] and [second]
+ *
+ * @param first the first vector
+ * @param second the second vector
+ * @return the cross-product of two vectors
+ */
+fun getCrossProduct(first: Vector2f, second: Vector2f): Float {
+    return (first.x * second.y - first.y * second.x)
+}
+
+/**
  * Scalar division of [this] vector by [scalar]
  *
  * @param scalar the scalar to divide this vector with
@@ -707,6 +718,32 @@ fun Vector2f.distanceTo(otherVector: Vector2f): Float {
  */
 fun Vector2f.distanceSquaredTo(otherVector: Vector2f): Float {
     return (this.x - otherVector.x) * (this.x - otherVector.x) + (this.y - otherVector.y) * (this.y - otherVector.y)
+}
+
+/**
+ * Calculates the cross-product of [this] vector and [otherVector]
+ *
+ * @param otherVector the other vector
+ * @return the cross product of [this] and [otherVector]
+ */
+fun Vector2f.crossProduct(otherVector: Vector2f): Float {
+    return (this.x * otherVector.y - this.y * otherVector.x)
+}
+
+/**
+ * Calculates the facing of [this] vector
+ *
+ * @return the normalized 'facing' of this vector in a [0,360) range
+ */
+fun Vector2f.getFacing(): Float {
+    // Do atan2 to obtain the radians
+    val facingRadians = FastTrigUtils.atan2(this.y, this.x)
+    // Convert to degrees
+    val facingDegrees = Math.toDegrees(facingRadians)
+    // Normalize to [0, 360] range
+    val actualFacing = (facingDegrees + 360f) % 360f
+
+    return actualFacing.toFloat()
 }
 
 /**

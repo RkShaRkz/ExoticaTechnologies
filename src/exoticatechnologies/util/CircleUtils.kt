@@ -164,63 +164,6 @@ object CircleUtils {
         )
     }
 
-    /**
-     * Enum class describing the angle/degree type as either [USER_CENTRIC] or [TRIGONOMETRIC]
-     *
-     * The [USER_CENTRIC] system is a system where 0 is north, 90 is east, 180 is south, 270 is west and rotations increase **counter-clockwise**.
-     *
-     * The [TRIGONOMETRIC] system is a system where 0 is east, 90 is north, 180 is west, 270 is south and rotations increase **clockwise**.
-     *
-     * @see remapAngleToTrigonometricCoordinateSystem
-     * @see USER_CENTRIC
-     * @see TRIGONOMETRIC
-     */
-    enum class AngleDegreeType {
-        /**
-         * Denotes this angle to be in user-centric ("azimuth" / "bearing") system where:
-         * - 0 is north
-         * - 90 is east
-         * - 180 is south
-         * - 270 is west
-         */
-        USER_CENTRIC,
-
-        /**
-         * Denotes this angle to be in trigonometric ("standard position" / "cartesian") system where:
-         * - 0 is east
-         * - 90 is north
-         * - 180 is west
-         * - 270 is south
-         */
-        TRIGONOMETRIC
-    }
-
-    /**
-     * Method for converting caller's user-intuitive ("Azimuth" / "Bearing") expected system of
-     * 0 degrees being north,
-     * 90 degrees being east,
-     * 180 degrees being south
-     * 270 degrees being west
-     * where rotations increase **clockwise**
-     *
-     * into actual mathematically correct *actual* trigonometric ("Standard Position" / "Cartesian") angle coordinate system which is
-     * east being 0 degrees,
-     * north being 90 degrees
-     * west being 180 degrees
-     * south being 270 degrees
-     * where rotations increase **couter-clockwise**
-     *
-     * Essentially remapping the upper-right Q1, lower-right Q2, lower-left Q3, upper-left Q4 into actual
-     * upper-right Q1, upper-left Q2, lower-left Q3, lower-right Q4
-     *
-     * @param degrees the user-intuitive degree based in north being 0-degrees, east being 90-degrees, south being 180-degrees system
-     *
-     * @return the actual trigonometric correct degree based in east being 0-degrees, north being 90-degrees, west being 180-degrees system
-     */
-    fun remapAngleToTrigonometricCoordinateSystem(degrees: Float): Float {
-        // Convert caller's "north=0" system into trig's "east=0" system
-        return (90f - degrees + 360f) % 360f
-    }
 
     /**
      * Normalizes an angular difference to the canonical range [-π, π].
@@ -1209,5 +1152,7 @@ object CircleUtils {
             val velocityVector: Vector2f
         )
     }
+
+
 
 }
