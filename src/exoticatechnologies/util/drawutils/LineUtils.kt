@@ -445,7 +445,7 @@ object LineUtils {
                             // Pre-drain if we should (will drain once on a per-arm basis)
                             continuousDrain?.let {
                                 when (it) {
-                                    ContinuousDrainMode.ITERATION_BASED_MODE -> {   //TODO extract the ContinuousDrainMode
+                                    ContinuousDrainMode.ITERATION_BASED_MODE -> {
                                         particlePoints.removePoints(drawIterations)
                                     }
 
@@ -488,7 +488,7 @@ object LineUtils {
                 particleDuration: Float = 0.25f,
                 particleColors: List<Color>,
                 particleBrightness: Float = 1f,
-                particleDrawMode: ParticleDrawMode  //TODO extract this to DrawUtils
+                particleDrawMode: ParticleDrawMode
             ) {
                 if (particlePoints.isNotEmpty()) {
                     when (particleDrawMode) {
