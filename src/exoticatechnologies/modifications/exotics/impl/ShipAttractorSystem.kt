@@ -291,13 +291,18 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             setSmoothParticleLimit(newLimit = ORIGINAL_PARTICLE_LIMIT)
         }
 
+        fun getShipDependantParticleSize(ship: ShipAPI): Float {
+            // Coerce shipSize / 8 into [MIN_PARTICLE_SIZE, MAX_PARTICLE_SIZE] //16-64f
+            return (ship.collisionRadius/8).coerceIn(MIN_PARTICLE_SIZE, MAX_PARTICLE_SIZE)
+        }
+
         override fun advance(amount: Float, isPaused: Boolean) {
             if (isPaused.not()) {
                 // If not paused, draw particles on the swirl if we have it
                 visualSwirl?.let { swirl ->
                     swirl.drawParticles(
                         amount = amount,
-                        particleSize = 64f,
+                        particleSize = getShipDependantParticleSize(ship = ship),
                         particlesToDrawPerInterval = 6,
                         particleColors = listOf(
                             Color.WHITE.brighter().brighter(),
@@ -433,5 +438,8 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
 
         private const val PULL_IN_STRENGTH = 1000f
         private const val COOLDOWN_DURATION = 30f
+
+        private const val MIN_PARTICLE_SIZE = 16f
+        private const val MAX_PARTICLE_SIZE = 64f
     }
 }
