@@ -7,6 +7,72 @@ import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
 
 object LineUtils {
+
+    /**
+     * Generates an ArcSelection by trusting the provided left and right boundaries.
+     *
+     * @param origin The origin point of the arc
+     * @param facing The base facing in the coordinate system specified by [degreeType]
+     * @param leftOffset The offset that defines the "Left" boundary (relative to facing)
+     * @param rightOffset The offset that defines the "Right" boundary (relative to facing)
+     * @param degreeType The coordinate system for both the [facing] and the offsets.
+     */
+    fun generateArc(
+        origin: Vector2f,
+        facing: Float,
+        leftOffset: Float,
+        rightOffset: Float,
+        length: Float,
+        degreeType: AngleDegreeType,
+        generateParticles: Boolean = false,
+        particleSegments: Int? = null,
+        particleSpacing: Float? = null
+    ): ArcSelection {
+
+        // 1. Standardize everything to Trigonometric (Engine) space
+        // We treat the "Offset" as a rotation. In USER_CENTRIC, +30 is a CW rotation.
+        // After remapping, the rotation will naturally follow the correct direction.
+        val trigFacing = if (degreeType == AngleDegreeType.USER_CENTRIC) {
+            remapAngleToTrigonometricCoordinateSystem(facing)
+        } else {
+            facing
+        }
+
+        // 2. Apply offsets.
+        // If degreeType is USER_CENTRIC, the offsets are CW, so we subtract them from the trigFacing.
+        // If degreeType is TRIGONOMETRIC, the offsets are CCW, so we add them.
+        val (finalLeftAngle, finalRightAngle) = when(degreeType) {
+            AngleDegreeType.USER_CENTRIC -> {
+                // In North=0 CW system: Left (-30) is CCW, Right (30) is CW.
+                // Remapping standardizes the 'starting line', subtraction standardizes the CW rotation.
+                (trigFacing - leftOffset) to (trigFacing - rightOffset)
+            }
+            AngleDegreeType.TRIGONOMETRIC -> {
+                // In East=0 CCW system: Left (30) is CCW, Right (-30) is CW.
+                (trigFacing + leftOffset) to (trigFacing + rightOffset)
+            }
+        }
+
+        // 3. Generate the lines using the trusted angles
+        val leftLine = generateStraightLine(
+            start = origin,
+            info = StraightLineInfo(length, finalLeftAngle, AngleDegreeType.TRIGONOMETRIC),
+            generateParticles = generateParticles,
+            particleSegments = particleSegments,
+            particleSpacing = particleSpacing
+        )
+
+        val rightLine = generateStraightLine(
+            start = origin,
+            info = StraightLineInfo(length, finalRightAngle, AngleDegreeType.TRIGONOMETRIC),
+            generateParticles = generateParticles,
+            particleSegments = particleSegments,
+            particleSpacing = particleSpacing
+        )
+
+        return ArcSelection(origin, leftLine, rightLine, length)
+    }
+
     /**
      * Generates a list of equidistant points along a vector.
      *
@@ -81,23 +147,32 @@ object LineUtils {
         val rightLine: LineUtils.StraightLine,
         val length: Float
     ) {
-        /**
-         * Checks if a ship is within the cone using cross products of the line directions.
-         */
         fun isWithinArc(target: ShipAPI): Boolean {
             val targetPos = target.location
             val toTarget = Vector2f.sub(targetPos, origin, Vector2f())
 
+            // 1. Distance check
             if (toTarget.lengthSquared() > length * length) return false
 
-            // Extract normalized direction vectors from the lines
-            val leftVec = leftLine.getDirectionVector()
-            val rightVec = rightLine.getDirectionVector()
+            // 2. Fetch boundary vectors
+            val L = leftLine.getDirectionVec()
+            val R = rightLine.getDirectionVec()
 
-            val isTargetCWOfLeft = leftVec.x * toTarget.y - leftVec.y * toTarget.x < 0
-            val isTargetCCWOfRight = rightVec.x * toTarget.y - rightVec.y * toTarget.x > 0
+            // 3. Determine if this is a "Small Arc" or "Big Wrap"
+            // If Right Vector is Left of Left Vector, it's a Big Wrap (>180 deg)
+            val isBigWrap = L.crossProduct(R) > 0
 
-            return isTargetCWOfLeft && isTargetCCWOfRight
+            val isRightOfLeft = L.crossProduct(toTarget) < 0
+            val isLeftOfRight = R.crossProduct(toTarget) > 0
+
+            return if (isBigWrap) {
+                // In a big wrap, you are inside if you are on EITHER side
+                // of the "v-shaped" gap behind you.
+                isRightOfLeft || isLeftOfRight
+            } else {
+                // In a small cone, you must be between both.
+                isRightOfLeft && isLeftOfRight
+            }
         }
 
         fun draw(numDots: Int, color: Color) {
