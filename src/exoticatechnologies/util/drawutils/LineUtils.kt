@@ -75,8 +75,51 @@ object LineUtils {
         return points
     }
 
-
     data class ArcSelection(
+        val origin: Vector2f,
+        val leftLine: LineUtils.StraightLine,
+        val rightLine: LineUtils.StraightLine,
+        val length: Float
+    ) {
+        /**
+         * Checks if a ship is within the cone using cross products of the line directions.
+         */
+        fun isWithinArc(target: ShipAPI): Boolean {
+            val targetPos = target.location
+            val toTarget = Vector2f.sub(targetPos, origin, Vector2f())
+
+            if (toTarget.lengthSquared() > length * length) return false
+
+            // Extract normalized direction vectors from the lines
+            val leftVec = leftLine.getDirectionVector()
+            val rightVec = rightLine.getDirectionVector()
+
+            val isTargetCWOfLeft = leftVec.x * toTarget.y - leftVec.y * toTarget.x < 0
+            val isTargetCCWOfRight = rightVec.x * toTarget.y - rightVec.y * toTarget.x > 0
+
+            return isTargetCWOfLeft && isTargetCCWOfRight
+        }
+
+        fun draw(numDots: Int, color: Color) {
+            leftLine.draw(numDots, color)
+            rightLine.draw(numDots, color)
+        }
+
+        fun drawParticles(
+            amount: Float,
+            particleSize: Float = 12f,
+            particleDuration: Float = 0.25f,
+            particlesToDrawPerInterval: Int = 1,
+            particleColors: List<Color>,
+            particleDrawMode: ParticleDrawMode,
+            continuousDrain: ContinuousDrainMode?
+        ) {
+            leftLine.drawParticles(amount, particleSize, particleDuration, particlesToDrawPerInterval, particleColors, particleDrawMode, continuousDrain)
+            rightLine.drawParticles(amount, particleSize, particleDuration, particlesToDrawPerInterval, particleColors, particleDrawMode, continuousDrain)
+        }
+    }
+
+    data class ArcSelection2(
         val origin: Vector2f,
         val leftVec: Vector2f,  // Normalized vector for left boundary
         val rightVec: Vector2f, // Normalized vector for right boundary
@@ -350,6 +393,16 @@ object LineUtils {
                 )
                 // Draw logic...
             }
+        }
+
+        fun getDirectionVector(): Vector2f {
+            val dx = end.x - start.x
+            val dy = end.y - start.y
+            val vec = Vector2f(dx, dy)
+            if (length > 0) {
+                vec.scale(1f / length)
+            }
+            return vec
         }
 
         /**
