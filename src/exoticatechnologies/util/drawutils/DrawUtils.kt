@@ -1,8 +1,12 @@
-package exoticatechnologies.util
+package exoticatechnologies.util.drawutils
 
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.CombatEngineAPI
-import com.fs.starfarer.api.combat.CombatEntityAPI
+import exoticatechnologies.util.EngineParticlePainter
+import exoticatechnologies.util.ParticleParams
+import exoticatechnologies.util.ParticleType
+import exoticatechnologies.util.drawutils.CircleUtils.Swirl
+import exoticatechnologies.util.drawutils.LineUtils.StraightLine
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
 
@@ -40,4 +44,41 @@ object DrawUtils {
         }
     }
 
+}
+
+
+/**
+ * Enum describing how particles should be drawn when using [Swirl.drawParticles] and [Swirl.SwirlArmParticles.draw]
+ *
+ * Works very identical for line-based [StraightLine.drawParticles] and [StraightLine.StraightLineParticles.draw]
+ * and other line classes, except that unlike Swirl they have only one "arm" (line in their case)
+ *
+ * @see ONE_AT_A_TIME
+ * @see WHOLE_ARM
+ */
+enum class ParticleDrawMode {
+    /**
+     * Enum signifying the "one dot at a time" mode, which draws one dot and removes it from the arm
+     */
+    ONE_AT_A_TIME,
+
+    /**
+     * Enum signifying the "whole arm at a time" mode, which draws the whole arm and removes a number of dots from it
+     */
+    WHOLE_ARM
+}
+
+/**
+ * Enum class describing the "continuous drain" and how many particles should be pre-drained before drawing
+ */
+enum class ContinuousDrainMode {
+    /**
+     * Pre-drain based on drawing iteration, first draw iteration pre-draining 0, second draw-iteration pre-draining 1 and so on...
+     */
+    ITERATION_BASED_MODE,
+
+    /**
+     * Pre-drain based on previous arm's post-draw size, so that the next arm's draw state begins from the size of the last arm's drawing state
+     */
+    PREVIOUS_ARM_SIZE_MODE
 }

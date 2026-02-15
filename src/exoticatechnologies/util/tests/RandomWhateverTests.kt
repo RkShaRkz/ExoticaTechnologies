@@ -3,12 +3,14 @@ package exoticatechnologies.util.tests
 import com.fs.starfarer.api.combat.*
 import exoticatechnologies.util.calculateVelocityVector
 import exoticatechnologies.util.getVelocityVector
+import exoticatechnologies.util.remapAngleToTrigonometricCoordinateSystem
 import exoticatechnologies.util.tests.utils.WeaponAPIUtils.createAnonymousWeaponAPI
 import org.junit.Assert
 import org.junit.Test
 import org.junit.experimental.runners.Enclosed
 import org.junit.runner.RunWith
 import org.lwjgl.util.vector.Vector2f
+import kotlin.math.exp
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -171,6 +173,27 @@ class RandomWhateverTests {
             // This assertion proves they are not equal
             // Except Google was wrong like I kept telling him, and the methods are exactly the same. Different kind of problem though.
             Assert.assertEquals(result1.x, result2.x)
+        }
+    }
+
+    class AngleTests {
+        @Test
+        fun `compare whether angle remapping works between user-centric and trigonometric`() {
+            // Trigonometric angles start at the "east" aka lies on the X-axis to the right
+            val trigonometricZeroAngle = 0f
+            // And that is considered 90-degrees in our 'user-centric' angle system
+            val expectedConvertedAngle1 = 90f
+
+            val remappedTrigonometricZeroAngle = remapAngleToTrigonometricCoordinateSystem(trigonometricZeroAngle)
+            Assert.assertEquals("Trigonometric to UserCentric remapping broken - should have been 90", expectedConvertedAngle1, remappedTrigonometricZeroAngle)
+
+            // User-centric angles start at the "north" aka lies on the Y-axis to the up
+            val userCentricZeroAngle = 0f
+            // And that is considered 90 degrees in regular trigonometric angle system
+            val expectedConvertedAngle2 = 90f
+
+            val remappedUserCentricZeroAngle = remapAngleToTrigonometricCoordinateSystem(userCentricZeroAngle)
+            Assert.assertEquals("UserCentric to Trigonometric remapping broken - should have been 90", expectedConvertedAngle2, remappedUserCentricZeroAngle)
         }
     }
 }

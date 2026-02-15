@@ -1,3 +1,5 @@
+package exoticatechnologies.util.drawutils
+
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.combat.CombatEngine
@@ -45,8 +47,8 @@ object CircleUtils {
      */
     fun rotatePointsAlongCircle(points: List<Vector2f>, center: Vector2f, angleDegrees: Float): List<Vector2f> {
         val angle = Math.toRadians(angleDegrees.toDouble())
-        val cos = Math.cos(angle)
-        val sin = Math.sin(angle)
+        val cos = cos(angle)
+        val sin = sin(angle)
 
         return points.map { p ->
             val dx = p.x - center.x
@@ -196,7 +198,7 @@ object CircleUtils {
      */
     fun normalizeAngularDelta(dTheta: Double): Double {
         // returns in [-π, π]
-        return Math.atan2(Math.sin(dTheta), Math.cos(dTheta))
+        return atan2(sin(dTheta), cos(dTheta))
     }
 
     /**
@@ -393,40 +395,6 @@ object CircleUtils {
          * Use a natural logarithm curve
          */
         LOGARITHMIC
-    }
-
-    /**
-     * Enum describing how particles should be drawn when using [Swirl.drawParticles] and [Swirl.SwirlArmParticles.draw]
-     *
-     * @see ONE_AT_A_TIME
-     * @see WHOLE_ARM
-     */
-    enum class ParticleDrawMode {
-        /**
-         * Enum signifying the "one dot at a time" mode, which draws one dot and removes it from the arm
-         */
-        ONE_AT_A_TIME,
-
-        /**
-         * Enum signifying the "whole arm at a time" mode, which draws the whole arm and removes a number of dots from it
-         */
-        WHOLE_ARM
-    }
-
-    /**
-     * Enum class describing the "continuous drain" and how many particles should be pre-drained before drawing
-     */
-    enum class ContinuousDrainMode {
-        /**
-         * Pre-drain based on drawing iteration, first draw iteration pre-draining 0, second draw-iteration pre-draining 1 and so on...
-         */
-        ITERATION_BASED_MODE,
-
-        /**
-         * Pre-drain based on previous arm's post-draw size, so that the next arm's draw state begins from the size of the last arm's drawing state
-         */
-        //TODO test this out
-        PREVIOUS_ARM_SIZE_MODE
     }
 
     //TODO right now, the Swirl is really just a fixed-location "instantaneous" swirl
@@ -746,7 +714,7 @@ object CircleUtils {
                         Color.DARK_GRAY,
                         Color.DARK_GRAY.darker().darker()
                     ),
-                    particleDrawMode = CircleUtils.ParticleDrawMode.WHOLE_ARM
+                    particleDrawMode = ParticleDrawMode.WHOLE_ARM
                 )
             }
         }
@@ -1027,7 +995,7 @@ object CircleUtils {
                 mutableCircleList.toList()
             } else {
                 // If no particles should be generated, return empty list
-                emptyList<CircleParticles>()
+                emptyList()
             }
             intervalUtil = MultiIntervalUtil(particleDrawInterval)
         }

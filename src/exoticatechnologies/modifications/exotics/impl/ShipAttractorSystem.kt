@@ -14,6 +14,9 @@ import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.modifications.exotics.misc.ForceApplier
 import exoticatechnologies.util.*
+import exoticatechnologies.util.drawutils.CircleUtils
+import exoticatechnologies.util.drawutils.ContinuousDrainMode
+import exoticatechnologies.util.drawutils.ParticleDrawMode
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
@@ -312,9 +315,9 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                             Color.DARK_GRAY,
                             Color.DARK_GRAY.darker().darker()
                         ),
-                        particleDrawMode = CircleUtils.ParticleDrawMode.WHOLE_ARM,
+                        particleDrawMode = ParticleDrawMode.WHOLE_ARM,
                         particleArmsToDraw = 9,
-                        continuousDrain = CircleUtils.ContinuousDrainMode.ITERATION_BASED_MODE
+                        continuousDrain = ContinuousDrainMode.ITERATION_BASED_MODE
                     )
                     // If all arms have finished, get rid of visualSwirl
                     if (swirl.hasFinished()) {
