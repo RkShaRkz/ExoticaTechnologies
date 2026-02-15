@@ -9,7 +9,38 @@ import java.awt.Color
 object LineUtils {
 
     /**
-     * Generates an ArcSelection by trusting the provided left and right boundaries.
+     * Generates an [ArcSelection] by trusting the provided left and right boundaries.
+     *
+     * **NOTE:** That means that
+     * ```
+     *      generateArc(
+     *          origin = ship.location,
+     *          facing = ship.facing,
+     *          leftOffset = -30f,
+     *          rightOffset = 30f,
+     *          length = 1500f,
+     *          degreeType = AngleDegreeType.TRIGONOMETRIC,
+     *          . . .
+     *      )
+     * ```
+     * generates a backwards-facing 300-degree arc. Whereas
+     * ```
+     *      generateArc(
+     *          origin = ship.location,
+     *          facing = ship.facing,
+     *          leftOffset =  30f,
+     *          rightOffset = -30f,
+     *          length = 1500f,
+     *          degreeType = AngleDegreeType.TRIGONOMETRIC,
+     *          . . .
+     *      )
+     * ```
+     * generates a forward-facing 60-degree arc.
+     *
+     * Do also mind that the first example would work "as expected" for [AngleDegreeType.USER_CENTRIC] (generating 60-degree arc),
+     * whereas the second example would produce a wide 300-degree arc. The method 'allows' you to make such a mistake because
+     * it trusts you know what you're doing.
+     *
      *
      * @param origin The origin point of the arc
      * @param facing The base facing in the coordinate system specified by [degreeType]
@@ -18,6 +49,73 @@ object LineUtils {
      * @param degreeType The coordinate system for both the [facing] and the offsets.
      */
     fun generateArc(
+        origin: Vector2f,
+        facing: Float,
+        leftOffset: Float,
+        rightOffset: Float,
+        length: Float,
+        degreeType: AngleDegreeType,
+        generateParticles: Boolean = false,
+        particleSegments: Int? = null,
+        particleSpacing: Float? = null
+    ): ArcSelection {
+
+        // 1. First, convert facing to Trig
+        val trigonometricFacing = when(degreeType) {
+            AngleDegreeType.USER_CENTRIC -> {
+                // Usercentric needs remapping
+                remapAngleToTrigonometricCoordinateSystem(facing)
+            }
+            AngleDegreeType.TRIGONOMETRIC -> {
+                // trigonometric does not need remapping as it's already in required form
+                facing
+            }
+        }.exhaustive
+
+        // 2. Apply offsets based on coordinate system rotation
+        // now that we have the trigonometric facing, everything below is straightforward and streamlined
+        val (finalLeftAngle, finalRightAngle) = when(degreeType) {
+            AngleDegreeType.USER_CENTRIC -> {
+                // User Centric: + is Clockwise (so subtract from trigonometric facing)
+                (trigonometricFacing - leftOffset) to (trigonometricFacing - rightOffset)
+            }
+            AngleDegreeType.TRIGONOMETRIC -> {
+                // Trigonometric: + is Counter-Clockwise (so add to trigonometric facing)
+                (trigonometricFacing + leftOffset) to (trigonometricFacing + rightOffset)
+            }
+        }.exhaustive
+
+        // 3. Generate lines using 'trusted' angles
+        val leftLine = generateStraightLine(
+            start = origin,
+            info = StraightLineInfo(length, finalLeftAngle, AngleDegreeType.TRIGONOMETRIC),
+            generateParticles = generateParticles,
+            particleSegments = particleSegments,
+            particleSpacing = particleSpacing
+        )
+
+        val rightLine = generateStraightLine(
+            start = origin,
+            info = StraightLineInfo(length, finalRightAngle, AngleDegreeType.TRIGONOMETRIC),
+            generateParticles = generateParticles,
+            particleSegments = particleSegments,
+            particleSpacing = particleSpacing
+        )
+
+        return ArcSelection(origin, leftLine, rightLine, length)
+    }
+
+
+    /**
+     * Generates an ArcSelection by trusting the provided left and right boundaries.
+     *
+     * @param origin The origin point of the arc
+     * @param facing The base facing in the coordinate system specified by [degreeType]
+     * @param leftOffset The offset that defines the "Left" boundary (relative to facing)
+     * @param rightOffset The offset that defines the "Right" boundary (relative to facing)
+     * @param degreeType The coordinate system for both the [facing] and the offsets.
+     */
+    fun generateArc2(
         origin: Vector2f,
         facing: Float,
         leftOffset: Float,
@@ -155,8 +253,8 @@ object LineUtils {
             if (toTarget.lengthSquared() > length * length) return false
 
             // 2. Fetch boundary vectors
-            val L = leftLine.getDirectionVec()
-            val R = rightLine.getDirectionVec()
+            val L = leftLine.getDirectionVector()
+            val R = rightLine.getDirectionVector()
 
             // 3. Determine if this is a "Small Arc" or "Big Wrap"
             // If Right Vector is Left of Left Vector, it's a Big Wrap (>180 deg)
@@ -191,112 +289,6 @@ object LineUtils {
         ) {
             leftLine.drawParticles(amount, particleSize, particleDuration, particlesToDrawPerInterval, particleColors, particleDrawMode, continuousDrain)
             rightLine.drawParticles(amount, particleSize, particleDuration, particlesToDrawPerInterval, particleColors, particleDrawMode, continuousDrain)
-        }
-    }
-
-    data class ArcSelection2(
-        val origin: Vector2f,
-        val leftVec: Vector2f,  // Normalized vector for left boundary
-        val rightVec: Vector2f, // Normalized vector for right boundary
-        val length: Float
-    ) {
-
-        /**
-         * Checks if a ship is within the cone.
-         * @param target the target [ShipAPI] to check
-         * @return whether the [target] is within this arc or not
-         */
-        fun isWithinArc(target: ShipAPI): Boolean {
-            val targetPos = target.location
-            val toTarget = targetPos.sub(origin)
-
-            // 1. Distance check
-            val distSq = toTarget.lengthSquared()
-            if (distSq > length * length) return false
-
-            // 2. Angular check using 2D cross product
-            // Check whether the target is clockwise of the 'left' vector and counterclockwise of the 'right' vector
-            val isTargetCWOfLeftVector = leftVec.crossProduct(toTarget) < 0
-            val isTargetCCWOfRightVector = rightVec.crossProduct(toTarget) > 0
-
-            return isTargetCWOfLeftVector && isTargetCCWOfRightVector
-        }
-
-        /**
-         * Iterates over all ships in the combat engine and runs logic if they are in the arc.
-         */
-        fun forEveryShipInArc(shipsToCheck: List<ShipAPI>, action: (ShipAPI) -> Unit) {
-            for (ship in shipsToCheck) {
-                if (isWithinArc(ship)) {
-                    action(ship)
-                }
-            }
-        }
-
-        /**
-         * Draws X dots along the left and right boundary vectors.
-         */
-        fun draw(
-            numDots: Int,
-            color: Color
-        ) {
-            for (i in 0..numDots) {
-                val t = i.toFloat() / numDots.toFloat()
-                val currentDist = t * length
-
-                // Calculate dot positions
-                val dotLeft = Vector2f(origin.x + leftVec.x * currentDist, origin.y + leftVec.y * currentDist)
-                val dotRight = Vector2f(origin.x + rightVec.x * currentDist, origin.y + rightVec.y * currentDist)
-
-                //TODO lets actually make the Arc contain only two StraightLines and just call into their draw(...) here
-            }
-        }
-
-        /**
-         * Visualizes the boundaries using particles.
-         */
-        fun drawParticles(numParticles: Int?, spacing: Int?) {
-            // Throw if both arguments are null
-            if (numParticles == null && spacing == null) {
-                throw IllegalArgumentException("Must use either a fixed number of particles or dynamic via spacing. numParticles and spacing cannot both be null")
-            }
-            // Prefer numParticles over spacing
-            numParticles?.let { particleCount ->
-                for (i in 0..particleCount) {
-                    val t = i.toFloat() / particleCount.toFloat()
-                    val d = t * length
-
-                    val pLeft = Vector2f(origin.x + leftVec.x * d, origin.y + leftVec.y * d)
-                    val pRight = Vector2f(origin.x + rightVec.x * d, origin.y + rightVec.y * d)
-
-//                engine.addHitParticle(pLeft, Vector2f(), 5f, 1f, 0.1f, Color.CYAN)
-//                engine.addHitParticle(pRight, Vector2f(), 5f, 1f, 0.1f, Color.CYAN)
-                    //TODO this will just call into both StraightLines' drawParticles(...)
-                }
-            }
-
-            // Check spacing too
-            spacing?.let {
-                val steps = (length / spacing).toInt()
-                // Now start iteratively calculating the particle's distance
-                for (i in 0..steps) {
-                    // Calculate distance for this specific particle
-                    val currentDist = i * spacing
-
-                    // Boundary positions
-                    val pLeft = Vector2f(
-                        origin.x + leftVec.x * currentDist,
-                        origin.y + leftVec.y * currentDist
-                    )
-                    val pRight = Vector2f(
-                        origin.x + rightVec.x * currentDist,
-                        origin.y + rightVec.y * currentDist
-                    )
-
-                    //TODO this doesn't make sense...
-                    // we should use either 'numParticles' or 'spacing' when generating StraightLines and not within this draw
-                }
-            }
         }
     }
 

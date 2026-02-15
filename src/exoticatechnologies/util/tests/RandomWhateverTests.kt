@@ -1,9 +1,12 @@
 package exoticatechnologies.util.tests
 
 import com.fs.starfarer.api.combat.*
+import exoticatechnologies.util.AngleDegreeType
 import exoticatechnologies.util.calculateVelocityVector
+import exoticatechnologies.util.drawutils.LineUtils
 import exoticatechnologies.util.getVelocityVector
 import exoticatechnologies.util.remapAngleToTrigonometricCoordinateSystem
+import exoticatechnologies.util.tests.utils.ShipAPIUtils
 import exoticatechnologies.util.tests.utils.WeaponAPIUtils.createAnonymousWeaponAPI
 import org.junit.Assert
 import org.junit.Test
@@ -194,6 +197,54 @@ class RandomWhateverTests {
 
             val remappedUserCentricZeroAngle = remapAngleToTrigonometricCoordinateSystem(userCentricZeroAngle)
             Assert.assertEquals("UserCentric to Trigonometric remapping broken - should have been 90", expectedConvertedAngle2, remappedUserCentricZeroAngle)
+        }
+    }
+
+    class ArcTests {
+        @Test
+        fun `check whether the example from documentation works and breaks as expected`() {
+            val ourLocation = Vector2f(0f, 0f)
+            val ourTrigonometricFacing = 90f
+            // Generate a 1500-long 300-degree backwards arc
+            val trigonometricAngleArc = LineUtils.generateArc(
+                origin = ourLocation,
+                facing = ourTrigonometricFacing,
+                leftOffset = -30f,
+                rightOffset = 30f,
+                length = 1500f,
+                degreeType = AngleDegreeType.TRIGONOMETRIC,
+            )
+
+            // Generate a target slightly in front of our origin
+            val potentialTarget = Vector2f(0f, 10f)
+
+            // Now, if my documentation is correct, the potential target will not be in trigonometric arc
+            val isWithinTrigArc = trigonometricAngleArc.isWithinArc(
+                target = ShipAPIUtils.createAnonymousShipAPI(location = potentialTarget)
+            )
+            val expectedWithinTrigArc = false
+
+            Assert.assertEquals("Seems like my assumption was wrong, and TRIGONOMETRIC big-arc is not broken", expectedWithinTrigArc, isWithinTrigArc)
+
+            // Since our facing is 'trigonometric', we should remap it to user-centric
+            // because after we pass AngleDegreeType.USER_CENTRIC - then **all** angles are expected to be user-centric
+            val userCentricFacing = remapAngleToTrigonometricCoordinateSystem(ourTrigonometricFacing)
+            // Generate a 1500-long 60-degree forward arc
+            val userCentricAngleArc = LineUtils.generateArc(
+                origin = ourLocation,
+                facing = userCentricFacing,
+                leftOffset = -30f,
+                rightOffset = 30f,
+                length = 1500f,
+                degreeType = AngleDegreeType.USER_CENTRIC,
+            )
+
+            // Now, if my documentation is correct, the potential target will not be in trigonometric arc
+            val isWithinUserCentricArc = userCentricAngleArc.isWithinArc(
+                target = ShipAPIUtils.createAnonymousShipAPI(location = potentialTarget)
+            )
+            val expectedWithinUserCentricArc = true
+            Assert.assertEquals("Seems like my assumption was wrong, and USER_CENTRIC *is* broken", expectedWithinUserCentricArc, isWithinUserCentricArc)
         }
     }
 }
