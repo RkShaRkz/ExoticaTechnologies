@@ -128,7 +128,7 @@ object LineUtils {
      */
     fun generateStraightLineVisual(
         start: Vector2f,
-        end: Vector2f, // Use the end vector instead of angle/length
+        end: Vector2f,
         numPoints: Int? = null,
         spacing: Float? = null
     ): List<Vector2f> {
@@ -141,33 +141,32 @@ object LineUtils {
         val totalLength = start.distanceTo(end)
 
         // 2. Determine the number of points (n)
-        val n: Int = when {
-            numPoints != null -> numPoints.coerceAtLeast(1)
+        val segments: Int = when {
+            numPoints != null -> {
+                // For e.g. 5 points, there's 4 segments
+                (numPoints - 1).coerceAtLeast(1)
+            }
             spacing != null -> {
                 // Calculate how many segments fit into the length
                 // By using round() we ensure we don't 'lose' length; we just adjust spacing slightly.
                 // So that it becomes "at least" and not "exactly"
-                val segments = Math.round(totalLength / spacing).coerceAtLeast(1).toInt()
+                val segments = Math.round(totalLength / spacing).coerceAtLeast(1)
 
-                // And return the number of points, which is always (segments + 1)
-                segments + 1
+                segments
             }
 
-            else -> 0
+            else -> 1
         }
 
-        // 3. Generate points using Linear Interpolation
+        // 3. Generate points using Linear Interpolation through line segments
         val points = mutableListOf<Vector2f>()
 
-        for (i in 0 until n) {
+        // We will be using 0..segments (inclusive) since it naturally yields (segments + 1) points.
+        // Example: Loop 0..4 gives points at 0%, 25%, 50%, 75%, 100%
+        for (i in 0..segments) {
             // Calculate the interpolation fraction t (0.0 to 1.0)
             // If n is 1, t is 0 (just the start point).
-            val t = if (n > 1) {
-                i.toFloat() / (n - 1).toFloat()
-            } else {
-                0f
-            }
-            val currentDist = t * totalLength
+            val t = i.toFloat() / segments.toFloat()
 
             // Now perform the *actual* lerping which is faster than by using getPointOnCircumference(...)
             val x = start.x + (end.x - start.x) * t

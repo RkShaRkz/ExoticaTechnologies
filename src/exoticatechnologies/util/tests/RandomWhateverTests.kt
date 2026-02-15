@@ -13,7 +13,6 @@ import org.junit.Test
 import org.junit.experimental.runners.Enclosed
 import org.junit.runner.RunWith
 import org.lwjgl.util.vector.Vector2f
-import kotlin.math.exp
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -245,6 +244,24 @@ class RandomWhateverTests {
             )
             val expectedWithinUserCentricArc = true
             Assert.assertEquals("Seems like my assumption was wrong, and USER_CENTRIC *is* broken", expectedWithinUserCentricArc, isWithinUserCentricArc)
+        }
+
+        @Test
+        fun `naively verify that straightLineVisuals also works`() {
+            val start = Vector2f(0f, 0f)
+            val end = Vector2f(0f, 4f)
+
+            val visualsList = LineUtils.generateStraightLineVisual(
+                start = start,
+                end = end,
+                numPoints = 5
+            )
+
+            // Now we should end up with 5 dots, at 0, 1, 2, 3, 4
+            for(test in 0..4) {
+                // Check each visualList's member and validate that they are indeed 0,1,2,3,4
+                Assert.assertEquals("Seems like visuals aren't making proper vectors for numPoints", test.toFloat(), visualsList[test].y)
+            }
         }
     }
 }
