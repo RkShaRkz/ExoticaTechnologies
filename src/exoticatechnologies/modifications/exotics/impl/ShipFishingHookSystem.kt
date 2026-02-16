@@ -130,6 +130,29 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             }
         }
 
+        private fun generateArc(
+            center: Vector2f,
+            userCentricFacing: Float,
+            generateParticles: Boolean,
+            particleSpacing: Float,
+            arcWidth: Float,
+            fullRange: Float
+        ): LineUtils.ArcSelection {
+            val halfArc = arcWidth / 2
+            return LineUtils.generateArc(
+                origin = center,
+                facing = userCentricFacing,
+                // since we want to have things like (-15,15) we need to multiply by -1
+                leftOffset = halfArc.withSign(-1f),
+                rightOffset = halfArc,
+                length = fullRange,
+                degreeType = AngleDegreeType.USER_CENTRIC,
+                generateParticles = generateParticles,
+                particleSegments = null,
+                particleSpacing = particleSpacing
+            )
+        }
+
         private fun evaluateSituation(): Boolean {
             // If interval elapsed, we are going to do a few checks to determine if we should activate:
             // 1. if we have enemies within system range but outside of weighted effective weapon range (excluding wings) - activate
@@ -142,17 +165,26 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             val userCentricFacing = remapAngleToTrigonometricCoordinateSystem(ship.facing)
             val arcWidth = getScaledArcWidth(member, mods, exoticData)
             val halfArc = arcWidth / 2
-            val evaluationArc = LineUtils.generateArc(
-                origin = ship.location,
-                facing = userCentricFacing,
+//            val evaluationArc = LineUtils.generateArc(
+//                origin = ship.location,
+//                facing = userCentricFacing,
                 // since we want to have things like (-15,15) we need to multiply by -1
-                leftOffset = halfArc.withSign(-1f),
-                rightOffset = halfArc,
-                length = getRadiusAmount(member, mods, exoticData),
-                degreeType = AngleDegreeType.USER_CENTRIC,
-                generateParticles = true,
-                particleSegments = null,
-                particleSpacing = 100f
+//                leftOffset = halfArc.withSign(-1f),
+//                rightOffset = halfArc,
+//                length = getRadiusAmount(member, mods, exoticData),
+//                degreeType = AngleDegreeType.USER_CENTRIC,
+//                generateParticles = true,
+//                particleSegments = null,
+//                particleSpacing = 100f
+//            )
+            val evaluationArc = generateArc(
+                center = ship.location,
+                //TODO replace this with different 'facing' for child modules, so just let them aim at their targets
+                userCentricFacing = remapAngleToTrigonometricCoordinateSystem(ship.facing),
+                generateParticles = false,
+                particleSpacing = 100f,
+                arcWidth = getScaledArcWidth(member, mods, exoticData),
+                fullRange = getRadiusAmount(member, mods, exoticData)
             )
             val shipsInArcRadius = getPotentialTargets(member, mods, exoticData)
                 .filter { target -> target.isFighter.not() }
@@ -347,23 +379,14 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
 
         private fun showVisualFlair() {
             // generate dots
-            val center = ship.location
-            val fullRange = getRadiusAmount(member, mods, exoticData)
-
-            val userCentricFacing = remapAngleToTrigonometricCoordinateSystem(ship.facing)
-            val arcWidth = getScaledArcWidth(member, mods, exoticData)
-            val halfArc = arcWidth / 2
-            visualArc = LineUtils.generateArc(
-                origin = center,
-                facing = userCentricFacing,
-                // since we want to have things like (-15,15) we need to multiply by -1
-                leftOffset = halfArc.withSign(-1f),
-                rightOffset = halfArc,
-                length = fullRange,
-                degreeType = AngleDegreeType.USER_CENTRIC,
+            visualArc = generateArc(
+                center = ship.location,
+                //TODO replace this with different 'facing' for child modules, so just let them aim at their targets
+                userCentricFacing = remapAngleToTrigonometricCoordinateSystem(ship.facing),
                 generateParticles = true,
-                particleSegments = null,
-                particleSpacing = 100f
+                particleSpacing = 100f,
+                arcWidth = getScaledArcWidth(member, mods, exoticData),
+                fullRange = getRadiusAmount(member, mods, exoticData)
             )
         }
 
@@ -389,6 +412,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 applyImplicitMomentumScaling = true
             )
             // Now, generate a visual
+            //TODO replace this with ArrowLines
             val pullInVisual = LineUtils.generateStraightLine(
                 start = shipToPull.location,
                 end = destinationShip.location,
