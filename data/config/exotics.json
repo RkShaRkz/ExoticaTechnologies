@@ -198,5 +198,9 @@
   "ShipAttractorSystem": {
     "name": "Ship Attractor System",
     "exoticClass": "exoticatechnologies.modifications.exotics.impl.ShipAttractorSystem"
+  },
+  "ShipFishingHookSystem": {
+    "name": "Ship Fishing Hook System",
+    "exoticClass": "exoticatechnologies.modifications.exotics.impl.ShipFishingHookSystem"
   }
 }

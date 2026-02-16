@@ -71,7 +71,8 @@
 			"MissileSpamSystem": "graphics/icons/exotics/missilespamsystem.png",
 			"AmmoCraftingSystem": "graphics/icons/exotics/ammocraftingsystem.png",
 			"ShipRepulsorSystem": "graphics/icons/exotics/shiprepulsorsystem.png",
-			"ShipAttractorSystem": "graphics/icons/exotics/shipattractorsystem.png"
+			"ShipAttractorSystem": "graphics/icons/exotics/shipattractorsystem.png",
+			"ShipFishingHookSystem": "graphics/icons/exotics/shipfishinghooksystem.png"
 		},
 		"upgrades": {
 			"AdvancedFluxCoils": "graphics/icons/upgrades/advancedfluxcoils.png",
