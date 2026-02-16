@@ -195,7 +195,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
             // Criteria 4 - there are more allied ships than enemy ships
             val enemyShips = shipsInRadius.count()
             val allyShips = alliesInRange.count()
-            if (allyShips >= enemyShips) return true
+            if (allyShips >= enemyShips && enemyShips != 0) return true
 
 
             // None of the criterias were fulfilled so far, return false for this evaluation cycle
