@@ -231,6 +231,15 @@ object LineUtils {
             leftLine.drawParticles(amount, particleSize, particleDuration, particlesToDrawPerInterval, particleColors, particleDrawMode, continuousDrain)
             rightLine.drawParticles(amount, particleSize, particleDuration, particlesToDrawPerInterval, particleColors, particleDrawMode, continuousDrain)
         }
+
+        /**
+         * Method for checking whether all of this [ArcSelection]'s lines ([StraightLine]) have finished or not
+         *
+         * @return whether all particle arms have finished or not
+         */
+        fun hasFinished(): Boolean {
+            return leftLine.hasFinished() && rightLine.hasFinished()
+        }
     }
 
     data class StraightLineInfo(
@@ -535,6 +544,16 @@ object LineUtils {
                         }
                     }
                 }.exhaustive
+            }
+        }
+
+        fun hasFinished(): Boolean {
+            // IF we were supposed to have particles, we're done only when the particles say we're done
+            // otherwise, we are done.
+            return if (generateParticles) {
+                particlePoints?.hasFinished() ?: false
+            } else {
+                true
             }
         }
 
