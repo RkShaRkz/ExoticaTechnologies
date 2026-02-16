@@ -931,7 +931,6 @@ object CircleUtils {
         private val generateInwards: Boolean,
         private val globalRotationDegrees: Float,
         private val generateParticles: Boolean,
-//        private val particleSegments: Int,    //TODO delete
         private val particleDrawInterval: Float,
         private val particleDrawingDuration: Float,
         private val particleRingsUseDelay: Boolean
