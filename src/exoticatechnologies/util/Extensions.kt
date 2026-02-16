@@ -760,6 +760,11 @@ fun Vector2f.getFacing(): Float {
  *
  * @see getVelocityVector
  */
+@Deprecated(
+    message = "This method should not be used since it returns the same results as the other, faster method",
+    replaceWith = ReplaceWith("getVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Float)"),
+    level = DeprecationLevel.WARNING
+)
 fun calculateVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Float): Vector2f {
     val direction = getDirectionVector(fromVector, toVector)
     val distance = fromVector.distanceTo(toVector)
