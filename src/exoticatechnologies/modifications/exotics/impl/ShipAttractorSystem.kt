@@ -7,6 +7,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.IntervalUtil
+import exoticatechnologies.combat.ExoticaCombatUtils
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
@@ -153,7 +154,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                 .filter { target -> target.isFighter.not() }
 
             // Calculate our 'most damaging' range and see how many targets are within range but outside most damaging range
-            val largestDamageRange = getLargestDamageContributingRange(ship)
+            val largestDamageRange = ExoticaCombatUtils.getLargestDamageContributingRange(ship)
             val shipsWithinRangeOutsideOfBestRange = shipsInRadius.filter { targetShip ->
                 val distanceToUs = targetShip.distanceToShip(ship)
 
@@ -200,36 +201,6 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
 
             // None of the criterias were fulfilled so far, return false for this evaluation cycle
             return false
-        }
-
-        private fun getLargestDamageContributingRange(ship: ShipAPI): Float {
-            // Create a range to "weapon damage potential" map
-            val rangeDamageMap = mutableMapOf<Float, Float>()
-            // For all weapons on installing ship, "calculate" it's DPS and derive potential damage over 10 seconds
-            for (weapon in getAllShipWeapons(ship)) {
-                // If weapon is broken, skip it
-                if (weapon.isDisabled || weapon.isPermanentlyDisabled) continue
-                // "sustainedDps" might make sense but not really because it evaluates over "ship fires for infinite amount of time"
-//                weapon.derivedStats.sustainedDps
-                // Otherwise, grab it's DPS, and calculate the "damage contribution" over 10 seconds
-                val weaponDps = weapon.derivedStats.dps
-                val weapon10secPotential = weaponDps * 10f
-
-                val weaponRange = weapon.range
-                // Add to range in the map
-                val currentRangeDamageValue = rangeDamageMap[weaponRange] ?: 0f
-                // Update map
-                rangeDamageMap[weaponRange] = currentRangeDamageValue + weapon10secPotential
-            }
-
-            // After all weapons were processed, grab the key with the highest value
-            val largestEntry = rangeDamageMap.maxByOrNull { it.value }
-            return if (largestEntry != null) {
-                largestEntry.key
-            } else {
-                // no maximum was found, fallback to 0
-                0f
-            }
         }
 
         /**
