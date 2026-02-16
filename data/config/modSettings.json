@@ -110,6 +110,7 @@
       "AmmoCraftingSystem",
       "ShipRepulsorSystem",
       "ShipAttractorSystem",
+      "ShipFishingHookSystem"
     ],
     "rngUpgradeWhitelist": [
       "WeldedArmor",
