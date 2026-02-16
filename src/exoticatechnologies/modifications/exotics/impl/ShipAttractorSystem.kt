@@ -240,6 +240,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
          * - fluxLevel is above 0.9
          * - is overloaded or venting
          * - engines are flamed out
+         * - is retreating, direct retreating or has defense disabled
          *
          * @param ship the ship to evaluate
          * @return true if the ship is vulnerable, false otherwise
@@ -251,7 +252,8 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
                 ship.fluxLevel > 0.9f ||
                 ship.fluxTracker.isOverloaded ||
                 ship.fluxTracker.isVenting ||
-                ship.engineController.isFlamedOut
+                ship.engineController.isFlamedOut ||
+                ship.isRetreating || ship.isDirectRetreat || ship.isDefenseDisabled
         }
 
 

@@ -22,6 +22,7 @@ import org.lwjgl.util.vector.Vector2f
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
+import kotlin.math.withSign
 
 class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     private val logger: Logger = Logger.getLogger(ShipFishingHookSystem::class.java)
@@ -46,7 +47,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         if (expand) {
             StringUtils.getTranslation(key, "longDescription")
                 .format("radius", getRadiusAmount(member, mods, exoticData))
-                .format("cone_width", getScaledConeWidth(member, mods, exoticData))
+                .format("arc_width", getScaledArcWidth(member, mods, exoticData))
                 .formatFloat("cooldown_time", getScaledCooldownDuration(member, mods, exoticData))
                 .addToTooltip(tooltip, title)
         }
@@ -92,7 +93,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         return baseRadiusBasedOnShipSize * getPositiveMult(member, mods, exoticData)
     }
 
-    private fun getScaledConeWidth(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
+    private fun getScaledArcWidth(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): Float {
         // Multiply by positive, and then divide by negative - so that a (negative:2, positive:1.5) doesn't just double
         // the width but also shrink it;
         // example: 30 * 2 / 1.5 = 40
@@ -137,6 +138,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             // If any criteria is met, we will do an early return and avoid evaluating the rest of them
             // Otherwise - do nothing for this evaluation cycle
 
+            //TODO create an 'evaluation arc' since that one should be used to check most of these points
             val shipsInRadius = getPotentialTargets(member, mods, exoticData)
                 .filter { target -> target.isFighter.not() }
 
@@ -170,6 +172,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             if (anyVulnerableShipsInRange) return true
 
             // In case we did not return, try the last case - "more allies than enemies"
+            //TODO this is flawed, because the fishing hook has a huge range, so checking whether allies in e.g. 7500 range
+            // are more numerous than the few we will pull in doesn't quite make sense.... limit to 2000 or so.
             val alliesInRange = CombatUtils.getShipsWithinRange(ship.location, getRadiusAmount(member, mods, exoticData))
                 // make sure it only contains allies
                 .filter { filterShip -> filterShip.owner == ship.owner}
@@ -180,8 +184,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 // and make sure we're not counting our own fighters
                 .filter { target -> target.isFighter.not() }
 
-            // Criteria 4 - there are more allied ships than enemy ships
-            val enemyShips = shipsInRadius.count()
+            // Criteria 4 - there are more allied ships than potential pulled-in enemy ships
+            val enemyShips = shipsInRadius.count()  //TODO shipsInArc
             val allyShips = alliesInRange.count()
             if (allyShips >= enemyShips) return true
 
@@ -230,6 +234,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
          * - fluxLevel is above 0.9
          * - is overloaded or venting
          * - engines are flamed out
+         * - is retreating, direct retreating or has defense disabled
          *
          * @param ship the ship to evaluate
          * @return true if the ship is vulnerable, false otherwise
@@ -241,7 +246,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 ship.fluxLevel > 0.9f ||
                 ship.fluxTracker.isOverloaded ||
                 ship.fluxTracker.isVenting ||
-                ship.engineController.isFlamedOut
+                ship.engineController.isFlamedOut ||
+                ship.isRetreating || ship.isDirectRetreat || ship.isDefenseDisabled
         }
 
 
@@ -289,31 +295,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
 
         override fun advance(amount: Float, isPaused: Boolean) {
             if (isPaused.not()) {
-                // If not paused, draw particles on the swirl if we have it
-                /*
-                visualSwirl?.let { swirl ->
-                    swirl.drawParticles(
-                        amount = amount,
-                        particleSize = getShipDependantParticleSize(ship = ship),
-                        particlesToDrawPerInterval = 6,
-                        particleColors = listOf(
-                            Color.WHITE.brighter().brighter(),
-                            Color.WHITE,
-                            Color.LIGHT_GRAY.brighter().brighter(),
-                            Color.LIGHT_GRAY,
-                            Color.DARK_GRAY,
-                            Color.DARK_GRAY.darker().darker()
-                        ),
-                        particleDrawMode = ParticleDrawMode.WHOLE_ARM,
-                        particleArmsToDraw = 9,
-                        continuousDrain = ContinuousDrainMode.ITERATION_BASED_MODE
-                    )
-                    // If all arms have finished, get rid of visualSwirl
-                    if (swirl.hasFinished()) {
-                        onSwirlFinished(swirl)
-                    }
-                }
-                 */
+                // If not paused, draw particles on the arc if we have it
                 visualArc?.let { arc ->
                     arc.drawParticles(
                         amount = amount,
@@ -336,6 +318,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                         onArcFinished(arc)
                     }
                 }
+                //TODO need to draw visuals on each target...
             }
         }
 
@@ -348,11 +331,14 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             val fullRange = getRadiusAmount(member, mods, exoticData)
 
             val userCentricFacing = remapAngleToTrigonometricCoordinateSystem(ship.facing)
+            val arcWidth = getScaledArcWidth(member, mods, exoticData)
+            val halfArc = arcWidth / 2
             visualArc = LineUtils.generateArc(
                 origin = center,
                 facing = userCentricFacing,
-                leftOffset = -30f,
-                rightOffset = 30f,
+                // since we want to have things like (-15,15) we need to multiply by -1
+                leftOffset = halfArc.withSign(-1f),
+                rightOffset = halfArc,
                 length = fullRange,
                 degreeType = AngleDegreeType.USER_CENTRIC,
                 generateParticles = true,

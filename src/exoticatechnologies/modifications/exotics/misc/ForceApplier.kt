@@ -50,7 +50,8 @@ object ForceApplier {
             // under very-super-special conditions
             if (applyImplicitMomentumScaling) {
                 // Momentum is far too weak otherwise
-                momentum *= 100f
+                // But also, do mind about overflow in case some huge value comes in...
+                momentum = (momentum * 100f).coerceAtMost(Float.MAX_VALUE)
             }
             log("Actual momentum ${momentum}")
             // Doing some vector calculate
