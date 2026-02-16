@@ -1,11 +1,14 @@
 package exoticatechnologies.util
 
+import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.CombatEngineAPI
 import com.fs.starfarer.api.combat.CombatEntityAPI
 import com.fs.starfarer.api.combat.DamageType
 import com.fs.starfarer.api.combat.ShipAPI
+import com.fs.starfarer.combat.CombatEngine
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
+import java.util.*
 
 /**
  * Wrapper class around `CombatEngineAPI.add<whatever>Particle` methods to decouple my code from directly invoking
@@ -13,8 +16,82 @@ import java.awt.Color
  * methods via [addParticle]
  *
  * Is also a wrapper around `CombatEngineAPI.spawnEmpArc<whatever>` methods via a single entry-point to all these via [spawnEmpArc]
+ *
+ * Also contains the [ParticleLimits] which is useful for setting and resetting concrete particle type limits
  */
 object EngineParticlePainter {
+
+    object ParticleLimits {
+        val LIMITS_MAP: EnumMap<ParticleType, Int> = EnumMap(ParticleType::class.java)
+        init {
+            /**
+             *     HIT_PARTICLE,
+             *     SMOOTH_PARTICLE,
+             *     SMOKE_PARTICLE,
+             *     NEGATIVE_PARTICLE,
+             *     NEBULA_PARTICLE,
+             *     NEGATIVE_NEBULA_PARTICLE,
+             *     NEBULA_SMOKE_PARTICLE,
+             *     SWIRLY_NEBULA_PARTICLE,
+             *     NEGATIVE_SWIRLY_NEBULA_PARTICLE,
+             *     NEBULA_SMOOTH_PARTICLE
+             */
+            val actualCombatEngine = (Global.getCombatEngine() as CombatEngine)
+//            LIMITS_MAP.put(ParticleType.HIT_PARTICLE, actualCombatEngine.hit.limit)
+            // HIT_PARTICLES do not have a limit
+            LIMITS_MAP.put(ParticleType.SMOOTH_PARTICLE, actualCombatEngine.smoothParticles.limit)
+            LIMITS_MAP.put(ParticleType.SMOKE_PARTICLE, actualCombatEngine.smokeParticles.limit)
+            LIMITS_MAP.put(ParticleType.NEGATIVE_PARTICLE, actualCombatEngine.negativeParticles.limit)
+            LIMITS_MAP.put(ParticleType.NEBULA_PARTICLE, actualCombatEngine.nebulaParticles.limit)
+            LIMITS_MAP.put(ParticleType.NEGATIVE_NEBULA_PARTICLE, actualCombatEngine.negativeNebulaParticles.limit)
+            LIMITS_MAP.put(ParticleType.NEBULA_SMOKE_PARTICLE, actualCombatEngine.nebulaSmokeParticles.limit)
+            LIMITS_MAP.put(ParticleType.SWIRLY_NEBULA_PARTICLE, actualCombatEngine.swirlyNebulaParticles.limit)
+            LIMITS_MAP.put(ParticleType.NEGATIVE_SWIRLY_NEBULA_PARTICLE, actualCombatEngine.negativeSwirlyNebulaParticles.limit)
+            LIMITS_MAP.put(ParticleType.NEBULA_SMOOTH_PARTICLE, actualCombatEngine.nebulaSmoothParticles.limit)
+        }
+
+        /**
+         * Resets the particle limit to their default (initialized at game load) for a particular [particleType]
+         *
+         * **NOTE:** [ParticleType.HIT_PARTICLE] do not have a limit.
+         *
+         * @param particleType the particle type to reset limits for
+         * @throws IllegalStateException if the limit for the particular particle type is not found in the map
+         */
+        fun resetParticleLimitForParticleType(particleType: ParticleType) {
+            val limit = LIMITS_MAP[particleType]
+            if (limit != null) {
+                setParticleLimitForParticleType(particleType, limit)
+            } else {
+                throw IllegalStateException("Trying to reset particle limit for particle type: ${particleType}, which was not present in the limits map!")
+            }
+        }
+
+        /**
+         * Sets a new limit for a particular [particleType]
+         *
+         * **NOTE:** [ParticleType.HIT_PARTICLE] do not have a limit, so the method will throw if called with that.
+         *
+         * @param particleType the particle type to set new limit for
+         * @param newLimit the new limit to set
+         * @throws NotImplementedError if called with [ParticleType.HIT_PARTICLE]
+         */
+        fun setParticleLimitForParticleType(particleType: ParticleType, newLimit: Int) {
+            val actualCombatEngine = (Global.getCombatEngine() as CombatEngine)
+            when(particleType) {
+                ParticleType.HIT_PARTICLE -> TODO("HitParticles do not have a limit so why are you calling this?")
+                ParticleType.SMOOTH_PARTICLE -> actualCombatEngine.smoothParticles.limit = newLimit
+                ParticleType.SMOKE_PARTICLE -> actualCombatEngine.smokeParticles.limit = newLimit
+                ParticleType.NEGATIVE_PARTICLE -> actualCombatEngine.negativeParticles.limit = newLimit
+                ParticleType.NEBULA_PARTICLE -> actualCombatEngine.nebulaParticles.limit = newLimit
+                ParticleType.NEGATIVE_NEBULA_PARTICLE -> actualCombatEngine.negativeNebulaParticles.limit = newLimit
+                ParticleType.NEBULA_SMOKE_PARTICLE -> actualCombatEngine.nebulaSmoothParticles.limit = newLimit
+                ParticleType.SWIRLY_NEBULA_PARTICLE -> actualCombatEngine.swirlyNebulaParticles.limit = newLimit
+                ParticleType.NEGATIVE_SWIRLY_NEBULA_PARTICLE -> actualCombatEngine.negativeSwirlyNebulaParticles.limit = newLimit
+                ParticleType.NEBULA_SMOOTH_PARTICLE -> actualCombatEngine.nebulaSmoothParticles.limit = newLimit
+            }.exhaustive
+        }
+    }
 
     /**
      * Method for spawning EMP arcs. Depending on the [arcType], a different kind of [EmpArcParams] has to be provided.

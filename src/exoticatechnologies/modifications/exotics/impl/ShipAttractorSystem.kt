@@ -125,7 +125,6 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
         // check for activation every 3 seconds
         private val activationIntervalUtil = IntervalUtil(2.95f, 3.05f)
         private var visualSwirl: CircleUtils.Swirl? = null
-        private val ORIGINAL_PARTICLE_LIMIT = (Global.getCombatEngine() as CombatEngine).smoothParticles.limit
 
         override fun getBaseActiveDuration() = 1f
 
@@ -260,10 +259,6 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
 
         override fun getDisplayText() = "Ship Attractor System"
 
-        private fun setSmoothParticleLimit(newLimit: Int) {
-            (Global.getCombatEngine() as CombatEngine).smoothParticles.limit = newLimit
-        }
-
         override fun onActivate() {
             log("--> onActivate()")
             super.onActivate()
@@ -291,7 +286,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
         fun onSwirlFinished(swirlThatFinished: CircleUtils.Swirl) {
             visualSwirl = null
             // And reset the smooth particle limit back to original
-            setSmoothParticleLimit(newLimit = ORIGINAL_PARTICLE_LIMIT)
+            EngineParticlePainter.ParticleLimits.resetParticleLimitForParticleType(ParticleType.SMOOTH_PARTICLE)
         }
 
         fun getShipDependantParticleSize(ship: ShipAPI): Float {
@@ -329,7 +324,7 @@ class ShipAttractorSystem(key: String, settings: JSONObject) : Exotic(key, setti
 
         private fun showVisualFlair() {
             // Bump the limit temporarily
-            setSmoothParticleLimit(newLimit = 4000)
+            EngineParticlePainter.ParticleLimits.setParticleLimitForParticleType(ParticleType.SMOOTH_PARTICLE, 4000)
             // generate dots
             val center = ship.location
             val fullRange = getRadiusAmount(member, mods, exoticData)
