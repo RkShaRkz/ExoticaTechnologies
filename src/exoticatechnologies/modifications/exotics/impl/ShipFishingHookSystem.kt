@@ -114,6 +114,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         // check for activation every 3 seconds
         private val activationIntervalUtil = IntervalUtil(2.95f, 3.05f)
         private var visualArc: LineUtils.ArcSelection? = null
+        private val targetsVisualsList = mutableListOf<LineUtils.StraightLine>()
 
         override fun getBaseActiveDuration() = 1f
 
@@ -319,6 +320,17 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                     }
                 }
                 //TODO need to draw visuals on each target...
+                targetsVisualsList.forEach { visual ->
+                    visual.drawParticles(
+                        amount = amount,
+                        particleSize = 24f,
+                        particleDuration = 0.5f,
+                        particlesToDrawPerInterval = 3,
+                        particleColors = listOf(Color.WHITE),
+                        particleDrawMode = ParticleDrawMode.ONE_AT_A_TIME,
+                        continuousDrain = null
+                    )
+                }
             }
         }
 
@@ -357,6 +369,29 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             return actualStrength
         }
 
+        fun pullInShip(pullInMomentum: Float, shipToPull: ShipAPI, destinationShip: ShipAPI, collisionPoint: Vector2f) {
+            // First, apply momentum where needed
+            ForceApplier.applyMomentum(
+                entity = shipToPull,
+                pointOfImpact = collisionPoint,
+                direction = Vector2f.sub(destinationShip.location, shipToPull.location, null),
+                momentum = pullInMomentum,
+                elasticCollision = false,
+                modifyAngularVelocity = false,
+                applyImplicitMomentumScaling = true
+            )
+            // Now, generate a visual
+            val pullInVisual = LineUtils.generateStraightLine(
+                start = shipToPull.location,
+                end = destinationShip.location,
+                generateParticles = true,
+                particleSegments = null,
+                particleSpacing = 75f
+            )
+            // And add it to the list of visuals to play
+            targetsVisualsList.add(pullInVisual)
+        }
+
 
         private fun pullInShipsWithinRadius() {
             log("--> pullInShipsWithinRadius()")
@@ -387,14 +422,11 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                             // and finally we will also add the ship's summed mass so that it at least gets *some* push towards us
                             // regardless of how big it is
                             val momentum = getReelInStrengthForShip(nearbyShip) * getPositiveMult(member, mods, exoticData)
-                            ForceApplier.applyMomentum(
-                                entity = nearbyShip,
-                                pointOfImpact = collision,
-                                direction = Vector2f.sub(ship.location, nearbyShip.location, null),
-                                momentum = momentum,
-                                elasticCollision = false,
-                                modifyAngularVelocity = false,
-                                applyImplicitMomentumScaling = true
+                            pullInShip(
+                                pullInMomentum = momentum,
+                                shipToPull = nearbyShip,
+                                destinationShip = ship,
+                                collisionPoint = collision
                             )
                         } else {
                             // This is the "inverse" case, when we try pulling in an immovable object - so we should pull ourselves in a bit
@@ -402,14 +434,20 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                             // So we will scale the strength * factor with negative effect mult, perhaps too harsh but it is what it is
                             val negativeMomentum = getReelInStrengthForShip(ship) * getNegativeMult(member, mods, exoticData)
 
-                            ForceApplier.applyMomentum(
-                                entity = ship.getRootModule(),
-                                pointOfImpact = collision,
-                                direction = Vector2f.sub(nearbyShip.location, ship.location, null),
-                                momentum = negativeMomentum,
-                                elasticCollision = false,
-                                modifyAngularVelocity = false,
-                                applyImplicitMomentumScaling = true
+//                            ForceApplier.applyMomentum(
+//                                entity = ship.getRootModule(),
+//                                pointOfImpact = collision,
+//                                direction = Vector2f.sub(nearbyShip.location, ship.location, null),
+//                                momentum = negativeMomentum,
+//                                elasticCollision = false,
+//                                modifyAngularVelocity = false,
+//                                applyImplicitMomentumScaling = true
+//                            )
+                            pullInShip(
+                                pullInMomentum = negativeMomentum,
+                                shipToPull = ship,
+                                destinationShip = nearbyShip.getRootModule(),
+                                collisionPoint = collision
                             )
                         }
                     }
