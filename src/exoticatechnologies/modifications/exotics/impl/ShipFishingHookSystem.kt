@@ -134,7 +134,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             center: Vector2f,
             userCentricFacing: Float,
             generateParticles: Boolean,
-            particleSpacing: Float,
+            particleSpacing: Float?,
             arcWidth: Float,
             fullRange: Float
         ): LineUtils.ArcSelection {
@@ -153,6 +153,27 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             )
         }
 
+        private fun getTarget(): ShipAPI? {
+            val shipTarget: ShipAPI? = ship.shipTarget
+            return shipTarget
+        }
+
+        /**
+         * Method that either returns the facing to this ship's target, or fallbacks to [ShipAPI.getFacing] if there is no target
+         */
+        private fun getFacingToTarget(): Float {
+            val target = getTarget()
+
+            return if (target != null) {
+                ship.location.getFacingTo(target.location)
+            } else {
+                // With no target, fallback to ship.facing
+                ship.facing
+            }
+        }
+
+
+
         private fun evaluateSituation(): Boolean {
             // If interval elapsed, we are going to do a few checks to determine if we should activate:
             // 1. if we have enemies within system range but outside of weighted effective weapon range (excluding wings) - activate
@@ -162,12 +183,20 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             // If any criteria is met, we will do an early return and avoid evaluating the rest of them
             // Otherwise - do nothing for this evaluation cycle
 
+            // Since this system is installable on child modules, there's no reason to force them all to 'fire' directly ahead
+            val facingToUseForEvaluation = if(ship.isRootModule()) {
+                // For root modules, which the player drives, we cannot 'angle' the system so always use facing
+                ship.facing
+            } else {
+                // If this ship is not the root of the ship, then either use facing to target or this ship's facing
+                getFacingToTarget()
+            }
+
             val evaluationArc = generateArc(
                 center = ship.location,
-                //TODO replace this with different 'facing' for child modules, so just let them aim at their targets
-                userCentricFacing = remapAngleToTrigonometricCoordinateSystem(ship.facing),
+                userCentricFacing = remapAngleToTrigonometricCoordinateSystem(facingToUseForEvaluation),
                 generateParticles = false,
-                particleSpacing = 100f,
+                particleSpacing = null,
                 arcWidth = getScaledArcWidth(member, mods, exoticData),
                 fullRange = getRadiusAmount(member, mods, exoticData)
             )
@@ -363,11 +392,19 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         }
 
         private fun showVisualFlair() {
-            // generate dots
+            // We will allow the child modules to 'target' with their fishing hook system,
+            // however the root (drivable) module will be forced to always shoot straight ahead
+            val facingToUseForActivation = if(ship.isRootModule()) {
+                // For root modules, which the player drives, we cannot 'angle' the system so always use facing
+                ship.facing
+            } else {
+                // If this ship is not the root of the ship, then either use facing to target or this ship's facing
+                getFacingToTarget()
+            }
+
             visualArc = generateArc(
                 center = ship.location,
-                //TODO replace this with different 'facing' for child modules, so just let them aim at their targets
-                userCentricFacing = remapAngleToTrigonometricCoordinateSystem(ship.facing),
+                userCentricFacing = remapAngleToTrigonometricCoordinateSystem(facingToUseForActivation),
                 generateParticles = true,
                 particleSpacing = 100f,
                 arcWidth = getScaledArcWidth(member, mods, exoticData),

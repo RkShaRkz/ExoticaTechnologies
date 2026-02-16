@@ -436,6 +436,16 @@ fun ShipAPI.getRootModule(): ShipAPI {
 }
 
 /**
+ * Whether this module is the root module of the ship. Should always return true for single module ships.
+ *
+ * @return whether [this] is the root module of the whole ship
+ */
+fun ShipAPI.isRootModule(): Boolean {
+    val rootModuleShip = this.getRootModule()
+    return this == rootModuleShip
+}
+
+/**
  * Returns whether the [ship] is a multi-module (or belongs to a multi-module) ship.
  * Internally calls [getAllShipSections] so you might not want to call this in every frame
  *
@@ -744,6 +754,18 @@ fun Vector2f.getFacing(): Float {
     val actualFacing = (facingDegrees + 360f) % 360f
 
     return actualFacing.toFloat()
+}
+
+/**
+ * Calculates the facing of [this] to 'directly look at' [otherVector]
+ *
+ * @param otherVector the other vector, to get facing to
+ * @return the facing for [this] to 'directly look at' [otherVector], in degrees, normalized in [0,360) range
+ *
+ * @see getFacing
+ */
+fun Vector2f.getFacingTo(otherVector: Vector2f): Float {
+    return this.getDirectionVectorTo(otherVector).getFacing()
 }
 
 /**
