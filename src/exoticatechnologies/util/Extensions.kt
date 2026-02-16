@@ -442,7 +442,7 @@ fun ShipAPI.getRootModule(): ShipAPI {
  */
 fun ShipAPI.isRootModule(): Boolean {
     val rootModuleShip = this.getRootModule()
-    return this == rootModuleShip
+    return this.hullSpec.hullId == rootModuleShip.hullSpec.hullId
 }
 
 /**
