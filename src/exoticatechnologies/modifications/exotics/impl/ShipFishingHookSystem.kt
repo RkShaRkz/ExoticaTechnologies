@@ -139,13 +139,28 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             // If any criteria is met, we will do an early return and avoid evaluating the rest of them
             // Otherwise - do nothing for this evaluation cycle
 
-            //TODO create an 'evaluation arc' since that one should be used to check most of these points
-            val shipsInRadius = getPotentialTargets(member, mods, exoticData)
+            val userCentricFacing = remapAngleToTrigonometricCoordinateSystem(ship.facing)
+            val arcWidth = getScaledArcWidth(member, mods, exoticData)
+            val halfArc = arcWidth / 2
+            val evaluationArc = LineUtils.generateArc(
+                origin = ship.location,
+                facing = userCentricFacing,
+                // since we want to have things like (-15,15) we need to multiply by -1
+                leftOffset = halfArc.withSign(-1f),
+                rightOffset = halfArc,
+                length = getRadiusAmount(member, mods, exoticData),
+                degreeType = AngleDegreeType.USER_CENTRIC,
+                generateParticles = true,
+                particleSegments = null,
+                particleSpacing = 100f
+            )
+            val shipsInArcRadius = getPotentialTargets(member, mods, exoticData)
                 .filter { target -> target.isFighter.not() }
+                .filter { evaluationArc.isWithinArc(it) }
 
             // Calculate our 'most damaging' range and see how many targets are within range but outside most damaging range
             val largestDamageRange = getLargestDamageContributingRange(ship)
-            val shipsWithinRangeOutsideOfBestRange = shipsInRadius.filter { targetShip ->
+            val shipsWithinRangeOutsideOfBestRange = shipsInArcRadius.filter { targetShip ->
                 val distanceToUs = targetShip.distanceToShip(ship)
 
                 return@filter distanceToUs > largestDamageRange
@@ -156,8 +171,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             if (haveShipsOutsideOfMostDamagingRange) return true
 
             // In case we did not return, lets start working on criteria 2 - majority of ships moving away
-            val enemyShipCount = shipsInRadius.count()
-            val enemyShipsRunningAway = shipsInRadius
+            val enemyShipCount = shipsInArcRadius.count()
+            val enemyShipsRunningAway = shipsInArcRadius
                 .map { enemyShip -> enemyShip.isMovingAwayFromShip(ship) }
                 .filter { it }
                 .count()
@@ -166,16 +181,14 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             if (enemyShipsRunningAway > enemyShipCount / 2) return true
 
             // In case we did not return, lets work on criteria 3 - vulnerable ships detected
-            val vulnerableShipsInRange = shipsInRadius.filter { enemyShip -> isVulnerable(enemyShip) }
+            val vulnerableShipsInRange = shipsInArcRadius.filter { enemyShip -> isVulnerable(enemyShip) }
 
             // Criteria 3 - there are vulnerable ships present
             val anyVulnerableShipsInRange = vulnerableShipsInRange.isNotEmpty()
             if (anyVulnerableShipsInRange) return true
 
             // In case we did not return, try the last case - "more allies than enemies"
-            //TODO this is flawed, because the fishing hook has a huge range, so checking whether allies in e.g. 7500 range
-            // are more numerous than the few we will pull in doesn't quite make sense.... limit to 2000 or so.
-            val alliesInRange = CombatUtils.getShipsWithinRange(ship.location, getRadiusAmount(member, mods, exoticData))
+            val alliesInRange = CombatUtils.getShipsWithinRange(ship.location, ALLIES_CHECK_RANGE)
                 // make sure it only contains allies
                 .filter { filterShip -> filterShip.owner == ship.owner}
                 // make sure we're not targetting ourselves
@@ -186,7 +199,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 .filter { target -> target.isFighter.not() }
 
             // Criteria 4 - there are more allied ships than potential pulled-in enemy ships
-            val enemyShips = shipsInRadius.count()  //TODO shipsInArc
+            val enemyShips = shipsInArcRadius.count()
             val allyShips = alliesInRange.count()
             if (allyShips >= enemyShips) return true
 
@@ -301,7 +314,6 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                     arc.drawParticles(
                         amount = amount,
                         particleSize = getShipDependantParticleSize(ship = ship),
-//                        particlesToDrawPerInterval = 6,
                         particleColors = listOf(
                             Color.WHITE.brighter().brighter(),
                             Color.WHITE,
@@ -311,7 +323,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                             Color.DARK_GRAY.darker().darker()
                         ),
                         particleDrawMode = ParticleDrawMode.WHOLE_ARM,
-                        continuousDrain = null//ContinuousDrainMode.ITERATION_BASED_MODE
+                        continuousDrain = null
                     )
 
                     // If we finished, get rid of this arc
@@ -319,7 +331,6 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                         onArcFinished(arc)
                     }
                 }
-                //TODO need to draw visuals on each target...
                 targetsVisualsList.forEach { visual ->
                     visual.drawParticles(
                         amount = amount,
@@ -335,9 +346,6 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         }
 
         private fun showVisualFlair() {
-            // Bump the limit temporarily
-            //TODO do i even have to touch the limits for this one?
-//            EngineParticlePainter.ParticleLimits.setParticleLimitForParticleType(ParticleType.SMOOTH_PARTICLE, 4000)
             // generate dots
             val center = ship.location
             val fullRange = getRadiusAmount(member, mods, exoticData)
@@ -355,7 +363,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 degreeType = AngleDegreeType.USER_CENTRIC,
                 generateParticles = true,
                 particleSegments = null,
-                particleSpacing = 100f  //TODO tweak this
+                particleSpacing = 100f
             )
         }
 
@@ -386,7 +394,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 end = destinationShip.location,
                 generateParticles = true,
                 particleSegments = null,
-                particleSpacing = 75f
+                particleSpacing = 75f,
+                particleDrawInterval = 0.25f
             )
             // And add it to the list of visuals to play
             targetsVisualsList.add(pullInVisual)
@@ -434,15 +443,6 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                             // So we will scale the strength * factor with negative effect mult, perhaps too harsh but it is what it is
                             val negativeMomentum = getReelInStrengthForShip(ship) * getNegativeMult(member, mods, exoticData)
 
-//                            ForceApplier.applyMomentum(
-//                                entity = ship.getRootModule(),
-//                                pointOfImpact = collision,
-//                                direction = Vector2f.sub(nearbyShip.location, ship.location, null),
-//                                momentum = negativeMomentum,
-//                                elasticCollision = false,
-//                                modifyAngularVelocity = false,
-//                                applyImplicitMomentumScaling = true
-//                            )
                             pullInShip(
                                 pullInMomentum = negativeMomentum,
                                 shipToPull = ship,
@@ -469,6 +469,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         private const val PULL_IN_STRENGTH = 1000f
         private const val COOLDOWN_DURATION = 30f
         private const val BASE_CONE_WIDTH = 30f
+        private const val ALLIES_CHECK_RANGE = 2000f
 
         private const val MIN_PARTICLE_SIZE = 16f
         private const val MAX_PARTICLE_SIZE = 64f
