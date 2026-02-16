@@ -619,7 +619,7 @@
 	"ShipFishingHookSystem": {
 		"description": "A focused beam of exotic energy projects outward like a luminous tether, forming a filament that latches onto distant targets. Once anchored, the filament contracts with irresistible force, reeling the caught object toward the ship as if hooked by light itself. The void shimmers with polarized arcs as the tether strains, then dissipates once its prey is secured.",
 		"tooltip": "Fires a filament of energy that hooks onto an enemy ship within range and pulls it steadily toward the user.",
-		"longDescription": "When activated, the system emits a coherent filament of polarized energy extending up to *${radius} radius* from the ship. The filament latches onto all enemy ships caught in a *${arc_width}-degrees* arc and pulls them inward with immense momentum strength. The tether remains active until the target is reeled in or the effect dissipates. The system takes *${cooldown_time} seconds* to recharge. =Works only on module(s) where it's installed=. =Installable only on the main module=."
+		"longDescription": "When activated, the system emits a coherent filament of polarized energy extending up to *${radius} radius* from the ship. The filament latches onto all enemy ships caught in a *${arc_width}-degrees* arc and pulls them inward with immense momentum strength. The tether remains active until the target is reeled in or the effect dissipates. The system takes *${cooldown_time} seconds* to recharge. =Works only on module(s) where it's installed=."
 	}
 
 }

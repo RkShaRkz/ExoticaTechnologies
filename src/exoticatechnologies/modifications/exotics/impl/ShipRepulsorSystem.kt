@@ -42,6 +42,8 @@ class ShipRepulsorSystem(key: String, settings: JSONObject) : Exotic(key, settin
         return true
     }
 
+    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
+
     override fun modifyToolTip(tooltip: TooltipMakerAPI, title: UIComponentAPI, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData, expand: Boolean) {
         if (expand) {
             StringUtils.getTranslation(key, "longDescription")
