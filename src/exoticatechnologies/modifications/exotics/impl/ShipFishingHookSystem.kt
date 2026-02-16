@@ -162,21 +162,6 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             // If any criteria is met, we will do an early return and avoid evaluating the rest of them
             // Otherwise - do nothing for this evaluation cycle
 
-            val userCentricFacing = remapAngleToTrigonometricCoordinateSystem(ship.facing)
-            val arcWidth = getScaledArcWidth(member, mods, exoticData)
-            val halfArc = arcWidth / 2
-//            val evaluationArc = LineUtils.generateArc(
-//                origin = ship.location,
-//                facing = userCentricFacing,
-                // since we want to have things like (-15,15) we need to multiply by -1
-//                leftOffset = halfArc.withSign(-1f),
-//                rightOffset = halfArc,
-//                length = getRadiusAmount(member, mods, exoticData),
-//                degreeType = AngleDegreeType.USER_CENTRIC,
-//                generateParticles = true,
-//                particleSegments = null,
-//                particleSpacing = 100f
-//            )
             val evaluationArc = generateArc(
                 center = ship.location,
                 //TODO replace this with different 'facing' for child modules, so just let them aim at their targets
