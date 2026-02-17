@@ -163,8 +163,8 @@ abstract class Modification(val key: String, val settings: JSONObject) {
     }
 
     /**
-     * Whether the modification is installable in non-main modules for multi-module ships,
-     * and whether it should apply it's effects to all other modules.
+     * Whether the modification is installable in non-main modules for multi-module ships.
+     * Whether it should apply it's effects to all other modules depends on [shouldShareEffectToOtherModules]
      *
      * This version is called in [ExoticaTechHM]'s [BaseHullMod.applyEffectsAfterShipCreation]
      *
