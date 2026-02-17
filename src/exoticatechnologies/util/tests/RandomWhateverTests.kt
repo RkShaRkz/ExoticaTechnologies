@@ -1,15 +1,15 @@
 package exoticatechnologies.util.tests
 
 import com.fs.starfarer.api.combat.*
-import exoticatechnologies.util.calculateVelocityVector
-import exoticatechnologies.util.getVelocityVector
-import exoticatechnologies.util.remapAngleToTrigonometricCoordinateSystem
+import exoticatechnologies.util.*
+import exoticatechnologies.util.tests.utils.ShipAPIUtils
 import exoticatechnologies.util.tests.utils.WeaponAPIUtils.createAnonymousWeaponAPI
 import org.junit.Assert
 import org.junit.Test
 import org.junit.experimental.runners.Enclosed
 import org.junit.runner.RunWith
 import org.lwjgl.util.vector.Vector2f
+import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -193,6 +193,100 @@ class RandomWhateverTests {
 
             val remappedUserCentricZeroAngle = remapAngleToTrigonometricCoordinateSystem(userCentricZeroAngle)
             Assert.assertEquals("UserCentric to Trigonometric remapping broken - should have been 90", expectedConvertedAngle2, remappedUserCentricZeroAngle)
+        }
+    }
+
+    class FacingTests {
+        @Test
+        fun `compare normal facing versus get facing towards vector`() {
+            // Lets start off with a ship at (0,0), facing east (90 trig)
+            // and check facing towards a target that is right (east) of us (10,0)
+
+            val ourShipLocation = Vector2f(0f,0f)
+            val ourShip = ShipAPIUtils.createAnonymousShipAPI(
+                location = ourShipLocation,
+                facing = 90f
+            )
+
+            val targetShip1Location = Vector2f(10f, 0f)
+            val targetShip1 = ShipAPIUtils.createAnonymousShipAPI(
+                location = targetShip1Location,
+                facing = 0f
+            )
+
+            val facingTowardsTarget1 = calculateFacingTo(ourShipLocation, targetShip1Location)
+            val angleFromOurToTargetShip1 = ourShip.getAngleDeltaToAnotherShip(targetShip1, true)
+            val expectedFacingTowardsTarget1 = 0f
+            val expectedRotationDeltaTowardsTarget1 = 90f
+
+            // validate that our facing is 90 (trig) and facing towards target is 0 (trig)
+            Assert.assertEquals("Our ship facing should have been 90", 90f, ourShip.facing)
+            Assert.assertEquals("getFacingTo() doesn't work right, should have been 90 for this case", expectedFacingTowardsTarget1, facingTowardsTarget1)
+            Assert.assertEquals("ShipAPI.getAngleToAnotherShip() doesn't work right, should have been 90 for this case", expectedRotationDeltaTowardsTarget1, angleFromOurToTargetShip1)
+
+            //----------------------------------------------------------------------
+            // now, lets see what is going on when the target is below (south of) us
+            //----------------------------------------------------------------------
+
+            val targetShip2Location = Vector2f(0f, -10f)
+            val targetShip2 = ShipAPIUtils.createAnonymousShipAPI(
+                location = targetShip2Location,
+                facing = 0f
+            )
+
+            val facingTowardsTarget2 = calculateFacingTo(ourShipLocation, targetShip2Location)
+            val angleFromOurToTargetShip2 = ourShip.getAngleDeltaToAnotherShip(targetShip2, true)
+            val expectedFacingTowardsTarget2 = 270f //south is 270 trig
+            val expectedRotationDeltaTowardsTarget2 = 180f  // since we're looking north and should turn south, that'd be 180
+
+            // validate that our facing is 90 (trig) and facing towards target is 0 (trig)
+            Assert.assertEquals("getFacingTo() doesn't work right, should have been 270 for this case", expectedFacingTowardsTarget2, facingTowardsTarget2)
+            // Since the angle will turn out to be either 180 or -180, we will abs it so the test isn't flaky
+            // and it doesn't really matter if the ship thinks he needs to turn to the left or to the right - only that it should flip around
+            Assert.assertEquals("ShipAPI.getAngleToAnotherShip() doesn't work right, should have been 180 for this case", expectedRotationDeltaTowardsTarget2, abs(angleFromOurToTargetShip2))
+
+            //----------------------------------------------------------------------
+            // now, lets see what is going on when the target is left (west) of us
+            //----------------------------------------------------------------------
+
+            val targetShip3Location = Vector2f(-100f, 0f)
+            val targetShip3 = ShipAPIUtils.createAnonymousShipAPI(
+                location = targetShip3Location,
+                facing = 0f
+            )
+
+            val facingTowardsTarget3 = calculateFacingTo(ourShipLocation, targetShip3Location)
+            val angleFromOurToTargetShip3 = ourShip.getAngleDeltaToAnotherShip(targetShip3, true)
+            val expectedFacingTowardsTarget3 = 180f //west is 180 trig
+            val expectedRotationDeltaTowardsTarget3 = -90f  // since we're looking north and should turn west, that'd be -90
+
+            // validate that facing towards target is 180 (trig)
+            Assert.assertEquals("getFacingTo() doesn't work right, should have been 180 for this case", expectedFacingTowardsTarget3, facingTowardsTarget3)
+            Assert.assertEquals("ShipAPI.getAngleToAnotherShip() doesn't work right, should have been -90 for this case", expectedRotationDeltaTowardsTarget3, angleFromOurToTargetShip3)
+
+            //----------------------------------------------------------------------
+            // now, lets see what is going on when the target is above (north of) us
+            //----------------------------------------------------------------------
+
+            val targetShip4Location = Vector2f(0f, 100f)
+            val targetShip4 = ShipAPIUtils.createAnonymousShipAPI(
+                location = targetShip4Location,
+                facing = 0f
+            )
+
+            val facingTowardsTarget4 = calculateFacingTo(ourShipLocation, targetShip4Location)
+            val angleFromOurToTargetShip4 = ourShip.getAngleDeltaToAnotherShip(targetShip4, true)
+            val expectedFacingTowardsTarget4 = 90f //north is 90 trig
+            val expectedRotationDeltaTowardsTarget4 = 0f  // since we're looking north and should turn north, that'd be -0
+
+            // validate that facing towards target is 90 (trig)
+            Assert.assertEquals("getFacingTo() doesn't work right, should have been 90 for this case", expectedFacingTowardsTarget4, facingTowardsTarget4)
+            Assert.assertEquals("ShipAPI.getAngleToAnotherShip() doesn't work right, should have been 0 for this case", expectedRotationDeltaTowardsTarget4, angleFromOurToTargetShip4)
+        }
+
+        @Test
+        fun `see differences between calculateFacingTo, getAngleToAnotherShip and getAbsoluteAngleToAnotherShip`() {
+
         }
     }
 

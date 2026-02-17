@@ -15,7 +15,6 @@ import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.util.reflect.ReflectionUtils
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
-import org.lazywizard.lazylib.VectorUtils
 import org.lwjgl.util.vector.Vector
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
@@ -126,25 +125,36 @@ fun ShipAPI.getForwardVector(): Vector2f {
 
 /**
  * Returns the angle (in degrees) between this ship's Forward Vector and *anotherShip*
- * @return the difference in degrees
+ *
+ * @param anotherShip the other ship to which we should calculate our "turn delta"
+ * @param useStrictMath whether to use strict math or fall back to [FastTrigUtils]. Defaults to **false**
+ *
+ * @return the difference in degrees, normalized in [0,360) range
  * @see [ShipAPI.getForwardVector]
  */
-fun ShipAPI.getAngleToAnotherShip(anotherShip: ShipAPI): Float {
-    val targetDirectionAngle = VectorUtils.getAngle(this.location, anotherShip.location)
-    val myForwardVector = this.getForwardVector()
-    val myAngle = VectorUtils.getAngle(myForwardVector, anotherShip.location)
-    val differenceInDegrees = (myAngle - targetDirectionAngle)
+fun ShipAPI.getAngleDeltaToAnotherShip(anotherShip: ShipAPI, useStrictMath: Boolean = false): Float {
+    // Since the previous implementation didn't work and unnecessarily involved forwardVector
+    // lets try something simpler:
+    // - calculate necessary facing from our ship to anotherShip
+    // - calculate the difference in angles by subtracting necessary facing from our facing
 
-    return differenceInDegrees
+    val targetDirectionAngle = this.location.getFacingTo(anotherShip.location, useStrictMath = useStrictMath)
+    val differenceInAngles = this.facing - targetDirectionAngle
+
+    return differenceInAngles
 }
 
 /**
- * Returns the absolue angle (in degrees) between this ship and *anotherShip*
+ * Returns the absolute angle (in degrees) between this ship and *anotherShip*
+ *
+ * @param anotherShip the other ship to which we should calculate our "turn delta"
+ * @param useStrictMath whether to use strict math or fall back to [FastTrigUtils]. Defaults to **false**
+ *
  * @return the difference in degrees, as absolute value
- * @see [ShipAPI.getAngleToAnotherShip]
+ * @see [ShipAPI.getAngleDeltaToAnotherShip]
  */
-fun ShipAPI.getAbsoluteAngleToAnotherShip(anotherShip: ShipAPI): Float {
-    return this.getAngleToAnotherShip(anotherShip).absoluteValue
+fun ShipAPI.getAbsoluteAngleDeltaToAnotherShip(anotherShip: ShipAPI, useStrictMath: Boolean = false): Float {
+    return this.getAngleDeltaToAnotherShip(anotherShip, useStrictMath = useStrictMath).absoluteValue
 }
 
 /**
@@ -745,9 +755,9 @@ fun Vector2f.crossProduct(otherVector: Vector2f): Float {
  *
  * @return the normalized 'facing' of this vector in a [0,360) range
  */
-fun Vector2f.getFacing(): Float {
+fun Vector2f.getFacing(useFastTrig: Boolean = true): Float {
     // Do atan2 to obtain the radians
-    val facingRadians = FastTrigUtils.atan2(this.y, this.x)
+    val facingRadians = if (useFastTrig) { FastTrigUtils.atan2(this.y, this.x) } else { atan2(this.y.toDouble(), this.x.toDouble()) }
     // Convert to degrees
     val facingDegrees = Math.toDegrees(facingRadians)
     // Normalize to [0, 360] range
@@ -764,8 +774,20 @@ fun Vector2f.getFacing(): Float {
  *
  * @see getFacing
  */
-fun Vector2f.getFacingTo(otherVector: Vector2f): Float {
-    return this.getDirectionVectorTo(otherVector).getFacing()
+fun Vector2f.getFacingTo(otherVector: Vector2f, useStrictMath: Boolean = false): Float {
+    return this.getDirectionVectorTo(otherVector).getFacing(useFastTrig = useStrictMath.not())
+}
+
+/**
+ * Calculates the facing from [sourceVector] to [destinationVector] so that it is position to 'directly look at'
+ *
+ * @param sourceVector the source vector used to calculate facing from
+ * @param destinationVector the vector used to calculate facing to
+ *
+ * @return the facing required for [sourceVector] to 'directly look at' [destinationVector], in degrees, normalized in [0,360) range
+ */
+fun calculateFacingTo(sourceVector: Vector2f, destinationVector: Vector2f): Float {
+    return sourceVector.getFacingTo(destinationVector)
 }
 
 /**
