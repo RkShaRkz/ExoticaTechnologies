@@ -469,7 +469,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         class ChildModuleAimingEvaluator(
             ship: ShipAPI,
             system: ShipFishingHookSystem,
-            magicSubsystem: FishingHookSystem
+            magicSubsystem: FishingHookSystem,
+            val sweepingStep: Int = 15
         ) : AIEvaluator(ship, system, magicSubsystem) {
             override fun evaluate(): EvaluationData {
                 // Since child modules can aim, we need to scan and find the best activation angle,
@@ -479,8 +480,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 var bestAngle = magicSubsystem.getFacingToTarget()
                 var highestScore = 0
 
-                // Sweep the circle
-                for (degree in 0 until 360 step 15) {
+                // Sweep the circle - after some thinking (and a test) I think 'until' is better than '..' due to not repeating the first step again
+                for (degree in 0 until 360 step sweepingStep) {
                     val angle = degree.toFloat()
                     val evaluationArc = magicSubsystem.generateArc(
                         center = evaluatingShip.location,
@@ -509,6 +510,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         }
 
         fun checkCriteria(evaluationArc: LineUtils.ArcSelection): Int {
+            var score = 0
+
             val shipsInArcRadius = magicSubsystem.getPotentialTargets(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
                 .filter { target -> target.isFighter.not() }
                 .filter { evaluationArc.isWithinArc(it) }
@@ -525,7 +528,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             val haveShipsOutsideOfMostDamagingRange = shipsWithinRangeOutsideOfBestRange.isNotEmpty()
             if (haveShipsOutsideOfMostDamagingRange) {
                 // So, most important criteria starts with the biggest base, and each member contributing it is worth the most
-                return 50 + shipsWithinRangeOutsideOfBestRange.size * 5
+                score += 50 + shipsWithinRangeOutsideOfBestRange.size * 5
             }
 
             // In case we did not return, lets start working on criteria 2 - majority of ships moving away
@@ -538,7 +541,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             // Criteria 2 - majority of ships running away
             if (enemyShipsRunningAway > enemyShipCount / 2) {
                 // Second criteria starts with a smaller base and each contributing member is worth *a bit less*
-                return 40 + enemyShipsRunningAway * 4
+                score += 40 + enemyShipsRunningAway * 4
             }
 
             // In case we did not return, lets work on criteria 3 - vulnerable ships detected
@@ -548,7 +551,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             val anyVulnerableShipsInRange = vulnerableShipsInRange.isNotEmpty()
             if (anyVulnerableShipsInRange) {
                 // Third criteria starts from 30, each member worth 3
-                return 30 + vulnerableShipsInRange.size * 3
+                score += 30 + vulnerableShipsInRange.size * 3
             }
 
             // In case we did not return, try the last case - "more allies than enemies"
@@ -567,7 +570,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             val allyShips = alliesInRange.count()
             if (allyShips >= enemyShips && enemyShips != 0) {
                 // This is somewhat special, because both allies and enemies will count for it - each worth 2
-                return 20 + allyShips * 2 + enemyShips * 2
+                score += 20 + allyShips * 2 + enemyShips * 2
             }
 
             // Criteria 5 - there are enemies outside of weapon range, including PD
@@ -582,12 +585,12 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 .count()
             if (enemiesOutsideWeaponRange >= 1) {
                 // Last "bottom of the barrel" criteria, least amount of worth (1)
-                return 10 + enemiesOutsideWeaponRange
+                score += 10 + enemiesOutsideWeaponRange
             }
 
-
-            // None of the criterias were fulfilled so far, return false for this evaluation cycle
-            return 0
+            // Just return the score we accumulated so far, and if it ended up being zero that just means
+            // that none of the criterias were fulfilled so far, so we should return "false" for this evaluation cycle
+            return score
         }
     }
 

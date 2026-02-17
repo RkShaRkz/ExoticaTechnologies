@@ -293,4 +293,19 @@ class RandomWhateverTests {
         }
     }
 
+    /**
+     * Some of these tests are going to be commented-out; some others will be here just because they didn't find a better place to be
+     */
+    class ReallyWhateverTests {
+        @Test
+        fun `difference between zero to 360 using dots and until`() {
+            for(index in 0 until 360 step 15) {
+                println("until index: ${index}")
+            }
+
+            for(index in 0 .. 360 step 15) {
+                println("dots  index: ${index}")
+            }
+        }
+    }
 }
