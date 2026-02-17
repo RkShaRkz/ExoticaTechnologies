@@ -15,7 +15,6 @@ import exoticatechnologies.modifications.exotics.misc.ForceApplier
 import exoticatechnologies.util.*
 import exoticatechnologies.util.drawutils.LineUtils
 import exoticatechnologies.util.drawutils.ParticleDrawMode
-import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
@@ -433,7 +432,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
     ) {
         abstract fun evaluate(): EvaluationData
 
-        fun checkCriteria(evaluationArc: LineUtils.ArcSelection): Boolean {
+        fun checkCriteria(evaluationArc: LineUtils.ArcSelection): Int {
             val shipsInArcRadius = magicSubsystem.getPotentialTargets(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
                 .filter { target -> target.isFighter.not() }
                 .filter { evaluationArc.isWithinArc(it) }
@@ -449,7 +448,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             // Criteria 1 - have ships within range but outside of our most-damaging range
             val haveShipsOutsideOfMostDamagingRange = shipsWithinRangeOutsideOfBestRange.isNotEmpty()
             if (haveShipsOutsideOfMostDamagingRange) {
-                return true
+                // So, most important criteria starts with the biggest base, and each member contributing it is worth the most
+                return 50 + shipsWithinRangeOutsideOfBestRange.size * 5
             }
 
             // In case we did not return, lets start working on criteria 2 - majority of ships moving away
@@ -461,7 +461,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
 
             // Criteria 2 - majority of ships running away
             if (enemyShipsRunningAway > enemyShipCount / 2) {
-                return true
+                // Second criteria starts with a smaller base and each contributing member is worth *a bit less*
+                return 40 + enemyShipsRunningAway * 4
             }
 
             // In case we did not return, lets work on criteria 3 - vulnerable ships detected
@@ -470,7 +471,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             // Criteria 3 - there are vulnerable ships present
             val anyVulnerableShipsInRange = vulnerableShipsInRange.isNotEmpty()
             if (anyVulnerableShipsInRange) {
-                return true
+                // Third criteria starts from 30, each member worth 3
+                return 30 + vulnerableShipsInRange.size * 3
             }
 
             // In case we did not return, try the last case - "more allies than enemies"
@@ -488,7 +490,8 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             val enemyShips = shipsInArcRadius.count()
             val allyShips = alliesInRange.count()
             if (allyShips >= enemyShips && enemyShips != 0) {
-                return true
+                // This is somewhat special, because both allies and enemies will count for it - each worth 2
+                return 20 + allyShips * 2 + enemyShips * 2
             }
 
             // Criteria 5 - there are enemies outside of weapon range, including PD
@@ -502,12 +505,13 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 }
                 .count()
             if (enemiesOutsideWeaponRange >= 1) {
-                return true
+                // Last "bottom of the barrel" criteria, least amount of worth (1)
+                return 10 + enemiesOutsideWeaponRange
             }
 
 
             // None of the criterias were fulfilled so far, return false for this evaluation cycle
-            return false
+            return 0
         }
     }
 
@@ -542,7 +546,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                     fullRange = system.getRadiusAmount(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
                 )
 
-                val result = checkCriteria(evaluationArc)
+                val result = checkCriteria(evaluationArc) > 0
 
                 return EvaluationData(
                     angle = evaluatingShip.facing,
@@ -563,7 +567,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 // So we will start from either ship.target or ship.facing and do a full circle.
 
                 var bestAngle = magicSubsystem.getFacingToTarget()
-                var highestScore = 0f
+                var highestScore = 0
 
                 // Sweep the circle
                 for (degree in 0 until 360 step 15) {
@@ -578,7 +582,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                     )
 
                     // Calculate a score for this specific slice
-                    val score = calculateScoreForArc(evaluationArc)
+                    val score = checkCriteria(evaluationArc)
 
                     if (score > highestScore) {
                         highestScore = score
