@@ -425,12 +425,88 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         if (LOGS_ENABLED) logger.info(logMsg)
     }
 
-    abstract class Evaluator(
+    data class EvaluationData(
+        val angle: Float,
+        val shouldActivate: Boolean
+    )
+
+    sealed class AIEvaluator(
         val evaluatingShip: ShipAPI,
         val system: ShipFishingHookSystem,
         val magicSubsystem: FishingHookSystem
     ) {
         abstract fun evaluate(): EvaluationData
+
+        // classes first, class methods last; abstract will stay above so that they are clearly visible
+
+        class RootModuleEvaluator(
+            ship: ShipAPI,
+            system: ShipFishingHookSystem,
+            magicSubsystem: FishingHookSystem
+        ) : AIEvaluator(ship, system, magicSubsystem) {
+            override fun evaluate(): EvaluationData {
+                // Since root module always shoots straight, his evaluation is easy - always ship.facing
+
+                val evaluationArc = magicSubsystem.generateArc(
+                    center = evaluatingShip.location,
+                    userCentricFacing = remapAngleToTrigonometricCoordinateSystem(evaluatingShip.facing),
+                    generateParticles = false,
+                    particleSpacing = null,
+                    arcWidth = system.getScaledArcWidth(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData),
+                    fullRange = system.getRadiusAmount(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
+                )
+
+                val result = checkCriteria(evaluationArc) > 0
+
+                return EvaluationData(
+                    angle = evaluatingShip.facing,
+                    shouldActivate = result
+                )
+            }
+
+        }
+
+        class ChildModuleAimingEvaluator(
+            ship: ShipAPI,
+            system: ShipFishingHookSystem,
+            magicSubsystem: FishingHookSystem
+        ) : AIEvaluator(ship, system, magicSubsystem) {
+            override fun evaluate(): EvaluationData {
+                // Since child modules can aim, we need to scan and find the best activation angle,
+                // returning the angle that scored best
+                // So we will start from either ship.target or ship.facing and do a full circle.
+
+                var bestAngle = magicSubsystem.getFacingToTarget()
+                var highestScore = 0
+
+                // Sweep the circle
+                for (degree in 0 until 360 step 15) {
+                    val angle = degree.toFloat()
+                    val evaluationArc = magicSubsystem.generateArc(
+                        center = evaluatingShip.location,
+                        userCentricFacing = remapAngleToTrigonometricCoordinateSystem(angle),
+                        generateParticles = false,
+                        particleSpacing = null,
+                        arcWidth = system.getScaledArcWidth(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData),
+                        fullRange = system.getRadiusAmount(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
+                    )
+
+                    // Calculate a score for this specific slice
+                    val score = checkCriteria(evaluationArc)
+
+                    if (score > highestScore) {
+                        highestScore = score
+                        bestAngle = angle
+                    }
+                }
+
+                return EvaluationData(
+                    angle = bestAngle,
+                    shouldActivate = highestScore > 0f
+                )
+            }
+
+        }
 
         fun checkCriteria(evaluationArc: LineUtils.ArcSelection): Int {
             val shipsInArcRadius = magicSubsystem.getPotentialTargets(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
@@ -512,90 +588,6 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
 
             // None of the criterias were fulfilled so far, return false for this evaluation cycle
             return 0
-        }
-    }
-
-    data class EvaluationData(
-        val angle: Float,
-        val shouldActivate: Boolean
-    )
-
-    sealed class AIEvaluator(
-        ship: ShipAPI,
-        system: ShipFishingHookSystem,
-        magicSubsystem: FishingHookSystem
-    ) : Evaluator(
-        evaluatingShip = ship,
-        system = system,
-        magicSubsystem = magicSubsystem
-    ) {
-        class RootModuleEvaluator(
-            ship: ShipAPI,
-            system: ShipFishingHookSystem,
-            magicSubsystem: FishingHookSystem
-        ) : AIEvaluator(ship, system, magicSubsystem) {
-            override fun evaluate(): EvaluationData {
-                // Since root module always shoots straight, his evaluation is easy - always ship.facing
-
-                val evaluationArc = magicSubsystem.generateArc(
-                    center = evaluatingShip.location,
-                    userCentricFacing = remapAngleToTrigonometricCoordinateSystem(evaluatingShip.facing),
-                    generateParticles = false,
-                    particleSpacing = null,
-                    arcWidth = system.getScaledArcWidth(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData),
-                    fullRange = system.getRadiusAmount(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
-                )
-
-                val result = checkCriteria(evaluationArc) > 0
-
-                return EvaluationData(
-                    angle = evaluatingShip.facing,
-                    shouldActivate = result
-                )
-            }
-
-        }
-
-        class ChildModuleAimingEvaluator(
-            ship: ShipAPI,
-            system: ShipFishingHookSystem,
-            magicSubsystem: FishingHookSystem
-        ) : AIEvaluator(ship, system, magicSubsystem) {
-            override fun evaluate(): EvaluationData {
-                // Since child modules can aim, we need to scan and find the best activation angle,
-                // returning the angle that scored best
-                // So we will start from either ship.target or ship.facing and do a full circle.
-
-                var bestAngle = magicSubsystem.getFacingToTarget()
-                var highestScore = 0
-
-                // Sweep the circle
-                for (degree in 0 until 360 step 15) {
-                    val angle = degree.toFloat()
-                    val evaluationArc = magicSubsystem.generateArc(
-                        center = evaluatingShip.location,
-                        userCentricFacing = remapAngleToTrigonometricCoordinateSystem(angle),
-                        generateParticles = false,
-                        particleSpacing = null,
-                        arcWidth = system.getScaledArcWidth(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData),
-                        fullRange = system.getRadiusAmount(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
-                    )
-
-                    // Calculate a score for this specific slice
-                    val score = checkCriteria(evaluationArc)
-
-                    if (score > highestScore) {
-                        highestScore = score
-                        bestAngle = angle
-                    }
-                }
-
-                return EvaluationData(
-                    angle = bestAngle,
-                    shouldActivate = highestScore > 0f
-                )
-            }
-
         }
     }
 
