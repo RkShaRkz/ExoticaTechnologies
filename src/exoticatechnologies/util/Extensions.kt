@@ -220,7 +220,20 @@ fun ShipAPI.isMovingAwayFromShip(otherShip: ShipAPI): Boolean {
     val toOtherShip = otherShip.location.sub(this.location)
     val dot = Vector2f.dot(otherShip.velocity, toOtherShip)
     return dot > 0f
+}
 
+/**
+ * Calculates the facing [this] should have to "directly look at" [otherShip].
+ *
+ * @param otherShip the other ship we should calculate our facing to, to "directly look at" it
+ * @param useStrictMath whether to use strict math or fall back to [FastTrigUtils]. Defaults to **false**
+ *
+ *
+ * @see ShipAPI.getAngleDeltaToAnotherShip
+ * @see Vector2f.getFacingTo
+ */
+fun ShipAPI.getFacingTo(otherShip: ShipAPI, useStrictMath: Boolean = false): Float {
+    return this.location.getFacingTo(otherShip.location, useStrictMath = useStrictMath)
 }
 
 /**

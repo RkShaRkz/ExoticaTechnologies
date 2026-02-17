@@ -215,6 +215,7 @@ class RandomWhateverTests {
             )
 
             val facingTowardsTarget1 = calculateFacingTo(ourShipLocation, targetShip1Location)
+            val shipFacingTowardsTarget1 = ourShip.getFacingTo(targetShip1)
             val angleFromOurToTargetShip1 = ourShip.getAngleDeltaToAnotherShip(targetShip1, true)
             val expectedFacingTowardsTarget1 = 0f
             val expectedRotationDeltaTowardsTarget1 = 90f
@@ -222,7 +223,8 @@ class RandomWhateverTests {
             // validate that our facing is 90 (trig) and facing towards target is 0 (trig)
             Assert.assertEquals("Our ship facing should have been 90", 90f, ourShip.facing)
             Assert.assertEquals("getFacingTo() doesn't work right, should have been 90 for this case", expectedFacingTowardsTarget1, facingTowardsTarget1)
-            Assert.assertEquals("ShipAPI.getAngleToAnotherShip() doesn't work right, should have been 90 for this case", expectedRotationDeltaTowardsTarget1, angleFromOurToTargetShip1)
+            Assert.assertEquals("ShipAPI.getFacingTo() doesn't work right, should have been 90 for this case", expectedFacingTowardsTarget1, shipFacingTowardsTarget1)
+            Assert.assertEquals("ShipAPI.getAngleDeltaToAnotherShip() doesn't work right, should have been 90 for this case", expectedRotationDeltaTowardsTarget1, angleFromOurToTargetShip1)
 
             //----------------------------------------------------------------------
             // now, lets see what is going on when the target is below (south of) us
@@ -235,15 +237,17 @@ class RandomWhateverTests {
             )
 
             val facingTowardsTarget2 = calculateFacingTo(ourShipLocation, targetShip2Location)
+            val shipFacingTowardsTarget2 = ourShip.getFacingTo(targetShip2)
             val angleFromOurToTargetShip2 = ourShip.getAngleDeltaToAnotherShip(targetShip2, true)
             val expectedFacingTowardsTarget2 = 270f //south is 270 trig
             val expectedRotationDeltaTowardsTarget2 = 180f  // since we're looking north and should turn south, that'd be 180
 
             // validate that our facing is 90 (trig) and facing towards target is 0 (trig)
             Assert.assertEquals("getFacingTo() doesn't work right, should have been 270 for this case", expectedFacingTowardsTarget2, facingTowardsTarget2)
+            Assert.assertEquals("ShipAPI.getFacingTo() doesn't work right, should have been 270 for this case", expectedFacingTowardsTarget2, shipFacingTowardsTarget2)
             // Since the angle will turn out to be either 180 or -180, we will abs it so the test isn't flaky
             // and it doesn't really matter if the ship thinks he needs to turn to the left or to the right - only that it should flip around
-            Assert.assertEquals("ShipAPI.getAngleToAnotherShip() doesn't work right, should have been 180 for this case", expectedRotationDeltaTowardsTarget2, abs(angleFromOurToTargetShip2))
+            Assert.assertEquals("ShipAPI.getAngleDeltaToAnotherShip() doesn't work right, should have been 180 for this case", expectedRotationDeltaTowardsTarget2, abs(angleFromOurToTargetShip2))
 
             //----------------------------------------------------------------------
             // now, lets see what is going on when the target is left (west) of us
@@ -256,13 +260,15 @@ class RandomWhateverTests {
             )
 
             val facingTowardsTarget3 = calculateFacingTo(ourShipLocation, targetShip3Location)
+            val shipFacingTowardsTarget3 = ourShip.getFacingTo(targetShip3)
             val angleFromOurToTargetShip3 = ourShip.getAngleDeltaToAnotherShip(targetShip3, true)
             val expectedFacingTowardsTarget3 = 180f //west is 180 trig
             val expectedRotationDeltaTowardsTarget3 = -90f  // since we're looking north and should turn west, that'd be -90
 
             // validate that facing towards target is 180 (trig)
             Assert.assertEquals("getFacingTo() doesn't work right, should have been 180 for this case", expectedFacingTowardsTarget3, facingTowardsTarget3)
-            Assert.assertEquals("ShipAPI.getAngleToAnotherShip() doesn't work right, should have been -90 for this case", expectedRotationDeltaTowardsTarget3, angleFromOurToTargetShip3)
+            Assert.assertEquals("ShipAPI.getFacingTo() doesn't work right, should have been 180 for this case", expectedFacingTowardsTarget3, shipFacingTowardsTarget3)
+            Assert.assertEquals("ShipAPI.getAngleDeltaToAnotherShip() doesn't work right, should have been -90 for this case", expectedRotationDeltaTowardsTarget3, angleFromOurToTargetShip3)
 
             //----------------------------------------------------------------------
             // now, lets see what is going on when the target is above (north of) us
@@ -275,18 +281,15 @@ class RandomWhateverTests {
             )
 
             val facingTowardsTarget4 = calculateFacingTo(ourShipLocation, targetShip4Location)
+            val shipFacingTowardsTarget4 = ourShip.getFacingTo(targetShip4)
             val angleFromOurToTargetShip4 = ourShip.getAngleDeltaToAnotherShip(targetShip4, true)
             val expectedFacingTowardsTarget4 = 90f //north is 90 trig
             val expectedRotationDeltaTowardsTarget4 = 0f  // since we're looking north and should turn north, that'd be -0
 
             // validate that facing towards target is 90 (trig)
             Assert.assertEquals("getFacingTo() doesn't work right, should have been 90 for this case", expectedFacingTowardsTarget4, facingTowardsTarget4)
-            Assert.assertEquals("ShipAPI.getAngleToAnotherShip() doesn't work right, should have been 0 for this case", expectedRotationDeltaTowardsTarget4, angleFromOurToTargetShip4)
-        }
-
-        @Test
-        fun `see differences between calculateFacingTo, getAngleToAnotherShip and getAbsoluteAngleToAnotherShip`() {
-
+            Assert.assertEquals("ShipAPI.getFacingTo() doesn't work right, should have been 90 for this case", expectedFacingTowardsTarget4, shipFacingTowardsTarget4)
+            Assert.assertEquals("ShipAPI.getAngleDeltaToAnotherShip() doesn't work right, should have been 0 for this case", expectedRotationDeltaTowardsTarget4, angleFromOurToTargetShip4)
         }
     }
 
