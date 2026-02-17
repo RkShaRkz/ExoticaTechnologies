@@ -106,17 +106,6 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         return COOLDOWN_DURATION * getNegativeMult(member, mods, exoticData)
     }
 
-    //TODO delete this, this is just for debugging
-    override fun advanceInCombatUnpaused(ship: ShipAPI, amount: Float, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData) {
-        super.advanceInCombatUnpaused(ship, amount, member, mods, exoticData)
-        exoticatechnologies.util.log(
-            logMsg = "[AdvanceInCombatUnpaused] IS this ship root module ? ${ship.isRootModule()}, ship.name: ${ship.name}, ship.facing: ${ship.facing}, ship.id: ${ship.id}",
-            logger = logger,
-            logLevel = Level.INFO
-        )
-    }
-
-
     inner class FishingHookSystem(
         ship: ShipAPI,
         val member: FleetMemberAPI,
@@ -127,6 +116,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         private val activationIntervalUtil = IntervalUtil(2.95f, 3.05f)
         private var visualArc: LineUtils.ArcSelection? = null
         private val targetsVisualsList = mutableListOf<LineUtils.StraightLine>()
+        private var activationAngle: Float = ship.facing
 
         override fun getBaseActiveDuration() = 1f
 
@@ -142,7 +132,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             }
         }
 
-        private fun generateArc(
+        fun generateArc(
             center: Vector2f,
             userCentricFacing: Float,
             generateParticles: Boolean,
@@ -173,7 +163,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         /**
          * Method that either returns the facing to this ship's target, or fallbacks to [ShipAPI.getFacing] if there is no target
          */
-        private fun getFacingToTarget(): Float {
+        fun getFacingToTarget(): Float {
             val target = getTarget()
 
             return if (target != null) {
@@ -194,138 +184,23 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             // If any criteria is met, we will do an early return and avoid evaluating the rest of them
             // Otherwise - do nothing for this evaluation cycle
 
-            // Since this system is installable on child modules, there's no reason to force them all to 'fire' directly ahead
-            //TODO break this up into two evaluators, one for root module and another one that can aim for child modules ...
-            val facingToUseForEvaluation = if(ship.isRootModule()) {
-                // For root modules, which the player drives, we cannot 'angle' the system so always use facing
-                ship.facing
+            val evaluator = if (ship.isRootModule()) {
+                AIEvaluator.RootModuleEvaluator(
+                    ship = ship,
+                    system = this@ShipFishingHookSystem,
+                    magicSubsystem = this@FishingHookSystem
+                )
             } else {
-                // If this ship is not the root of the ship, then either use facing to target or this ship's facing
-                getFacingToTarget()
-            }
-            exoticatechnologies.util.log(
-                logMsg = "[EVALUATION] IS this ship root module ? ${ship.isRootModule()}, ship.name: ${ship.name}, ship.facing: ${ship.facing}, ship.id: ${ship.id}, facingToUseForEvaluation: ${facingToUseForEvaluation}",
-                logger = logger,
-                logLevel = Level.INFO
-            )
-
-            val evaluationArc = generateArc(
-                center = ship.location,
-                userCentricFacing = remapAngleToTrigonometricCoordinateSystem(facingToUseForEvaluation),
-                generateParticles = false,
-                particleSpacing = null,
-                arcWidth = getScaledArcWidth(member, mods, exoticData),
-                fullRange = getRadiusAmount(member, mods, exoticData)
-            )
-            val shipsInArcRadius = getPotentialTargets(member, mods, exoticData)
-                .filter { target -> target.isFighter.not() }
-                .filter { evaluationArc.isWithinArc(it) }
-
-            // Calculate our 'most damaging' range and see how many targets are within range but outside most damaging range
-            val largestDamageRange = ExoticaCombatUtils.getLargestDamageContributingRange(ship)
-            val shipsWithinRangeOutsideOfBestRange = shipsInArcRadius.filter { targetShip ->
-                val distanceToUs = targetShip.distanceToShip(ship)
-
-                return@filter distanceToUs > largestDamageRange
-            }
-
-            // Criteria 1 - have ships within range but outside of our most-damaging range
-            val haveShipsOutsideOfMostDamagingRange = shipsWithinRangeOutsideOfBestRange.isNotEmpty()
-            if (haveShipsOutsideOfMostDamagingRange) {
-                exoticatechnologies.util.log(
-                    logMsg = "[EVALUATION] criteria 1 triggering activation",
-                    logger = logger,
-                    logLevel = Level.INFO
+                AIEvaluator.ChildModuleAimingEvaluator(
+                    ship = ship,
+                    system = this@ShipFishingHookSystem,
+                    magicSubsystem = this@FishingHookSystem
                 )
-                return true
             }
 
-            // In case we did not return, lets start working on criteria 2 - majority of ships moving away
-            val enemyShipCount = shipsInArcRadius.count()
-            val enemyShipsRunningAway = shipsInArcRadius
-                .map { enemyShip -> enemyShip.isMovingAwayFromShip(ship) }
-                .filter { it }
-                .count()
-
-            // Criteria 2 - majority of ships running away
-            if (enemyShipsRunningAway > enemyShipCount / 2) {
-                exoticatechnologies.util.log(
-                    logMsg = "[EVALUATION] criteria 2 triggering activation",
-                    logger = logger,
-                    logLevel = Level.INFO
-                )
-                return true
-            }
-
-            // In case we did not return, lets work on criteria 3 - vulnerable ships detected
-            val vulnerableShipsInRange = shipsInArcRadius.filter { enemyShip -> isVulnerable(enemyShip) }
-
-            // Criteria 3 - there are vulnerable ships present
-            val anyVulnerableShipsInRange = vulnerableShipsInRange.isNotEmpty()
-            if (anyVulnerableShipsInRange) {
-                exoticatechnologies.util.log(
-                    logMsg = "[EVALUATION] criteria 3 triggering activation",
-                    logger = logger,
-                    logLevel = Level.INFO
-                )
-                return true
-            }
-
-            // In case we did not return, try the last case - "more allies than enemies"
-            val alliesInRange = CombatUtils.getShipsWithinRange(ship.location, ALLIES_CHECK_RANGE)
-                // make sure it only contains allies
-                .filter { filterShip -> filterShip.owner == ship.owner}
-                // make sure we're not targetting ourselves
-                .filter { module -> module.fleetMember != member && module.parentStation != ship && module != ship }
-                // make sure we're not targetting child modules
-                .filter { module -> module.parentStation == null }
-                // and make sure we're not counting our own fighters
-                .filter { target -> target.isFighter.not() }
-
-            // Criteria 4 - there are more allied ships than potential pulled-in enemy ships
-            val enemyShips = shipsInArcRadius.count()
-            val allyShips = alliesInRange.count()
-            if (allyShips >= enemyShips && enemyShips != 0) {
-                exoticatechnologies.util.log(
-                    logMsg = "[EVALUATION] criteria 4 triggering activation",
-                    logger = logger,
-                    logLevel = Level.INFO
-                )
-                //DEBUG
-                for (ship in shipsInArcRadius) {
-                    // validate whether they are inside of the arc
-                    val res = evaluationArc.isWithinArc(ship)
-                    exoticatechnologies.util.log(
-                        logMsg = "[EVALUATION] criteria 4 - ship ${ship} is within arc ? ${res}",
-                        logger = logger,
-                        logLevel = Level.INFO
-                    )
-                }
-                return true
-            }
-
-            // Criteria 5 - there are enemies outside of weapon range, including PD
-            val enemiesOutsideWeaponRange = shipsInArcRadius
-                .map { shipInArc ->
-                    ship.distanceToShip(shipInArc) > ExoticaCombatUtils.getMaxWeaponRange(
-                        ship = ship,
-                        includePD = true,
-                        includeWeaponsOnAllModules = false
-                    )
-                }
-                .count()
-            if (enemiesOutsideWeaponRange >= 1) {
-                exoticatechnologies.util.log(
-                    logMsg = "[EVALUATION] criteria 5 triggering activation\tenemies outside of weapon range: ${enemiesOutsideWeaponRange}",
-                    logger = logger,
-                    logLevel = Level.INFO
-                )
-                return true
-            }
-
-
-            // None of the criterias were fulfilled so far, return false for this evaluation cycle
-            return false
+            val evaluationResult = evaluator.evaluate()
+            activationAngle = evaluationResult.angle
+            return evaluationResult.shouldActivate
         }
 
         /**
@@ -371,7 +246,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         /**
          * Just returns all enemy ships within radius of [ship]
          */
-        private fun getPotentialTargets(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): List<ShipAPI> {
+        fun getPotentialTargets(member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData): List<ShipAPI> {
             val radius: Float = getRadiusAmount(member, mods, exoticData)
 
             val potentiallyAffectedShips = CombatUtils.getShipsWithinRange(ship.location, radius)
@@ -445,22 +320,6 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 // If this ship is not the root of the ship, then either use facing to target or this ship's facing
                 getFacingToTarget()
             }
-
-            exoticatechnologies.util.log(
-                logMsg = "[ACTIVATION] IS this ship root module ? ${ship.isRootModule()}, ship.name: ${ship.name}, ship.facing: ${ship.facing}, ship.id: ${ship.id}, facingToUseForActivation: ${facingToUseForActivation}",
-                logger = logger,
-                logLevel = Level.INFO
-            )
-            exoticatechnologies.util.log(
-                logMsg = "ship modules: ${getAllShipSections(ship)}, ship modules' names: ${getAllShipSections(ship).map { it.name }}, ship modules' IDs: ${getAllShipSections(ship).map { it.id }}",
-                logger = logger,
-                logLevel = Level.INFO
-            )
-            exoticatechnologies.util.log(
-                logMsg = "ship modules: ${getAllShipSections(ship)}, ship modules' variant.hullVariantId: ${getAllShipSections(ship).map { it.variant.hullVariantId }}, ship modules' hullspec.hullID: ${getAllShipSections(ship).map { it.hullSpec.hullId }}",
-                logger = logger,
-                logLevel = Level.INFO
-            )
 
             visualArc = generateArc(
                 center = ship.location,
@@ -565,6 +424,175 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
 
     private fun log(logMsg: String) {
         if (LOGS_ENABLED) logger.info(logMsg)
+    }
+
+    abstract class Evaluator(
+        val evaluatingShip: ShipAPI,
+        val system: ShipFishingHookSystem,
+        val magicSubsystem: FishingHookSystem
+    ) {
+        abstract fun evaluate(): EvaluationData
+
+        fun checkCriteria(evaluationArc: LineUtils.ArcSelection): Boolean {
+            val shipsInArcRadius = magicSubsystem.getPotentialTargets(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
+                .filter { target -> target.isFighter.not() }
+                .filter { evaluationArc.isWithinArc(it) }
+
+            // Calculate our 'most damaging' range and see how many targets are within range but outside most damaging range
+            val largestDamageRange = ExoticaCombatUtils.getLargestDamageContributingRange(evaluatingShip)
+            val shipsWithinRangeOutsideOfBestRange = shipsInArcRadius.filter { targetShip ->
+                val distanceToUs = targetShip.distanceToShip(evaluatingShip)
+
+                return@filter distanceToUs > largestDamageRange
+            }
+
+            // Criteria 1 - have ships within range but outside of our most-damaging range
+            val haveShipsOutsideOfMostDamagingRange = shipsWithinRangeOutsideOfBestRange.isNotEmpty()
+            if (haveShipsOutsideOfMostDamagingRange) {
+                return true
+            }
+
+            // In case we did not return, lets start working on criteria 2 - majority of ships moving away
+            val enemyShipCount = shipsInArcRadius.count()
+            val enemyShipsRunningAway = shipsInArcRadius
+                .map { enemyShip -> enemyShip.isMovingAwayFromShip(evaluatingShip) }
+                .filter { it }
+                .count()
+
+            // Criteria 2 - majority of ships running away
+            if (enemyShipsRunningAway > enemyShipCount / 2) {
+                return true
+            }
+
+            // In case we did not return, lets work on criteria 3 - vulnerable ships detected
+            val vulnerableShipsInRange = shipsInArcRadius.filter { enemyShip -> magicSubsystem.isVulnerable(enemyShip) }
+
+            // Criteria 3 - there are vulnerable ships present
+            val anyVulnerableShipsInRange = vulnerableShipsInRange.isNotEmpty()
+            if (anyVulnerableShipsInRange) {
+                return true
+            }
+
+            // In case we did not return, try the last case - "more allies than enemies"
+            val alliesInRange = CombatUtils.getShipsWithinRange(evaluatingShip.location, ALLIES_CHECK_RANGE)
+                // make sure it only contains allies
+                .filter { filterShip -> filterShip.owner == evaluatingShip.owner }
+                // make sure we're not targetting ourselves
+                .filter { module -> module.fleetMember != magicSubsystem.member && module.parentStation != evaluatingShip && module != evaluatingShip }
+                // make sure we're not targetting child modules
+                .filter { module -> module.parentStation == null }
+                // and make sure we're not counting our own fighters
+                .filter { target -> target.isFighter.not() }
+
+            // Criteria 4 - there are more allied ships than potential pulled-in enemy ships
+            val enemyShips = shipsInArcRadius.count()
+            val allyShips = alliesInRange.count()
+            if (allyShips >= enemyShips && enemyShips != 0) {
+                return true
+            }
+
+            // Criteria 5 - there are enemies outside of weapon range, including PD
+            val enemiesOutsideWeaponRange = shipsInArcRadius
+                .map { shipInArc ->
+                    evaluatingShip.distanceToShip(shipInArc) > ExoticaCombatUtils.getMaxWeaponRange(
+                        ship = evaluatingShip,
+                        includePD = true,
+                        includeWeaponsOnAllModules = false
+                    )
+                }
+                .count()
+            if (enemiesOutsideWeaponRange >= 1) {
+                return true
+            }
+
+
+            // None of the criterias were fulfilled so far, return false for this evaluation cycle
+            return false
+        }
+    }
+
+    data class EvaluationData(
+        val angle: Float,
+        val shouldActivate: Boolean
+    )
+
+    sealed class AIEvaluator(
+        ship: ShipAPI,
+        system: ShipFishingHookSystem,
+        magicSubsystem: FishingHookSystem
+    ) : Evaluator(
+        evaluatingShip = ship,
+        system = system,
+        magicSubsystem = magicSubsystem
+    ) {
+        class RootModuleEvaluator(
+            ship: ShipAPI,
+            system: ShipFishingHookSystem,
+            magicSubsystem: FishingHookSystem
+        ) : AIEvaluator(ship, system, magicSubsystem) {
+            override fun evaluate(): EvaluationData {
+                // Since root module always shoots straight, his evaluation is easy - always ship.facing
+
+                val evaluationArc = magicSubsystem.generateArc(
+                    center = evaluatingShip.location,
+                    userCentricFacing = remapAngleToTrigonometricCoordinateSystem(evaluatingShip.facing),
+                    generateParticles = false,
+                    particleSpacing = null,
+                    arcWidth = system.getScaledArcWidth(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData),
+                    fullRange = system.getRadiusAmount(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
+                )
+
+                val result = checkCriteria(evaluationArc)
+
+                return EvaluationData(
+                    angle = evaluatingShip.facing,
+                    shouldActivate = result
+                )
+            }
+
+        }
+
+        class ChildModuleAimingEvaluator(
+            ship: ShipAPI,
+            system: ShipFishingHookSystem,
+            magicSubsystem: FishingHookSystem
+        ) : AIEvaluator(ship, system, magicSubsystem) {
+            override fun evaluate(): EvaluationData {
+                // Since child modules can aim, we need to scan and find the best activation angle,
+                // returning the angle that scored best
+                // So we will start from either ship.target or ship.facing and do a full circle.
+
+                var bestAngle = magicSubsystem.getFacingToTarget()
+                var highestScore = 0f
+
+                // Sweep the circle
+                for (degree in 0 until 360 step 15) {
+                    val angle = degree.toFloat()
+                    val evaluationArc = magicSubsystem.generateArc(
+                        center = evaluatingShip.location,
+                        userCentricFacing = remapAngleToTrigonometricCoordinateSystem(angle),
+                        generateParticles = false,
+                        particleSpacing = null,
+                        arcWidth = system.getScaledArcWidth(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData),
+                        fullRange = system.getRadiusAmount(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
+                    )
+
+                    // Calculate a score for this specific slice
+                    val score = calculateScoreForArc(evaluationArc)
+
+                    if (score > highestScore) {
+                        highestScore = score
+                        bestAngle = angle
+                    }
+                }
+
+                return EvaluationData(
+                    angle = bestAngle,
+                    shouldActivate = highestScore > 0f
+                )
+            }
+
+        }
     }
 
     companion object {
