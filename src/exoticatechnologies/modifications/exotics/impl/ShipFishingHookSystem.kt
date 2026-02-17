@@ -7,6 +7,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.util.IntervalUtil
+import exoticatechnologies.combat.ExoticaCombatUtils
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
@@ -14,6 +15,7 @@ import exoticatechnologies.modifications.exotics.misc.ForceApplier
 import exoticatechnologies.util.*
 import exoticatechnologies.util.drawutils.LineUtils
 import exoticatechnologies.util.drawutils.ParticleDrawMode
+import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
@@ -104,6 +106,16 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
         return COOLDOWN_DURATION * getNegativeMult(member, mods, exoticData)
     }
 
+    //TODO delete this, this is just for debugging
+    override fun advanceInCombatUnpaused(ship: ShipAPI, amount: Float, member: FleetMemberAPI, mods: ShipModifications, exoticData: ExoticData) {
+        super.advanceInCombatUnpaused(ship, amount, member, mods, exoticData)
+        exoticatechnologies.util.log(
+            logMsg = "[AdvanceInCombatUnpaused] IS this ship root module ? ${ship.isRootModule()}, ship.name: ${ship.name}, ship.facing: ${ship.facing}, ship.id: ${ship.id}",
+            logger = logger,
+            logLevel = Level.INFO
+        )
+    }
+
 
     inner class FishingHookSystem(
         ship: ShipAPI,
@@ -165,14 +177,12 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             val target = getTarget()
 
             return if (target != null) {
-                ship.location.getFacingTo(target.location)
+                ship.getFacingTo(target)
             } else {
                 // With no target, fallback to ship.facing
                 ship.facing
             }
         }
-
-
 
         private fun evaluateSituation(): Boolean {
             // If interval elapsed, we are going to do a few checks to determine if we should activate:
@@ -180,10 +190,12 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             // 2. majority of ships are moving away (excluding wings) - activate
             // 3. if there are vulnerable ships present (excluding wings) - activate
             // 4. allies outnumber enemies nearby (excluding wings) - activate
+            // 5. there are enemies outside of weapon range, including PD   //TODO rethink this one
             // If any criteria is met, we will do an early return and avoid evaluating the rest of them
             // Otherwise - do nothing for this evaluation cycle
 
             // Since this system is installable on child modules, there's no reason to force them all to 'fire' directly ahead
+            //TODO break this up into two evaluators, one for root module and another one that can aim for child modules ...
             val facingToUseForEvaluation = if(ship.isRootModule()) {
                 // For root modules, which the player drives, we cannot 'angle' the system so always use facing
                 ship.facing
@@ -191,6 +203,11 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 // If this ship is not the root of the ship, then either use facing to target or this ship's facing
                 getFacingToTarget()
             }
+            exoticatechnologies.util.log(
+                logMsg = "[EVALUATION] IS this ship root module ? ${ship.isRootModule()}, ship.name: ${ship.name}, ship.facing: ${ship.facing}, ship.id: ${ship.id}, facingToUseForEvaluation: ${facingToUseForEvaluation}",
+                logger = logger,
+                logLevel = Level.INFO
+            )
 
             val evaluationArc = generateArc(
                 center = ship.location,
@@ -205,7 +222,7 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 .filter { evaluationArc.isWithinArc(it) }
 
             // Calculate our 'most damaging' range and see how many targets are within range but outside most damaging range
-            val largestDamageRange = getLargestDamageContributingRange(ship)
+            val largestDamageRange = ExoticaCombatUtils.getLargestDamageContributingRange(ship)
             val shipsWithinRangeOutsideOfBestRange = shipsInArcRadius.filter { targetShip ->
                 val distanceToUs = targetShip.distanceToShip(ship)
 
@@ -214,7 +231,14 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
 
             // Criteria 1 - have ships within range but outside of our most-damaging range
             val haveShipsOutsideOfMostDamagingRange = shipsWithinRangeOutsideOfBestRange.isNotEmpty()
-            if (haveShipsOutsideOfMostDamagingRange) return true
+            if (haveShipsOutsideOfMostDamagingRange) {
+                exoticatechnologies.util.log(
+                    logMsg = "[EVALUATION] criteria 1 triggering activation",
+                    logger = logger,
+                    logLevel = Level.INFO
+                )
+                return true
+            }
 
             // In case we did not return, lets start working on criteria 2 - majority of ships moving away
             val enemyShipCount = shipsInArcRadius.count()
@@ -224,14 +248,28 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 .count()
 
             // Criteria 2 - majority of ships running away
-            if (enemyShipsRunningAway > enemyShipCount / 2) return true
+            if (enemyShipsRunningAway > enemyShipCount / 2) {
+                exoticatechnologies.util.log(
+                    logMsg = "[EVALUATION] criteria 2 triggering activation",
+                    logger = logger,
+                    logLevel = Level.INFO
+                )
+                return true
+            }
 
             // In case we did not return, lets work on criteria 3 - vulnerable ships detected
             val vulnerableShipsInRange = shipsInArcRadius.filter { enemyShip -> isVulnerable(enemyShip) }
 
             // Criteria 3 - there are vulnerable ships present
             val anyVulnerableShipsInRange = vulnerableShipsInRange.isNotEmpty()
-            if (anyVulnerableShipsInRange) return true
+            if (anyVulnerableShipsInRange) {
+                exoticatechnologies.util.log(
+                    logMsg = "[EVALUATION] criteria 3 triggering activation",
+                    logger = logger,
+                    logLevel = Level.INFO
+                )
+                return true
+            }
 
             // In case we did not return, try the last case - "more allies than enemies"
             val alliesInRange = CombatUtils.getShipsWithinRange(ship.location, ALLIES_CHECK_RANGE)
@@ -247,41 +285,47 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             // Criteria 4 - there are more allied ships than potential pulled-in enemy ships
             val enemyShips = shipsInArcRadius.count()
             val allyShips = alliesInRange.count()
-            if (allyShips >= enemyShips) return true
+            if (allyShips >= enemyShips && enemyShips != 0) {
+                exoticatechnologies.util.log(
+                    logMsg = "[EVALUATION] criteria 4 triggering activation",
+                    logger = logger,
+                    logLevel = Level.INFO
+                )
+                //DEBUG
+                for (ship in shipsInArcRadius) {
+                    // validate whether they are inside of the arc
+                    val res = evaluationArc.isWithinArc(ship)
+                    exoticatechnologies.util.log(
+                        logMsg = "[EVALUATION] criteria 4 - ship ${ship} is within arc ? ${res}",
+                        logger = logger,
+                        logLevel = Level.INFO
+                    )
+                }
+                return true
+            }
+
+            // Criteria 5 - there are enemies outside of weapon range, including PD
+            val enemiesOutsideWeaponRange = shipsInArcRadius
+                .map { shipInArc ->
+                    ship.distanceToShip(shipInArc) > ExoticaCombatUtils.getMaxWeaponRange(
+                        ship = ship,
+                        includePD = true,
+                        includeWeaponsOnAllModules = false
+                    )
+                }
+                .count()
+            if (enemiesOutsideWeaponRange >= 1) {
+                exoticatechnologies.util.log(
+                    logMsg = "[EVALUATION] criteria 5 triggering activation\tenemies outside of weapon range: ${enemiesOutsideWeaponRange}",
+                    logger = logger,
+                    logLevel = Level.INFO
+                )
+                return true
+            }
 
 
             // None of the criterias were fulfilled so far, return false for this evaluation cycle
             return false
-        }
-
-        private fun getLargestDamageContributingRange(ship: ShipAPI): Float {
-            // Create a range to "weapon damage potential" map
-            val rangeDamageMap = mutableMapOf<Float, Float>()
-            // For all weapons on installing ship, "calculate" it's DPS and derive potential damage over 10 seconds
-            for (weapon in getAllShipWeapons(ship)) {
-                // If weapon is broken, skip it
-                if (weapon.isDisabled || weapon.isPermanentlyDisabled) continue
-                // "sustainedDps" might make sense but not really because it evaluates over "ship fires for infinite amount of time"
-//                weapon.derivedStats.sustainedDps
-                // Otherwise, grab it's DPS, and calculate the "damage contribution" over 10 seconds
-                val weaponDps = weapon.derivedStats.dps
-                val weapon10secPotential = weaponDps * 10f
-
-                val weaponRange = weapon.range
-                // Add to range in the map
-                val currentRangeDamageValue = rangeDamageMap[weaponRange] ?: 0f
-                // Update map
-                rangeDamageMap[weaponRange] = currentRangeDamageValue + weapon10secPotential
-            }
-
-            // After all weapons were processed, grab the key with the highest value
-            val largestEntry = rangeDamageMap.maxByOrNull { it.value }
-            return if (largestEntry != null) {
-                largestEntry.key
-            } else {
-                // no maximum was found, fallback to 0
-                0f
-            }
         }
 
         /**
@@ -402,6 +446,22 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 getFacingToTarget()
             }
 
+            exoticatechnologies.util.log(
+                logMsg = "[ACTIVATION] IS this ship root module ? ${ship.isRootModule()}, ship.name: ${ship.name}, ship.facing: ${ship.facing}, ship.id: ${ship.id}, facingToUseForActivation: ${facingToUseForActivation}",
+                logger = logger,
+                logLevel = Level.INFO
+            )
+            exoticatechnologies.util.log(
+                logMsg = "ship modules: ${getAllShipSections(ship)}, ship modules' names: ${getAllShipSections(ship).map { it.name }}, ship modules' IDs: ${getAllShipSections(ship).map { it.id }}",
+                logger = logger,
+                logLevel = Level.INFO
+            )
+            exoticatechnologies.util.log(
+                logMsg = "ship modules: ${getAllShipSections(ship)}, ship modules' variant.hullVariantId: ${getAllShipSections(ship).map { it.variant.hullVariantId }}, ship modules' hullspec.hullID: ${getAllShipSections(ship).map { it.hullSpec.hullId }}",
+                logger = logger,
+                logLevel = Level.INFO
+            )
+
             visualArc = generateArc(
                 center = ship.location,
                 userCentricFacing = remapAngleToTrigonometricCoordinateSystem(facingToUseForActivation),
@@ -487,12 +547,12 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                             // This is the "inverse" case, when we try pulling in an immovable object - so we should pull ourselves in a bit
                             // however, just using these 'normal' values as-is would be bad, so they need to be scaled.
                             // So we will scale the strength * factor with negative effect mult, perhaps too harsh but it is what it is
-                            val negativeMomentum = getReelInStrengthForShip(ship) * getNegativeMult(member, mods, exoticData)
+                            val negativeMomentum = getReelInStrengthForShip(ship.getRootModule()) * getNegativeMult(member, mods, exoticData)
 
                             pullInShip(
                                 pullInMomentum = negativeMomentum,
-                                shipToPull = ship,
-                                destinationShip = nearbyShip.getRootModule(),
+                                shipToPull = ship.getRootModule(),
+                                destinationShip = nearbyShip,
                                 collisionPoint = collision
                             )
                         }
