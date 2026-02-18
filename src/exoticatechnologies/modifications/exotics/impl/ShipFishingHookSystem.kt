@@ -24,6 +24,7 @@ import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
 import java.awt.Color
 import kotlin.math.withSign
+import kotlin.random.Random
 
 class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, settings) {
     private val logger: Logger = Logger.getLogger(ShipFishingHookSystem::class.java)
@@ -472,6 +473,28 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
             magicSubsystem: FishingHookSystem,
             val sweepingStep: Int = 15
         ) : AIEvaluator(ship, system, magicSubsystem) {
+
+            /**
+             * Just a little method that had the identical code shared between both loops in [evaluate] extracted into it (extracted here)
+             * The method just generates the arc for [degree] angle, calls [checkCriteria] and returns a ```<degree, score>``` [Pair]
+             */
+            private fun loopArcEvaluate(degree: Int): Pair<Int, Int> {
+                val angle = degree.toFloat()
+                val evaluationArc = magicSubsystem.generateArc(
+                    center = evaluatingShip.location,
+                    userCentricFacing = remapAngleToTrigonometricCoordinateSystem(angle),
+                    generateParticles = false,
+                    particleSpacing = null,
+                    arcWidth = system.getScaledArcWidth(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData),
+                    fullRange = system.getRadiusAmount(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
+                )
+
+                // Calculate a score for this specific slice
+                val score = checkCriteria(evaluationArc)
+
+                return Pair(degree, score)
+            }
+
             override fun evaluate(): EvaluationData {
                 // Since child modules can aim, we need to scan and find the best activation angle,
                 // returning the angle that scored best
@@ -481,23 +504,23 @@ class ShipFishingHookSystem(key: String, settings: JSONObject) : Exotic(key, set
                 var highestScore = 0
 
                 // Sweep the circle - after some thinking (and a test) I think 'until' is better than '..' due to not repeating the first step again
-                for (degree in 0 until 360 step sweepingStep) {
-                    val angle = degree.toFloat()
-                    val evaluationArc = magicSubsystem.generateArc(
-                        center = evaluatingShip.location,
-                        userCentricFacing = remapAngleToTrigonometricCoordinateSystem(angle),
-                        generateParticles = false,
-                        particleSpacing = null,
-                        arcWidth = system.getScaledArcWidth(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData),
-                        fullRange = system.getRadiusAmount(magicSubsystem.member, magicSubsystem.mods, magicSubsystem.exoticData)
-                    )
-
-                    // Calculate a score for this specific slice
-                    val score = checkCriteria(evaluationArc)
-
-                    if (score > highestScore) {
-                        highestScore = score
-                        bestAngle = angle
+                // Flip a coin to decide whether to start evaluation from left-to-right or right-to-left - even though it makes no sense to do that
+                // since the evaluation should return the **best** angle for activation...
+                if (Random.nextInt() % 2 == 0 ) {
+                    for (degree in 0 until 360 step sweepingStep) {
+                        val (angle, score) = loopArcEvaluate(degree)
+                        if (score > highestScore) {
+                            highestScore = score
+                            bestAngle = angle.toFloat()
+                        }
+                    }
+                } else {
+                    for (degree in 360 downUntil 0 step sweepingStep) {
+                        val (angle, score) = loopArcEvaluate(degree)
+                        if (score > highestScore) {
+                            highestScore = score
+                            bestAngle = angle.toFloat()
+                        }
                     }
                 }
 

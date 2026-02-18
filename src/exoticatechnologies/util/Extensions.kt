@@ -975,6 +975,22 @@ fun List<String>.asSortedStringList(): List<String> {
 }
 
 /**
+ * Returns a progression from this value down to
+ * but not including the specified [to] value.
+ *
+ * Technically, like [until], just downwards
+ */
+infix fun Int.downUntil(to: Int): IntProgression {
+    // If 'to' is the highest possible value,
+    // nothing can be 'greater than' it to stop at.
+    if (to >= Int.MAX_VALUE) return IntRange.EMPTY
+
+    // Equivalent to: i = start; i > to; i--
+    // Which is: i = start; i >= (to + 1); i--
+    return this downTo (to + 1)
+}
+
+/**
  * Method that checks whether we're currently located in the Refit screen or not.
  */
 fun runningFromRefitScreen(): Boolean {
