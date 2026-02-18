@@ -232,7 +232,6 @@ public class ExoticaTechHM extends BaseHullMod {
                 }
             }
 
-//            if (!thisModuleOwnsIt) continue;
             if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
@@ -243,7 +242,7 @@ public class ExoticaTechHM extends BaseHullMod {
             } else if (thisExoticasMods.hasExotic(exotic)) {
                 shipModsToUse = thisExoticasMods;
             } else {
-                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it...");
+                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it... exotic: "+exotic);
             }
             exoticDataToUse = shipModsToUse.getExoticData(exotic);
 
@@ -253,17 +252,27 @@ public class ExoticaTechHM extends BaseHullMod {
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             boolean thisModuleOwnsIt = mods.hasUpgrade(upgrade);
             boolean presentSomewhereOnShip = false;
+            ShipModifications thisUpgradesMods = null;
             for (int i = 0; i < wholeShipsMods.size(); i++) {
                 ShipModifications tempMods = wholeShipsMods.get(i);
                 if (tempMods.hasUpgrade(upgrade)) {
                     presentSomewhereOnShip = true;
+                    thisUpgradesMods = tempMods;
                 }
             }
-//            if (!mods.hasUpgrade(upgrade)) continue;
             if (shouldSkipModification_NEW(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
-            //TODO tackle the whole "sharing" thing here as well, even though no such Upgrades exist yet ...
+            // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
+            // otherwise, lets call it with the other one that we identified above
+            ShipModifications shipModsToUse = mods;
+            if (mods.hasUpgrade(upgrade)) {
+                shipModsToUse = mods;
+            } else if (thisUpgradesMods.hasUpgrade(upgrade)) {
+                shipModsToUse = thisUpgradesMods;
+            } else {
+                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the upgrade have it... upgrade: "+upgrade);
+            }
 
-            upgrade.advanceInCombatUnpaused(ship, amount, member, mods);
+            upgrade.advanceInCombatUnpaused(ship, amount, member, shipModsToUse);
         }
     }
 
@@ -322,9 +331,77 @@ public class ExoticaTechHM extends BaseHullMod {
         List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
+            boolean thisModuleOwnsIt = mods.hasExotic(exotic);
+            boolean presentSomewhereOnShip = false;
+            ShipModifications thisExoticasMods = null;
+            for (int i = 0; i < wholeShipsMods.size(); i++) {
+                ShipModifications tempMods = wholeShipsMods.get(i);
+                if (tempMods.hasExotic(exotic)) {
+                    presentSomewhereOnShip = true;
+                    thisExoticasMods = tempMods;
+                }
+            }
+            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
+            // otherwise, lets call it with the other one that we identified above
+            ShipModifications shipModsToUse = mods;
+            ExoticData exoticDataToUse = null;
+            if (mods.hasExotic(exotic)) {
+                shipModsToUse = mods;
+            } else if (thisExoticasMods.hasExotic(exotic)) {
+                shipModsToUse = thisExoticasMods;
+            } else {
+                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it... exotic: "+exotic);
+            }
+            exoticDataToUse = shipModsToUse.getExoticData(exotic);
+
+            exotic.applyToShip(id, member, ship, shipModsToUse, Objects.requireNonNull(exoticDataToUse));
+        }
+
+        for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
+//            if (!mods.hasUpgrade(upgrade)) continue;
+//            if (shouldSkipModification(ship, upgrade)) continue;
+            boolean thisModuleOwnsIt = mods.hasUpgrade(upgrade);
+            boolean presentSomewhereOnShip = false;
+            ShipModifications thisUpgradesMods = null;
+            for (int i = 0; i < wholeShipsMods.size(); i++) {
+                ShipModifications tempMods = wholeShipsMods.get(i);
+                if (tempMods.hasUpgrade(upgrade)) {
+                    presentSomewhereOnShip = true;
+                    thisUpgradesMods = tempMods;
+                }
+            }
+            if (shouldSkipModification_NEW(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
+            // otherwise, lets call it with the other one that we identified above
+            ShipModifications shipModsToUse = mods;
+            if (mods.hasUpgrade(upgrade)) {
+                shipModsToUse = mods;
+            } else if (thisUpgradesMods.hasUpgrade(upgrade)) {
+                shipModsToUse = thisUpgradesMods;
+            } else {
+                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the upgrade have it... upgrade: "+upgrade);
+            }
+
+//            upgrade.applyToShip(member, ship, mods);
+            upgrade.applyToShip(member, ship, shipModsToUse);
+        }
+    }
+
+    @Override
+    public void applyEffectsToFighterSpawnedByShip(ShipAPI fighter, ShipAPI ship, String id) {
+        FleetMemberAPI member = FleetMemberUtils.findMemberFromShip(ship);
+        if (member == null) return;
+
+        ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
+        if (mods == null) return;
+        // Now, lets try fetching all of ship's Modifications to derive/calculate the two new parameters
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
+
+        for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
+            //TODO SHARK HERE
 //            if (!mods.hasExotic(exotic)) continue;
 //            if (shouldSkipModification(ship, exotic)) continue;
-//            exotic.applyToShip(id, member, ship, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
 
             boolean thisModuleOwnsIt = mods.hasExotic(exotic);
             boolean presentSomewhereOnShip = false;
@@ -336,51 +413,48 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisExoticasMods = tempMods;
                 }
             }
-            //            if (!mods.hasExotic(exotic)) continue;
             if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
-
-            //            exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
-            ExoticData exoticDataToUse = null;
             if (mods.hasExotic(exotic)) {
                 shipModsToUse = mods;
             } else if (thisExoticasMods.hasExotic(exotic)) {
                 shipModsToUse = thisExoticasMods;
             } else {
-                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it...");
+                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it... exotic: "+exotic);
             }
-            exoticDataToUse = shipModsToUse.getExoticData(exotic);
 
-            exotic.applyToShip(id, member, ship, shipModsToUse, Objects.requireNonNull(exoticDataToUse));
-        }
-
-        for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
-            if (!mods.hasUpgrade(upgrade)) continue;
-            if (shouldSkipModification(ship, upgrade)) continue;
-            //TODO same here
-            upgrade.applyToShip(member, ship, mods);
-        }
-    }
-
-    @Override
-    public void applyEffectsToFighterSpawnedByShip(ShipAPI fighter, ShipAPI ship, String id) {
-        FleetMemberAPI member = FleetMemberUtils.findMemberFromShip(ship);
-        if (member == null) return;
-
-        ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
-        if (mods == null) return;
-
-        for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
-            if (!mods.hasExotic(exotic)) continue;
-            if (shouldSkipModification(ship, exotic)) continue;
-            exotic.applyToFighters(member, ship, fighter, mods);
+//            exotic.applyToFighters(member, ship, fighter, mods);
+            exotic.applyToFighters(member, ship, fighter, shipModsToUse);
         }
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
-            if (!mods.hasUpgrade(upgrade)) continue;
-            if (shouldSkipModification(ship, upgrade)) continue;
-            upgrade.applyToFighters(member, ship, fighter, mods);
+//            if (!mods.hasUpgrade(upgrade)) continue;
+//            if (shouldSkipModification(ship, upgrade)) continue;
+//            upgrade.applyToFighters(member, ship, fighter, mods);
+            boolean thisModuleOwnsIt = mods.hasUpgrade(upgrade);
+            boolean presentSomewhereOnShip = false;
+            ShipModifications thisUpgradesMods = null;
+            for (int i = 0; i < wholeShipsMods.size(); i++) {
+                ShipModifications tempMods = wholeShipsMods.get(i);
+                if (tempMods.hasUpgrade(upgrade)) {
+                    presentSomewhereOnShip = true;
+                    thisUpgradesMods = tempMods;
+                }
+            }
+            if (shouldSkipModification_NEW(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
+            // otherwise, lets call it with the other one that we identified above
+            ShipModifications shipModsToUse = mods;
+            if (mods.hasUpgrade(upgrade)) {
+                shipModsToUse = mods;
+            } else if (thisUpgradesMods.hasUpgrade(upgrade)) {
+                shipModsToUse = thisUpgradesMods;
+            } else {
+                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the upgrade have it... upgrade: "+upgrade);
+            }
+
+            upgrade.applyToFighters(member, ship, fighter, shipModsToUse);
         }
     }
 
