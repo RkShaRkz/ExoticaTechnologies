@@ -14,6 +14,7 @@ import exoticatechnologies.modifications.ShipModFactory;
 import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.ShipModifications;
 import exoticatechnologies.modifications.exotics.Exotic;
+import exoticatechnologies.modifications.exotics.ExoticData;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
 import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
@@ -103,6 +104,41 @@ public class ExoticaTechHM extends BaseHullMod {
         }
     }
 
+    public boolean shouldSkipModification_NEW(
+            ShipAPI ship,
+            Modification mod,
+            boolean thisModuleOwnsIt,
+            boolean presentSomewhereOnShip
+    ) {
+        boolean modAppliesToModules = mod.shouldAffectModule(ship.getParentStation(), ship);
+        boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
+        boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
+
+        boolean skip = false;
+
+        if (!presentSomewhereOnShip) {
+            // Modifications that are not on any part of the ship should be skipped
+            skip = true;
+        } else if (thisModuleOwnsIt) {
+            // Modifications owned by this ship/module should always be applied
+            skip = false;
+        } else {
+            // Modifications owner by other modules should be checked for sharing (cross‑module application)
+            if (!modSharesEffectsWithAllModules) {
+                // If it does not share with modules, then we skip it
+                skip = true;
+            } else if (cachedCheckIsModule(ship)) {
+                // Skip only if the mod cannot affect modules AND the override flag is true
+                skip = (!modAppliesToModules && modShouldAffectModulesToShareEffectsToOtherModules);
+            } else {
+                // Target is root so allow as we did before
+                skip = false;
+            }
+        }
+        return skip;
+    }
+
+
     /**
      * Method for checking whether a {@link Modification} should be skipped before processing (calling it's callbacks on it)
      * <br>
@@ -116,7 +152,7 @@ public class ExoticaTechHM extends BaseHullMod {
      * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(ShipAPI, ShipAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
      * @see Modification#shouldAffectModulesToShareEffectsToOtherModules()
      */
-    public boolean shouldSkipModification(ShipAPI ship, Modification mod) {
+    public boolean shouldSkipModification(ShipAPI ship, Modification mod) { //TODO delete his after second one proves working
         boolean modAppliesToModules = mod.shouldAffectModule(ship.getParentStation(), ship);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
         boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
@@ -181,16 +217,51 @@ public class ExoticaTechHM extends BaseHullMod {
         ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
         if (mods == null) return;
 
-        for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
-            if (!mods.hasExotic(exotic)) continue;
-            if (shouldSkipModification(ship, exotic)) continue;
+        // Now, lets try fetching all of ship's Modifications to derive/calculate the two new parameters
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
 
-            exotic.advanceInCombatUnpaused(ship, amount, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
+        for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
+            boolean thisModuleOwnsIt = mods.hasExotic(exotic);
+            boolean presentSomewhereOnShip = false;
+            ShipModifications thisExoticasMods = null;
+            for (int i = 0; i < wholeShipsMods.size(); i++) {
+                ShipModifications tempMods = wholeShipsMods.get(i);
+                if (tempMods.hasExotic(exotic)) {
+                    presentSomewhereOnShip = true;
+                    thisExoticasMods = tempMods;
+                }
+            }
+
+//            if (!thisModuleOwnsIt) continue;
+            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
+            // otherwise, lets call it with the other one that we identified above
+            ShipModifications shipModsToUse = mods;
+            ExoticData exoticDataToUse = null;
+            if (mods.hasExotic(exotic)) {
+                shipModsToUse = mods;
+            } else if (thisExoticasMods.hasExotic(exotic)) {
+                shipModsToUse = thisExoticasMods;
+            } else {
+                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it...");
+            }
+            exoticDataToUse = shipModsToUse.getExoticData(exotic);
+
+            exotic.advanceInCombatUnpaused(ship, amount, member, mods, Objects.requireNonNull(exoticDataToUse));
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
-            if (!mods.hasUpgrade(upgrade)) continue;
-            if (shouldSkipModification(ship, upgrade)) continue;
+            boolean thisModuleOwnsIt = mods.hasUpgrade(upgrade);
+            boolean presentSomewhereOnShip = false;
+            for (int i = 0; i < wholeShipsMods.size(); i++) {
+                ShipModifications tempMods = wholeShipsMods.get(i);
+                if (tempMods.hasUpgrade(upgrade)) {
+                    presentSomewhereOnShip = true;
+                }
+            }
+//            if (!mods.hasUpgrade(upgrade)) continue;
+            if (shouldSkipModification_NEW(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            //TODO tackle the whole "sharing" thing here as well, even though no such Upgrades exist yet ...
 
             upgrade.advanceInCombatUnpaused(ship, amount, member, mods);
         }
@@ -245,17 +316,50 @@ public class ExoticaTechHM extends BaseHullMod {
         if (member == null) return;
 
         ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
-        if (mods == null) return;
+        if (mods == null) return;   //FIXME obviously, in case of a module that has no exoticas, it can't be shared to...
+
+        // Now, lets try fetching all of ship's Modifications to derive/calculate the two new parameters
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
-            if (!mods.hasExotic(exotic)) continue;
-            if (shouldSkipModification(ship, exotic)) continue;
-            exotic.applyToShip(id, member, ship, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
+//            if (!mods.hasExotic(exotic)) continue;
+//            if (shouldSkipModification(ship, exotic)) continue;
+//            exotic.applyToShip(id, member, ship, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
+
+            boolean thisModuleOwnsIt = mods.hasExotic(exotic);
+            boolean presentSomewhereOnShip = false;
+            ShipModifications thisExoticasMods = null;
+            for (int i = 0; i < wholeShipsMods.size(); i++) {
+                ShipModifications tempMods = wholeShipsMods.get(i);
+                if (tempMods.hasExotic(exotic)) {
+                    presentSomewhereOnShip = true;
+                    thisExoticasMods = tempMods;
+                }
+            }
+            //            if (!mods.hasExotic(exotic)) continue;
+            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+
+            //            exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
+            // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
+            // otherwise, lets call it with the other one that we identified above
+            ShipModifications shipModsToUse = mods;
+            ExoticData exoticDataToUse = null;
+            if (mods.hasExotic(exotic)) {
+                shipModsToUse = mods;
+            } else if (thisExoticasMods.hasExotic(exotic)) {
+                shipModsToUse = thisExoticasMods;
+            } else {
+                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it...");
+            }
+            exoticDataToUse = shipModsToUse.getExoticData(exotic);
+
+            exotic.applyToShip(id, member, ship, shipModsToUse, Objects.requireNonNull(exoticDataToUse));
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
             if (!mods.hasUpgrade(upgrade)) continue;
             if (shouldSkipModification(ship, upgrade)) continue;
+            //TODO same here
             upgrade.applyToShip(member, ship, mods);
         }
     }
