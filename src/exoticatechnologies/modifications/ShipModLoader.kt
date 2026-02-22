@@ -5,8 +5,7 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
-import exoticatechnologies.hullmods.util.ShipStatsRegistry
-import exoticatechnologies.modifications.ShipModLoader.Companion.get
+import exoticatechnologies.util.ShipStatsRegistry
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
