@@ -1,9 +1,13 @@
 package exoticatechnologies.modifications
 
+import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
+import exoticatechnologies.hullmods.util.ShipStatsRegistry
+import exoticatechnologies.modifications.ShipModLoader.Companion.get
+import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
 
@@ -53,7 +57,9 @@ class ShipModLoader {
         // Now, map them onto variants
         val allShipSectionVariants = allShipSections.map { it.variant }
         // As well as to their FMAPIs
-        val allShipSectionsFMAPIs = allShipSections.map { findMemberFromShip(it) }
+//        val allShipSectionsFMAPIs = allShipSections.map { findMemberFromShip(it) }
+        val allShipSectionsFMAPIs = allShipSections.map { it.fleetMember }
+        val rootFMAPI = findMemberFromShip(ship)
 
         // Now that we have all of this, we can build a list of ship mods, by grabbing
         // each index and calling getData(fmapi, variant)
@@ -73,6 +79,27 @@ class ShipModLoader {
             }
         }
         // Now we have all mods, so return them.
+        return allModsList.toList()
+    }
+
+    private fun getAllDataFromStatsAPI(stats: MutableShipStatsAPI): List<ShipModifications> {
+        // First, grab all ships' stats
+        val allShipStats = ShipStatsRegistry.getWholeShipsStatsFromSingleStats(stats)
+        val allShipFleetMembers = allShipStats.map { it.fleetMember }
+        val rootModuleFleetMember = FleetMemberUtils.findMemberForStats(stats)
+
+        val allModsList = mutableListOf<ShipModifications>()
+        for (someStats in allShipStats) {
+            val someStatsFM: FleetMemberAPI? = someStats.fleetMember
+            // if some stats FMAPI is non-null, proceed
+            someStatsFM?.let { statsFM ->
+                val moduleMods = ShipModLoader.get(statsFM, someStats.getVariant())
+                moduleMods?.let {
+                    allModsList.add(it)
+                }
+            }
+        }
+
         return allModsList.toList()
     }
 
@@ -135,6 +162,12 @@ class ShipModLoader {
         @Synchronized
         fun getAllForShipAPI(ship: ShipAPI): List<ShipModifications> {
             return inst.getAllDataForShipAPI(ship)
+        }
+
+        @JvmStatic
+        @Synchronized
+        fun getAllForStats(stats: MutableShipStatsAPI): List<ShipModifications> {
+            return inst.getAllDataFromStatsAPI(stats)
         }
     }
 

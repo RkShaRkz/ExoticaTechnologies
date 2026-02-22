@@ -166,6 +166,11 @@ public class ExoticaTechHM extends BaseHullMod {
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
         boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
 
+        // Check whether these 'stats' belong to the root FleetMemberAPI (root module) or a child one
+        FleetMemberAPI rootModule = FleetMemberUtils.findMemberForStats(stats);
+        FleetMemberAPI moduleFMAPI = stats.getFleetMember();
+        boolean isModuleStats = moduleFMAPI != rootModule;
+
         boolean skip = false;
 
         if (!presentSomewhereOnShip) {
@@ -179,7 +184,8 @@ public class ExoticaTechHM extends BaseHullMod {
             if (!modSharesEffectsWithAllModules) {
                 // If it does not share with modules, then we skip it
                 skip = true;
-            } else if (cachedCheckIsModule(ship)) {
+//            } else if (cachedCheckIsModule(ship)) {
+            } else if (isModuleStats) {
                 // Skip only if the mod cannot affect modules AND the override flag is true
                 skip = (!modAppliesToModules && modShouldAffectModulesToShareEffectsToOtherModules);
             } else {
@@ -351,39 +357,79 @@ public class ExoticaTechHM extends BaseHullMod {
         }
 
         ShipModifications mods = ShipModLoader.get(member, stats.getVariant());
-        //TODO delete
-        List<MutableShipStatsAPI> statsList = ShipStatsRegistry.getWholeShipsStatsFromSingleStats(stats);
-        // do a different check here
-        for (MutableShipStatsAPI someStats : statsList) {
-            AnonymousLogger.INSTANCE.log("[SHARK] someStats: "+someStats+", someStats.getFleetMember(): "+someStats.getFleetMember(), Level.INFO);
-            if (stats == someStats) {
-                AnonymousLogger.INSTANCE.log("[SHARK] found original stats in the statsList!!!", Level.INFO);
-            }
-            if (stats.getFleetMember() == someStats.getFleetMember()) {
-                AnonymousLogger.INSTANCE.log("[SHARK] found original stats FM in the statsList!!!", Level.INFO);
-            }
-
-            ShipModifications moduleMods = ShipModLoader.get(someStats.getFleetMember(), someStats.getVariant());
-            AnonymousLogger.INSTANCE.log("[SHARK] moduleMods: "+moduleMods, Level.INFO);
-        }
 
         if (mods == null) {
             member.getVariant().removePermaMod(HULLMOD_ID);
             return;
         }
 
-        for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
-            if (!mods.hasExotic(exotic)) continue;
-            if (shouldSkipModification(stats, exotic)) continue;
+        // Now, lets try fetching all of ship's Modifications to derive/calculate the two new parameters
+        FleetMemberAPI rootModuleMember = FleetMemberUtils.findMemberForStats(stats);    //this is root module
+        List<MutableShipStatsAPI> statsList = ShipStatsRegistry.getWholeShipsStatsFromSingleStats(stats);
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForStats(stats);
 
-            exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
+        for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
+//            if (!mods.hasExotic(exotic)) continue;
+//            if (shouldSkipModification(stats, exotic)) continue;
+//
+//            exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
+            boolean thisModuleOwnsIt = mods.hasExotic(exotic);
+            boolean presentSomewhereOnShip = false;
+            ShipModifications thisExoticasMods = null;
+            for (int i = 0; i < wholeShipsMods.size(); i++) {
+                ShipModifications tempMods = wholeShipsMods.get(i);
+                if (tempMods.hasExotic(exotic)) {
+                    presentSomewhereOnShip = true;
+                    thisExoticasMods = tempMods;
+                }
+            }
+
+            if (shouldSkipModification_NEW(stats, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
+            // otherwise, lets call it with the other one that we identified above
+            ShipModifications shipModsToUse = mods;
+            ExoticData exoticDataToUse = null;
+            if (mods.hasExotic(exotic)) {
+                shipModsToUse = mods;
+            } else if (thisExoticasMods.hasExotic(exotic)) {
+                shipModsToUse = thisExoticasMods;
+            } else {
+                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it... exotic: "+exotic);
+            }
+            exoticDataToUse = shipModsToUse.getExoticData(exotic);
+            // We should still apply to *THIS* module's stats
+            exotic.applyExoticToStats(id, stats, member, shipModsToUse, Objects.requireNonNull(exoticDataToUse));
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
-            if (!mods.hasUpgrade(upgrade)) continue;
-            if (shouldSkipModification(stats, upgrade)) continue;
+//            if (!mods.hasUpgrade(upgrade)) continue;
+//            if (shouldSkipModification(stats, upgrade)) continue;
+//
+//            upgrade.applyUpgradeToStats(stats, member, mods, mods.getUpgrade(upgrade));
+            boolean thisModuleOwnsIt = mods.hasUpgrade(upgrade);
+            boolean presentSomewhereOnShip = false;
+            ShipModifications thisUpgradesMods = null;
+            for (int i = 0; i < wholeShipsMods.size(); i++) {
+                ShipModifications tempMods = wholeShipsMods.get(i);
+                if (tempMods.hasUpgrade(upgrade)) {
+                    presentSomewhereOnShip = true;
+                    thisUpgradesMods = tempMods;
+                }
+            }
 
-            upgrade.applyUpgradeToStats(stats, member, mods, mods.getUpgrade(upgrade));
+            if (shouldSkipModification_NEW(stats, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
+            // otherwise, lets call it with the other one that we identified above
+            ShipModifications shipModsToUse = mods;
+            if (mods.hasUpgrade(upgrade)) {
+                shipModsToUse = mods;
+            } else if (thisUpgradesMods.hasUpgrade(upgrade)) {
+                shipModsToUse = thisUpgradesMods;
+            } else {
+                throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the upgrade have it... upgrade: "+upgrade);
+            }
+            // We should still apply to *THIS* module's stats
+            upgrade.applyUpgradeToStats(stats, member, shipModsToUse, shipModsToUse.getUpgrade(upgrade));
         }
     }
 
