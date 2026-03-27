@@ -14,6 +14,7 @@ import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
+import exoticatechnologies.util.distanceTo
 import org.json.JSONObject
 import org.magiclib.subsystems.MagicSubsystem
 import org.magiclib.subsystems.MagicSubsystemsManager
@@ -141,7 +142,7 @@ class SpooledFeeders(key: String, settings: JSONObject) : Exotic(key, settings) 
                     score += 8f
                 }
 
-                var dist = Misc.getDistance(ship.location, target.location)
+                var dist = ship.location.distanceTo(target.location)
                 if (dist > ExoticaCombatUtils.getMaxWeaponRange(ship, false)) {
                     return false
                 }

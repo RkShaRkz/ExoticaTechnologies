@@ -10,7 +10,7 @@ import exoticatechnologies.modifications.upgrades.Upgrade
 import exoticatechnologies.util.AfterimageData
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.addAfterimageToWholeShip
-import exoticatechnologies.util.getAbsoluteAngleToAnotherShip
+import exoticatechnologies.util.getAbsoluteAngleDeltaToAnotherShip
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.lazywizard.lazylib.MathUtils
@@ -88,7 +88,7 @@ class ExternalThrusters(key: String, settings: JSONObject) : Upgrade(key, settin
             return if (ship.shipTarget != null) {
                 val target = ship.shipTarget
 
-                val differenceInDegrees = ship.getAbsoluteAngleToAnotherShip(target)
+                val differenceInDegrees = ship.getAbsoluteAngleDeltaToAnotherShip(target)
                 val isWithinChargingArc = differenceInDegrees < ANGLE_TO_HINT_ACTIVATION_TO_AI
 
                 val activationDistanceSquared = DISTANCE_TO_HINT_ACTIVATION_TO_AI * DISTANCE_TO_HINT_ACTIVATION_TO_AI

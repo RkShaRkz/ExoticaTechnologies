@@ -15,6 +15,7 @@ import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
+import exoticatechnologies.util.distanceTo
 import org.apache.log4j.Logger
 import org.json.JSONObject
 import org.magiclib.subsystems.MagicSubsystem
@@ -98,8 +99,8 @@ class MissileSpamSystem(key: String, settings: JSONObject) : Exotic(key, setting
             val hasMissileWeapons = affectedWeapons.isNotEmpty()
             val weaponsMaxRange = ExoticaCombatUtils.getMaxWeaponRange(ship, false)
             val enemiesInRange = Global.getCombatEngine().ships.filter { filterShip ->
-                Misc.getDistance(filterShip.location, ship.location) < weaponsMaxRange
-                        && filterShip.owner != ship.owner
+                filterShip.location.distanceTo(ship.location) < weaponsMaxRange
+                    && filterShip.owner != ship.owner
             }
             val hasEnemiesInRange = enemiesInRange.isNotEmpty()
             val atLeastOneMissileWeaponHasAmmo = affectedWeapons.any { it.ammoTracker.ammo > 0 }

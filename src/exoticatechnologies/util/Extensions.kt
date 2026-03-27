@@ -1,7 +1,6 @@
 package exoticatechnologies.util
 
 import com.fs.starfarer.api.Global
-import com.fs.starfarer.api.campaign.CoreUITabId
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.combat.WeaponAPI
@@ -13,11 +12,9 @@ import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
-import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.reflect.ReflectionUtils
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
-import org.lazywizard.lazylib.VectorUtils
 import org.lwjgl.util.vector.Vector
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
@@ -109,6 +106,8 @@ fun Any?.safeEquals(other: Any?): Boolean {
     return this == other
 }
 
+// ShipAPI-related methods below
+
 /**
  * Returns the [Vector2f] of where the ship is looking (facing) at
  * @return the ship's forward vector, similar to [com.fs.starfarer.api.util.Misc.getUnitVectorAtDegreeAngle] used with the ship's [ShipAPI.getFacing]
@@ -126,25 +125,36 @@ fun ShipAPI.getForwardVector(): Vector2f {
 
 /**
  * Returns the angle (in degrees) between this ship's Forward Vector and *anotherShip*
- * @return the difference in degrees
+ *
+ * @param anotherShip the other ship to which we should calculate our "turn delta"
+ * @param useStrictMath whether to use strict math or fall back to [FastTrigUtils]. Defaults to **false**
+ *
+ * @return the difference in degrees, normalized in [0,360) range
  * @see [ShipAPI.getForwardVector]
  */
-fun ShipAPI.getAngleToAnotherShip(anotherShip: ShipAPI): Float {
-    val targetDirectionAngle = VectorUtils.getAngle(this.location, anotherShip.location)
-    val myForwardVector = this.getForwardVector()
-    val myAngle = VectorUtils.getAngle(myForwardVector, anotherShip.location)
-    val differenceInDegrees = (myAngle - targetDirectionAngle)
+fun ShipAPI.getAngleDeltaToAnotherShip(anotherShip: ShipAPI, useStrictMath: Boolean = false): Float {
+    // Since the previous implementation didn't work and unnecessarily involved forwardVector
+    // lets try something simpler:
+    // - calculate necessary facing from our ship to anotherShip
+    // - calculate the difference in angles by subtracting necessary facing from our facing
 
-    return differenceInDegrees
+    val targetDirectionAngle = this.location.getFacingTo(anotherShip.location, useStrictMath = useStrictMath)
+    val differenceInAngles = this.facing - targetDirectionAngle
+
+    return differenceInAngles
 }
 
 /**
- * Returns the absolue angle (in degrees) between this ship and *anotherShip*
+ * Returns the absolute angle (in degrees) between this ship and *anotherShip*
+ *
+ * @param anotherShip the other ship to which we should calculate our "turn delta"
+ * @param useStrictMath whether to use strict math or fall back to [FastTrigUtils]. Defaults to **false**
+ *
  * @return the difference in degrees, as absolute value
- * @see [ShipAPI.getAngleToAnotherShip]
+ * @see [ShipAPI.getAngleDeltaToAnotherShip]
  */
-fun ShipAPI.getAbsoluteAngleToAnotherShip(anotherShip: ShipAPI): Float {
-    return this.getAngleToAnotherShip(anotherShip).absoluteValue
+fun ShipAPI.getAbsoluteAngleDeltaToAnotherShip(anotherShip: ShipAPI, useStrictMath: Boolean = false): Float {
+    return this.getAngleDeltaToAnotherShip(anotherShip, useStrictMath = useStrictMath).absoluteValue
 }
 
 /**
@@ -178,6 +188,78 @@ fun ShipAPI.hasSModdedBuiltInHullmod(hullModId: String): Boolean {
     return Misc.getCurrSpecialModsList(this.variant).map { hullmods -> hullmods.id }.containsIgnoreCase(hullModId)
 }
 
+/**
+ * Returns distance from [this] ship to [otherShip]
+ *
+ * @param otherShip the other [ShipAPI] to calculate distance to
+ * @return the distance between this ship and other ship
+ */
+fun ShipAPI.distanceToShip(otherShip: ShipAPI): Float {
+    return (this.location.x - otherShip.location.x) * (this.location.x - otherShip.location.x) + (this.location.y - otherShip.location.y) * (this.location.y - otherShip.location.y)
+}
+
+/**
+ * Returns whether [this] ship is moving away from [otherShip]
+ *
+ * **NOTE:** the method first calculates a vector of
+ * ```kotlin
+ *     toOtherShip = otherShip.location - this.location
+ * ```
+ * and then checks whether the dot-product of [otherShip]'s velocity with `toOtherShip` vector is positive.
+ *
+ * If it is **positive**, it is moving away from [this]; if it is **negative** it is moving towards [this]
+ *
+ * **BEWARE** that this method is **not symmetrical**, just because [this] is moving away from [otherShip] **does not**
+ * mean that [otherShip] is also "moving away" from this, especially in the case of it tailing/chasing us
+ *
+ * @param otherShip the "other ship" we want to determine whether [this] ship is moving away from
+ *
+ * @return whether [this] ship is moving away from [otherShip]
+ */
+fun ShipAPI.isMovingAwayFromShip(otherShip: ShipAPI): Boolean {
+    val toOtherShip = otherShip.location.sub(this.location)
+    val dot = Vector2f.dot(otherShip.velocity, toOtherShip)
+    return dot > 0f
+}
+
+/**
+ * Calculates the facing [this] should have to "directly look at" [otherShip].
+ *
+ * @param otherShip the other ship we should calculate our facing to, to "directly look at" it
+ * @param useStrictMath whether to use strict math or fall back to [FastTrigUtils]. Defaults to **false**
+ *
+ *
+ * @see ShipAPI.getAngleDeltaToAnotherShip
+ * @see Vector2f.getFacingTo
+ */
+fun ShipAPI.getFacingTo(otherShip: ShipAPI, useStrictMath: Boolean = false): Float {
+    return this.location.getFacingTo(otherShip.location, useStrictMath = useStrictMath)
+}
+
+/**
+ * Determines whether two ships are moving apart from each other.
+ *
+ * This method calculates the relative velocity of [shipB] with respect to [shipA]
+ * and projects it onto the line connecting the two ships. If the projection is positive,
+ * the distance between them is increasing (they are separating). If negative, the distance
+ * is decreasing (they are closing in).
+ *
+ * **NOTE:** unlike [ShipAPI.isMovingAwayFromShip], this method **is symmetrical**,
+ * since it answers a different question - "is the distance between these two ships increasing?"
+ *
+ * @param shipA the first ship
+ * @param shipB the second ship
+ * @return true if the ships are moving away from each other (distance increasing),
+ *         false if they are moving closer together (distance decreasing or unchanged)
+ */
+
+fun areShipsSeparating(shipA: ShipAPI, shipB: ShipAPI): Boolean {
+    val deltaPos = Vector2f.sub(shipB.location, shipA.location, null)
+    val deltaVel = Vector2f.sub(shipB.velocity, shipA.velocity, null)
+    return Vector2f.dot(deltaVel, deltaPos) > 0f
+}
+
+// FleetMemberAPI-related methods below
 
 /**
  * Checks whether the ship has a hullmod installed on it (built-in or not)
@@ -345,7 +427,7 @@ fun addAfterimageToWholeShip(ship: ShipAPI, data: AfterimageData) {
  * child module.
  *
  * @param ship the ship for which to collect all modules
- * @return list of [ship]'s ship modules
+ * @return list of [ship]'s ship modules, parent (root module) being last
  */
 fun getAllShipSections(ship: ShipAPI): List<ShipAPI> {
     // If ship is parent, apply to children
@@ -361,6 +443,29 @@ fun getAllShipSections(ship: ShipAPI): List<ShipAPI> {
 
     // The last scenario is - it's single module ship, so just return that
     return listOf(ship)
+}
+
+/**
+ * Returns the root module of a ship.
+ *
+ * If this ship is a multimodule ship, the method will return the main module regardless of which module it's called on.
+ * If this ship is not a multimodule ship, this method will just return [this], which also happens to be the root module.
+ *
+ * @return the root (main) module of this ship
+ */
+fun ShipAPI.getRootModule(): ShipAPI {
+    // A bit of a hack but no point in reinventing the wheel now ...
+    return getAllShipSections(this).last()
+}
+
+/**
+ * Whether this module is the root module of the ship. Should always return true for single module ships.
+ *
+ * @return whether [this] is the root module of the whole ship
+ */
+fun ShipAPI.isRootModule(): Boolean {
+    val rootModuleShip = this.getRootModule()
+    return this.hullSpec.hullId == rootModuleShip.hullSpec.hullId
 }
 
 /**
@@ -428,10 +533,16 @@ fun FleetMemberAPI.isMultiModuleShip(): Boolean {
  *
  * @param fromVector the vector from which we want to start pointing
  * @param toVector the vector to which we want to point to
- * @return vector pointing from [fromVector] to [toVector]
+ * @param isNormalized whether the resulting vector should be normalized or not. Defaults to [false]
+ * @return vector pointing from [fromVector] to [toVector], which is normalized or not depending on [isNormalized]
  */
-fun getDirectionVector(fromVector: Vector2f, toVector: Vector2f): Vector2f {
-    return toVector.sub(fromVector)
+fun getDirectionVector(fromVector: Vector2f, toVector: Vector2f, isNormalized: Boolean = false): Vector2f {
+    val directionVector = toVector.sub(fromVector)
+    return if(isNormalized) {
+        directionVector.normalized()
+    } else {
+        directionVector
+    }
 }
 
 
@@ -456,6 +567,17 @@ fun Vector2f.getDirectionVectorTo(toVector: Vector2f): Vector2f {
  */
 fun getVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Float): Vector2f {
     return toVector.sub(fromVector).div(time)
+}
+
+/**
+ * Calculates the cross-product of two vectors [first] and [second]
+ *
+ * @param first the first vector
+ * @param second the second vector
+ * @return the cross-product of two vectors
+ */
+fun getCrossProduct(first: Vector2f, second: Vector2f): Float {
+    return (first.x * second.y - first.y * second.x)
 }
 
 /**
@@ -569,6 +691,119 @@ fun Vector2f.clone(): Vector2f {
 }
 
 /**
+ * Rotates this vector around the origin by [angle] degrees.
+ *
+ * @param angle rotation angle in degrees
+ * @return a new [Vector2f] rotated by the given angle
+ */
+fun Vector2f.rotate(angle: Float, useFastTrig: Boolean = true): Vector2f {
+    if (angle == 0f) return this.clone()
+
+    val angleRadians = Math.toRadians(angle.toDouble())
+    val cosine = if(useFastTrig) { FastTrigUtils.cos(angleRadians)} else { cos(angleRadians) }
+    val sine = if (useFastTrig) { FastTrigUtils.sin(angleRadians) } else { sin(angleRadians) }
+
+    val xPrim = (this.x.toDouble() * cosine) - (this.y.toDouble() * sine)
+    val yPrim = (this.x.toDouble() * sine) + (this.y.toDouble() * cosine)
+    return Vector2f(
+        xPrim.toFloat(),
+        yPrim.toFloat()
+    )
+}
+
+/**
+ * Rotates this vector around a given [pivotPoint] by [angle] degrees.
+ *
+ * @param pivotPoint the point to rotate around
+ * @param angle rotation angle in degrees
+ * @return a new [Vector2f] rotated around the pivot
+ */
+fun Vector2f.rotateAroundPivot(pivotPoint: Vector2f, angle: Float, useFastTrig: Boolean = true): Vector2f {
+    if (angle == 0f) return this.clone()
+
+    // translate relative to pivot
+    val temp = this.sub(pivotPoint)
+    // rotate around origin
+    val rotated = temp.rotate(angle, useFastTrig = useFastTrig)
+    // translate back
+    return rotated.add(pivotPoint)
+}
+
+/**
+ * Replacement for [Misc.getDistance] which can work in tests.
+ *
+ * Calculates distance between [this] vector and [otherVector]
+ *
+ * @param otherVector the other vector to calculate distance to
+ * @return the distance between [this] and [otherVector]
+ */
+fun Vector2f.distanceTo(otherVector: Vector2f): Float {
+    return sqrt((this.x - otherVector.x) * (this.x - otherVector.x) + (this.y - otherVector.y) * (this.y - otherVector.y)).toFloat()
+}
+
+/**
+ * Replacement for [Misc.getDistanceSq] which can work in tests.
+ *
+ * Calculates squared distance between [this] vector and [otherVector]
+ *
+ * @param otherVector the other vector to calculate distance to
+ * @return the squared distance between [this] and [otherVector]
+ */
+fun Vector2f.distanceSquaredTo(otherVector: Vector2f): Float {
+    return (this.x - otherVector.x) * (this.x - otherVector.x) + (this.y - otherVector.y) * (this.y - otherVector.y)
+}
+
+/**
+ * Calculates the cross-product of [this] vector and [otherVector]
+ *
+ * @param otherVector the other vector
+ * @return the cross product of [this] and [otherVector]
+ */
+fun Vector2f.crossProduct(otherVector: Vector2f): Float {
+    return (this.x * otherVector.y - this.y * otherVector.x)
+}
+
+/**
+ * Calculates the facing of [this] vector
+ *
+ * @return the normalized 'facing' of this vector in a [0,360) range
+ */
+fun Vector2f.getFacing(useFastTrig: Boolean = true): Float {
+    // Do atan2 to obtain the radians
+    val facingRadians = if (useFastTrig) { FastTrigUtils.atan2(this.y, this.x) } else { atan2(this.y.toDouble(), this.x.toDouble()) }
+    // Convert to degrees
+    val facingDegrees = Math.toDegrees(facingRadians)
+    // Normalize to [0, 360] range
+    val actualFacing = (facingDegrees + 360f) % 360f
+
+    return actualFacing.toFloat()
+}
+
+/**
+ * Calculates the facing of [this] to 'directly look at' [otherVector]
+ *
+ * @param otherVector the other vector, to get facing to
+ * @return the facing for [this] to 'directly look at' [otherVector], in degrees, normalized in [0,360) range
+ *
+ * @see getFacing
+ */
+fun Vector2f.getFacingTo(otherVector: Vector2f, useStrictMath: Boolean = false): Float {
+    return this.getDirectionVectorTo(otherVector).getFacing(useFastTrig = useStrictMath.not())
+}
+
+/**
+ * Calculates the facing from [sourceVector] to [destinationVector] so that it is position to 'directly look at'
+ *
+ * @param sourceVector the source vector used to calculate facing from
+ * @param destinationVector the vector used to calculate facing to
+ *
+ * @return the facing required for [sourceVector] to 'directly look at' [destinationVector], in degrees, normalized in [0,360) range
+ */
+fun calculateFacingTo(sourceVector: Vector2f, destinationVector: Vector2f): Float {
+    return sourceVector.getFacingTo(destinationVector)
+}
+
+/**
  * Calculates velocity vector which will take us from [fromVector] to [toVector] in [time] amount of time,
  * while taking distance into account.
  *
@@ -582,9 +817,14 @@ fun Vector2f.clone(): Vector2f {
  *
  * @see getVelocityVector
  */
+@Deprecated(
+    message = "This method should not be used since it returns the same results as the other, faster method",
+    replaceWith = ReplaceWith("getVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Float)"),
+    level = DeprecationLevel.WARNING
+)
 fun calculateVelocityVector(fromVector: Vector2f, toVector: Vector2f, time: Float): Vector2f {
     val direction = getDirectionVector(fromVector, toVector)
-    val distance = Misc.getDistance(fromVector, toVector)
+    val distance = fromVector.distanceTo(toVector)
     val speed = distance / time
 
     return direction.mul(speed / distance)
@@ -707,12 +947,47 @@ fun getChildModuleVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantA
 }
 
 /**
+ * Method that returns a sorted list of all child module variants belonging to the passed-in [fleetMemberAPI] along with
+ * the root module's ([fleetMemberAPI]'s) variant. The main module's variant will be last in the list.
+ *
+ * **NOTE:** **MUST** be called from the root module
+ *
+ * @param fleetMemberAPI the [FleetMemberAPI] to look up module variants for
+ * @return a list containing [ShipVariantAPI] variants belonging to all modules
+ */
+fun getAllModulesVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantAPI> {
+    val retVal = mutableListOf<ShipVariantAPI>()
+    // Add all child modules first
+    retVal.addAll(getChildModuleVariantList(fleetMemberAPI))
+    // And add own module variant last
+    retVal.add(fleetMemberAPI.variant)
+
+    return retVal.toList()
+}
+
+/**
  * Returns a sorted list of List<String>
  */
 fun List<String>.asSortedStringList(): List<String> {
     val temp = this.toMutableList()
     temp.sort()
     return temp.toList()
+}
+
+/**
+ * Returns a progression from this value down to
+ * but not including the specified [to] value.
+ *
+ * Technically, like [until], just downwards
+ */
+infix fun Int.downUntil(to: Int): IntProgression {
+    // If 'to' is the highest possible value,
+    // nothing can be 'greater than' it to stop at.
+    if (to >= Int.MAX_VALUE) return IntRange.EMPTY
+
+    // Equivalent to: i = start; i > to; i--
+    // Which is: i = start; i >= (to + 1); i--
+    return this downTo (to + 1)
 }
 
 /**
@@ -731,6 +1006,10 @@ fun runningFromExoticaTechnologiesScreen(): Boolean {
 
 val <T> T.exhaustive: T
     get() = this
+
+fun <T, V> pairOf(first: T, second: V): Pair<T, V> {
+    return Pair(first, second)
+}
 
 fun log(logMsg: String, logger: Logger, logLevel: Level = Level.DEBUG) {
     with(logger) {

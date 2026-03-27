@@ -18,6 +18,7 @@ import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.StringUtils
+import exoticatechnologies.util.distanceTo
 import org.json.JSONObject
 import org.lwjgl.util.vector.Vector2f
 import org.magiclib.kotlin.getDistanceSq
@@ -149,8 +150,8 @@ class TerminatorSubsystems(key: String, settings: JSONObject) : Exotic(key, sett
             drones.addAll(activeWings.keys)
 
             drones.sortWith { o1, o2 ->
-                val d1 = Misc.getDistance(o1.location, target.location)
-                val d2 = Misc.getDistance(o2.location, target.location)
+                val d1 = o1.location.distanceTo(target.location)
+                val d2 = o2.location.distanceTo(target.location)
                 sign(d1 - d2).toInt()
             }
 
@@ -227,7 +228,7 @@ class TerminatorSubsystems(key: String, settings: JSONObject) : Exotic(key, sett
                 val test = ship.aiFlags.getCustom(AIFlags.MANEUVER_TARGET)
                 if (test is ShipAPI) {
                     target = test
-                    val dist = Misc.getDistance(ship.location, target.location)
+                    val dist = ship.location.distanceTo(target.location)
                     val radSum = ship.collisionRadius + target.collisionRadius
                     if (dist > range + radSum) target = null
                 }

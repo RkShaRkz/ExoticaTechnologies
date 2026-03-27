@@ -24,7 +24,9 @@ object FleetMemberUtils {
         }
         return if (ship.fleetMember != null) {
             ship.fleetMember
-        } else findMemberForStats(ship.mutableStats)
+        } else {
+            findMemberForStats(ship.mutableStats)
+        }
     }
 
     @JvmStatic

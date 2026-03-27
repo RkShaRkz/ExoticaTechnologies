@@ -15,6 +15,7 @@ import exoticatechnologies.combat.ExoticaShipRemovalReason
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
+import exoticatechnologies.modifications.exotics.misc.ForceApplier
 import exoticatechnologies.util.*
 import org.apache.log4j.Logger
 import org.json.JSONObject
@@ -639,18 +640,36 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                 drone?.let {
                     val momentumFactor: Float = getShieldPushOutEffectMomentumFactor(ship.hullSize, member, mods, exoticData)
 
-                    for (ship in AIUtils.getNearbyEnemies(it, it.collisionRadius)) {
-                        if (MathUtils.getDistance(ship.location, it.location) < ship.collisionRadius + it.getCollisionRadius()) { //hmm, I needs to override the no negative result thing here.
-                            val pointToTest = VectorUtils.clampLength(Vector2f.sub(it.getLocation(), ship.location, null), it.getShieldRadiusEvenIfNoShield())
-                            val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(it.getLocation(), pointToTest, ship)
+                    for (nearbyEnemyShip in AIUtils.getNearbyEnemies(it, it.collisionRadius)) {
+                        if (MathUtils.getDistance(nearbyEnemyShip.location, it.location) < nearbyEnemyShip.collisionRadius + it.getCollisionRadius()) { //hmm, I needs to override the no negative result thing here.
+                            val pointToTest = VectorUtils.clampLength(Vector2f.sub(it.getLocation(), nearbyEnemyShip.location, null), it.getShieldRadiusEvenIfNoShield())
+                            val collisionPoint: Vector2f? = CollisionUtil.getShipCollisionPoint(it.getLocation(), pointToTest, nearbyEnemyShip)
                             collisionPoint?.let { collision ->
-                                if (!ship.isStation && !(ship.isStationModule && ship.parentStation.isStation)) {
-                                    ship.velocity.set(it.getVelocity())
+                                if (!nearbyEnemyShip.isStation && !(nearbyEnemyShip.isStationModule && nearbyEnemyShip.parentStation.isStation)) {
+                                    // Normal case, when we try pushing out non-station ships out of the guardian shield
+                                    nearbyEnemyShip.velocity.set(it.getVelocity())
                                     val momentum = amount * 10f * momentumFactor
-                                    ForceApplier.applyMomentum(ship, collision, Vector2f.sub(it.getLocation(), ship.location, null), momentum, true)
+                                    ForceApplier.applyMomentum(
+                                        entity = nearbyEnemyShip,
+                                        pointOfImpact = collision,
+                                        direction = Vector2f.sub(ship.location, nearbyEnemyShip.location, null),
+                                        momentum = momentum,
+                                        elasticCollision = true
+                                    )
                                 } else {
-                                    val momentum = amount * -0.5f * 1 / momentumFactor
-                                    ForceApplier.applyMomentum(it.getParentStation(), collision, Vector2f.sub(ship.location, it.getLocation(), null), momentum, true)
+                                    // Inverse case when we try pushing out an "immovable object" - a station
+                                    // so instead we push ourselves back, larger ships being less affected by this
+                                    // This is dependant on the inverse of 'momentumFactor' multiplied by negativeMult
+                                    val negativeMomentumFactor = (1 / momentumFactor) * getNegativeMult(member, mods, exoticData)
+                                    val momentum = amount * 5f * negativeMomentumFactor
+                                    ForceApplier.applyMomentum(
+                                        // Apply to the drone-host ship's root module so we get pushed back
+                                        entity = ship.getRootModule(),
+                                        pointOfImpact = collision,
+                                        direction = Vector2f.sub(nearbyEnemyShip.location, ship.location, null),
+                                        momentum = momentum,
+                                        elasticCollision = true
+                                    )
                                 }
                             }
                         }
@@ -775,67 +794,6 @@ class GuardianShield(key: String, settings: JSONObject) : Exotic(key, settings) 
                     }
 
                     logFlux("<-- transferFlux()", "$LOGTAG:FluxTransfer")
-                }
-            }
-        }
-    }
-
-    object ForceApplier {
-        fun applyMomentum(entity: CombatEntityAPI?, pointOfImpact: Vector2f?, direction: Vector2f, momentum: Float, elasticCollision: Boolean) {
-            // This whole thing is weird, but necessary since arguments are being reassigned for some reason
-            var entity = entity
-            var direction = direction
-            var momentum = momentum
-
-            if (entity == null) {
-                return
-            } else {
-                // Filter out forces without a direction
-                if (direction.lengthSquared() == 0f) {
-                    return
-                }
-                // Avoid divide-by-zero errors...
-                var mass = max(1.0, entity.mass.toDouble()).toFloat()
-                // We should not move stations, right?
-                if (entity is ShipAPI) {
-                    val ship = entity
-                    if (ship.isStation || (ship.isStationModule && ship.parentStation.isStation)) {
-                        return
-                    }
-                    if (ship.isStationModule && ship.isShipWithModules) {
-                        entity = ship.parentStation
-                        mass = max(1.0, ship.massWithModules.toDouble()).toFloat()
-                    }
-                }
-                // Momentum is far too weak otherwise
-                momentum *= 100f
-                // Doing some vector calculate
-                val BPtoMC = entity?.let { Vector2f.sub(it.location, pointOfImpact, null) }
-                        ?: throw RuntimeException("entity was null while assigning to BPtoMC -- this should not be happening. Look into GuardianShield -> ForceApplier::applyMomentum()")
-                val forceV = Vector2f()
-                direction.normalise(forceV)
-                forceV.scale(momentum)
-                // get force vector
-                BPtoMC.normalise(BPtoMC)
-                // calculate acceleration
-                BPtoMC.scale(Vector2f.dot(forceV, BPtoMC) / mass)
-                if (elasticCollision) {
-                    // Apply velocity change
-                    Vector2f.add(BPtoMC, entity.velocity, entity.velocity)
-                } else {
-                    // Apply velocity change
-                    direction = Vector2f(forceV)
-                    direction.scale(1 / mass)
-                    Vector2f.add(direction, entity.velocity, entity.velocity)
-                }
-                // calculate moment change
-                var angularAcc = VectorUtils.getCrossProduct(forceV, BPtoMC) / (0.5f * mass * entity.collisionRadius * entity.collisionRadius)
-                angularAcc = Math.toDegrees(angularAcc.toDouble()).toFloat()
-                // Apply angular velocity change
-                if (elasticCollision) {
-                    entity.angularVelocity = entity.angularVelocity + angularAcc
-                } else {
-                    entity.angularVelocity = entity.angularVelocity - angularAcc
                 }
             }
         }

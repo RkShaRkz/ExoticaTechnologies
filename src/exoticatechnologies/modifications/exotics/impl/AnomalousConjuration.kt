@@ -27,6 +27,7 @@ import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.modifications.exotics.types.ExoticType
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.Utilities
+import exoticatechnologies.util.distanceTo
 import org.json.JSONObject
 import org.lwjgl.util.vector.Vector2f
 import java.awt.Color
@@ -251,7 +252,7 @@ class AnomalousConjuration(key: String, settings: JSONObject) : Exotic(key, sett
 
     fun isVulnerableToMissileBarrage(from: ShipAPI, other: ShipAPI): Boolean {
         val incap = Misc.getIncapacitatedTime(other)
-        val dist = Misc.getDistance(from.location, other.location)
+        val dist = from.location.distanceTo(other.location)
         if (dist > 2000) return false
         val assumedMissileSpeed = 500f
         var eta = dist / assumedMissileSpeed
