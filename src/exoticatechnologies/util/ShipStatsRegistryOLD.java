@@ -2,13 +2,11 @@ package exoticatechnologies.util;
 
 import com.fs.starfarer.api.combat.MutableShipStatsAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
-import exoticatechnologies.util.AnonymousLogger;
-import exoticatechnologies.util.FleetMemberUtils;
 import org.apache.log4j.Level;
 
 import java.util.*;
 
-public class ShipStatsRegistry {
+public class ShipStatsRegistryOLD {
     // 1. The Storage
     private static final Map<FMAPIUUID, List<MutableShipStatsAPI>> globalStatsRegistry = new WeakHashMap<>();
     private static final Map<FleetMemberAPI, UUID> globalFMAPIUUIDmap = new WeakHashMap<>();
@@ -24,9 +22,9 @@ public class ShipStatsRegistry {
         if (member == null) return Collections.singletonList(stats);
 
         // Reset session if this is the Main Hull (Root)
-        if (stats == member.getStats()) {
-            globalFMAPIUUIDmap.put(member, UUID.randomUUID());
-        }
+//        if (stats == member.getStats()) {
+//            globalFMAPIUUIDmap.put(member, UUID.randomUUID());
+//        }
 
         UUID sessionID = globalFMAPIUUIDmap.get(member);
         if (sessionID == null) {
@@ -43,6 +41,7 @@ public class ShipStatsRegistry {
         List<MutableShipStatsAPI> allStats = globalStatsRegistry.get(key);
         if (!allStats.contains(stats)) {
             allStats.add(stats);
+            globalStatsRegistry.put(key, allStats);
         }
 
         return allStats;

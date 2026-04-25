@@ -322,7 +322,7 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     override fun toString(): String {
-        return "ShipModifications{bandwidth=${bandwidth}, exotics=${exotics}, upgrades=${upgrades}}"
+        return "ShipModifications{bandwidth=${bandwidth}, exotics=${exotics}, exoticIdSet:${getExoticIdSet()}, upgrades=${upgrades}}"
     }
 
     private val tooltipColor = Misc.getTextColor()

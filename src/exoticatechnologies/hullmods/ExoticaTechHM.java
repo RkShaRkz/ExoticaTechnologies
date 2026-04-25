@@ -9,6 +9,7 @@ import com.fs.starfarer.api.combat.ShipAPI;
 import com.fs.starfarer.api.combat.ShipVariantAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
+import exoticatechnologies.util.AnonymousLogger;
 import exoticatechnologies.util.ShipStatsRegistry;
 import exoticatechnologies.modifications.Modification;
 import exoticatechnologies.modifications.ShipModFactory;
@@ -121,10 +122,10 @@ public class ExoticaTechHM extends BaseHullMod {
      * @see Modification#shouldAffectModulesToShareEffectsToOtherModules()
      */
     public boolean shouldSkipModification_NEW(
-            ShipAPI ship,
-            Modification mod,
-            boolean thisModuleOwnsIt,
-            boolean presentSomewhereOnShip
+        ShipAPI ship,
+        Modification mod,
+        boolean thisModuleOwnsIt,
+        boolean presentSomewhereOnShip
     ) {
         boolean modAppliesToModules = mod.shouldAffectModule(ship.getParentStation(), ship);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
@@ -154,12 +155,24 @@ public class ExoticaTechHM extends BaseHullMod {
         return skip;
     }
 
-//    public boolean shouldSkipModification(MutableShipStatsAPI stats, Modification mod) {
+    /**
+     * Method for checking whether a {@link Modification} should be skipped before processing (calling it's callbacks on it)<br>
+     * <br>
+     * Called in:<br>
+     * - {@link ExoticaTechHM#applyEffectsBeforeShipCreation(ShipAPI.HullSize, MutableShipStatsAPI, String)}<br>
+     *
+     * @param stats the {@link MutableShipStatsAPI} stats of the ship/module on which the modification is installed
+     * @param mod the modification in question
+     * @param thisModuleOwnsIt whether this module (stats) owns the modification (mod) or not
+     * @param presentSomewhereOnShip whether this modification is present somewhere on the ship, in case it has to share it's effects
+     * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(MutableShipStatsAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
+     * @see Modification#shouldAffectModulesToShareEffectsToOtherModules()
+     */
     public boolean shouldSkipModification_NEW(
-            MutableShipStatsAPI stats,
-            Modification mod,
-            boolean thisModuleOwnsIt,
-            boolean presentSomewhereOnShip
+        MutableShipStatsAPI stats,
+        Modification mod,
+        boolean thisModuleOwnsIt,
+        boolean presentSomewhereOnShip
     ) {
         boolean modAppliesToModules = mod.shouldAffectModule(stats);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
@@ -169,6 +182,9 @@ public class ExoticaTechHM extends BaseHullMod {
         FleetMemberAPI rootModule = FleetMemberUtils.findMemberForStats(stats);
         FleetMemberAPI moduleFMAPI = stats.getFleetMember();
         boolean isModuleStats = moduleFMAPI != rootModule;
+        boolean isModuleStats2 = moduleFMAPI != null && moduleFMAPI.getShipName() == null;
+        //TODO `isModuleStats` always returns 'true' whereas `isModuleStats2` returns 'false' for modules
+        AnonymousLogger.INSTANCE.log("--> shouldSkipModification_NEW()\tisModuleStats: "+isModuleStats+", isModuleStats2: "+isModuleStats2, "ShouldSkipModification", Level.ERROR);
 
         boolean skip = false;
 
@@ -183,7 +199,6 @@ public class ExoticaTechHM extends BaseHullMod {
             if (!modSharesEffectsWithAllModules) {
                 // If it does not share with modules, then we skip it
                 skip = true;
-//            } else if (cachedCheckIsModule(ship)) {
             } else if (isModuleStats) {
                 // Skip only if the mod cannot affect modules AND the override flag is true
                 skip = (!modAppliesToModules && modShouldAffectModulesToShareEffectsToOtherModules);
@@ -230,17 +245,7 @@ public class ExoticaTechHM extends BaseHullMod {
         return false;
     }
 
-    /**
-     * Method for checking whether a {@link Modification} should be skipped before processing (calling it's callbacks on it)<br>
-     * <br>
-     * Called in:<br>
-     * - {@link ExoticaTechHM#applyEffectsBeforeShipCreation(ShipAPI.HullSize, MutableShipStatsAPI, String)}<br>
-     *
-     * @param stats the {@link MutableShipStatsAPI} stats of the ship/module on which the modification is installed
-     * @param mod the modification in question
-     * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(MutableShipStatsAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
-     * @see Modification#shouldAffectModulesToShareEffectsToOtherModules()
-     */
+
     public boolean shouldSkipModification(MutableShipStatsAPI stats, Modification mod) { //TODO delete his after second one proves working
         boolean fleetMemberNonNull = stats.getFleetMember() != null;
         // lets just default to 'false' if fleetmember is null - it won't go into the if() anyways
@@ -289,7 +294,12 @@ public class ExoticaTechHM extends BaseHullMod {
                 }
             }
 
-            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
+                AnonymousLogger.INSTANCE.log("[advanceInCombat] Skipping modification "+exotic+" on ship "+ship+", FM: "+ship.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
+                continue;
+            } else {
+                AnonymousLogger.INSTANCE.log("[advanceInCombat] NOT SKIPPING modification "+exotic+" on ship "+ship+", FM: "+ship.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
+            }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
@@ -383,7 +393,12 @@ public class ExoticaTechHM extends BaseHullMod {
                 }
             }
 
-            if (shouldSkipModification_NEW(stats, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            if (shouldSkipModification_NEW(stats, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
+                AnonymousLogger.INSTANCE.log("[applyEffectsBeforeShipCreation] Skipping modification "+exotic+" on stats "+stats+", FM: "+stats.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
+                continue;
+            } else {
+                AnonymousLogger.INSTANCE.log("[applyEffectsBeforeShipCreation] NOT SKIPPING modification "+exotic+" on stats "+stats+", FM: "+stats.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
+            }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
@@ -454,7 +469,12 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisExoticasMods = tempMods;
                 }
             }
-            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
+                AnonymousLogger.INSTANCE.log("[applyEffectsAfterShipCreation] Skipping modification "+exotic+" on ship "+ship+", FM: "+ship.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
+                continue;
+            } else {
+                AnonymousLogger.INSTANCE.log("[applyEffectsAfterShipCreation] NOT SKIPPING modification "+exotic+" on ship "+ship+", FM: "+ship.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
+            }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
@@ -526,7 +546,12 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisExoticasMods = tempMods;
                 }
             }
-            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
+                AnonymousLogger.INSTANCE.log("[applyEffectsToFightersSpawnedByShip] Skipping modification "+exotic+" on ship "+ship+", FM: "+ship.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
+                continue;
+            } else {
+                AnonymousLogger.INSTANCE.log("[applyEffectsToFightersSpawnedByShip] NOT SKIPPING modification "+exotic+" on ship "+ship+", FM: "+ship.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
+            }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
