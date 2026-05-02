@@ -26,6 +26,7 @@ import exoticatechnologies.refit.RefitButtonAdder;
 import exoticatechnologies.ui.impl.shop.ShopManager;
 import exoticatechnologies.ui.impl.shop.overview.OverviewPanelUIPlugin;
 import exoticatechnologies.util.AnonymousLogger;
+import exoticatechnologies.util.FleetMemberHierarchy;
 import exoticatechnologies.util.FleetMemberUtils;
 import exoticatechnologies.util.Utilities;
 import lombok.extern.log4j.Log4j;
@@ -63,6 +64,8 @@ public class ETModPlugin extends BaseModPlugin {
         FactionConfigLoader.load();
         // And cleanup the HullmodExoticHandler's map
         HullmodExoticHandler.INSTANCE.reinitialize();
+        // And refresh caches for FleetMemberHierarchy
+        FleetMemberHierarchy.reinitialize();
     }
 
     @Override
@@ -87,6 +90,8 @@ public class ETModPlugin extends BaseModPlugin {
         Utilities.mergeChipsIntoCrate(Global.getSector().getPlayerFleet().getCargo());
         // And cleanup the HullmodExoticHandler's map
         HullmodExoticHandler.INSTANCE.reinitialize();
+        // And refresh caches for FleetMemberHierarchy
+        FleetMemberHierarchy.reinitialize();
     }
 
     public static String getSectorSeedString() {
