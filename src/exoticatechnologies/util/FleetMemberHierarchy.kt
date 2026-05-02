@@ -15,7 +15,6 @@ import exoticatechnologies.refit.checkRefitVariant
 object FleetMemberHierarchy {
 
     private val logger: Logger = Logger.getLogger(FleetMemberHierarchy::class.java)
-
     private val variantToParent = WeakHashMap<ShipVariantAPI, ShipVariantAPI>()
 
     @JvmStatic fun isRootModule(stats: MutableShipStatsAPI?): Boolean = isRootModule(stats?.fleetMember)
@@ -25,7 +24,6 @@ object FleetMemberHierarchy {
         val fleet = getFleetContext(member)
 
         if (currentV != null && fleet != null) {
-            refreshCache(fleet)
             val isInFleet = fleet.fleetData.membersListCopy.any { it.checkRefitVariant() === currentV }
             if (isInFleet && !variantToParent.containsKey(currentV)) {
                 result = true
@@ -40,13 +38,11 @@ object FleetMemberHierarchy {
     @JvmStatic fun isChildModule(member: FleetMemberAPI?): Boolean {
         var result = false
         val variant = member?.checkRefitVariant()
-        val fleet = getFleetContext(member)
-
-        if (variant != null && fleet != null) {
-            refreshCache(fleet)
-            if (variantToParent.containsKey(variant)) {
-                result = true
+        if (variant != null) {
+            if (!variantToParent.containsKey(variant)) {
+                getFleetContext(member)
             }
+            result = variantToParent.containsKey(variant)
         }
         return result
     }
@@ -54,11 +50,10 @@ object FleetMemberHierarchy {
     @JvmStatic fun getRootModule(stats: MutableShipStatsAPI?): FleetMemberAPI? = getRootModule(stats?.fleetMember)
     @JvmStatic fun getRootModule(member: FleetMemberAPI?): FleetMemberAPI? {
         var result = member
-        val fleet = getFleetContext(member)
         val currentV = member?.checkRefitVariant()
+        val fleet = getFleetContext(member)
 
         if (member != null && fleet != null && currentV != null) {
-            refreshCache(fleet)
             val rootV = findRootVariant(currentV)
             val foundRoot = fleet.fleetData.membersListCopy.find { it.checkRefitVariant() === rootV }
             if (foundRoot != null) {
@@ -72,36 +67,34 @@ object FleetMemberHierarchy {
     @JvmStatic fun getAllChildModules(member: FleetMemberAPI?): List<FleetMemberAPI> {
         val modules = getAllModules(member).toMutableList()
         if (modules.isNotEmpty()) {
-            modules.removeAt(0)
+            // Root is now at the end
+            modules.removeAt(modules.size - 1)
         }
-        return modules
+        return modules.toList()
     }
 
     @JvmStatic fun getAllModulesStatsFromSingleStats(stats: MutableShipStatsAPI?): List<MutableShipStatsAPI> {
-        val wholeShipModulesList = getAllModules(stats)
-        val wholeShipStatsList = wholeShipModulesList.map { it.stats }
-
-        return wholeShipStatsList
+        return getAllModules(stats).map { it.stats }
     }
+
     @JvmStatic fun getAllModules(stats: MutableShipStatsAPI?): List<FleetMemberAPI> = getAllModules(stats?.fleetMember)
     @JvmStatic fun getAllModules(member: FleetMemberAPI?): List<FleetMemberAPI> {
         val resultList = mutableListOf<FleetMemberAPI>()
-        val fleet = getFleetContext(member)
         val currentV = member?.checkRefitVariant()
+        val fleet = getFleetContext(member)
 
         if (member != null && fleet != null && currentV != null) {
-            refreshCache(fleet)
             val rootV = findRootVariant(currentV)
             val rootMember = fleet.fleetData.membersListCopy.find { it.checkRefitVariant() === rootV }
 
             if (rootMember != null) {
-                resultList.add(rootMember)
                 collectModuleMembers(rootV, fleet, resultList)
+                resultList.add(rootMember) // Root module is ALWAYS last
             }
         } else if (member != null) {
             resultList.add(member)
         }
-        return resultList
+        return resultList.toList()
     }
 
     @JvmStatic fun findRootVariant(variant: ShipVariantAPI): ShipVariantAPI {
@@ -119,11 +112,11 @@ object FleetMemberHierarchy {
     }
 
     @JvmStatic fun refreshAllCaches() {
-        log("--> refreshAllCaches()", logger, Level.INFO)
+        logInfo("--> refreshAllCaches()")
         for (fleet in CampaignEventListener.activeFleets) {
             refreshCache(fleet)
         }
-        log("<-- refreshAllCaches()", logger, Level.INFO)
+        logInfo("<-- refreshAllCaches()")
     }
 
     @JvmStatic fun reinitialize() {
@@ -132,17 +125,21 @@ object FleetMemberHierarchy {
         if (Global.getSector() != null) {
             refreshAllCaches()
         } else {
-            logError("Global.getSector() was null! Bailing out without calling refreshAllCaches()...")
+            logError("Global.getSector() was null! Bailing out without calling refreshAllCaches() ...")
         }
     }
 
-    private fun refreshCache(fleet: CampaignFleetAPI) {
-        log("--> refreshCache()\tfleet: ${fleet}", logger, Level.INFO)
-        for (m in fleet.fleetData.membersListCopy) {
-            val v = m.checkRefitVariant()
-            mapVariantTree(v)
+    private fun refreshCache(fleet: CampaignFleetAPI?) {
+        logInfo("--> refreshCache()\tfleet: ${fleet}")
+        return if (fleet == null) {
+            // If fleet was null, just do nothing
+        } else {
+            // Otherwise remap everything
+            for (m in fleet.fleetData.membersListCopy) {
+                mapVariantTree(m.checkRefitVariant())
+            }
         }
-        log("<-- refreshCache()\tfleet: ${fleet}", logger, Level.INFO)
+        logInfo("<-- refreshCache()\tfleet: ${fleet}")
     }
 
     private fun mapVariantTree(parent: ShipVariantAPI) {
@@ -157,42 +154,47 @@ object FleetMemberHierarchy {
 
     private fun getFleetContext(member: FleetMemberAPI?): CampaignFleetAPI? {
         var result: CampaignFleetAPI? = null
-        val targetV = member?.checkRefitVariant()
+        val targetV = member?.checkRefitVariant() ?: return null
 
-        if (targetV != null) {
-            for (activeFleet in CampaignEventListener.activeFleets) {
-                val members = activeFleet.fleetData.membersListCopy
-                var foundInFleet = false
-                for (m in members) {
-                    val rootV = m.checkRefitVariant()
-                    if (rootV === targetV || isOwnerOf(rootV, targetV)) {
-                        foundInFleet = true
-                        break
-                    }
-                }
-                if (foundInFleet) {
-                    result = activeFleet
-                    break
-                }
+        for (activeFleet in CampaignEventListener.activeFleets) {
+            if (isVariantInFleet(activeFleet, targetV)) {
+                result = activeFleet
+                break
             }
         }
 
-        if (result == null && member != null) {
+        if (result == null && Global.getSector()?.playerFleet != null) {
+            if (isVariantInFleet(Global.getSector().playerFleet, targetV)) {
+                result = Global.getSector().playerFleet
+            }
+        }
+
+        if (result == null) {
             logError("Fleet context missing for member: ${member.shipName} [${member.hullId}]")
         }
         return result
     }
 
+    private fun isVariantInFleet(fleet: CampaignFleetAPI, targetV: ShipVariantAPI): Boolean {
+        for (m in fleet.fleetData.membersListCopy) {
+            val rootV = m.checkRefitVariant()
+            if (rootV === targetV || isOwnerOf(rootV, targetV)) return true
+        }
+        return false
+    }
+
     private fun isOwnerOf(parent: ShipVariantAPI?, child: ShipVariantAPI): Boolean {
+        if (parent == null) return false
         var found = false
-        if (parent != null) {
-            for (slotId in parent.stationModules.keys) {
-                val moduleV = parent.getModuleVariant(slotId)
-                if (moduleV != null) {
-                    if (moduleV === child || isOwnerOf(moduleV, child)) {
-                        found = true
-                        break
-                    }
+        for (slotId in parent.stationModules.keys) {
+            val moduleV = parent.getModuleVariant(slotId)
+            if (moduleV != null) {
+                if (!variantToParent.containsKey(moduleV)) {
+                    variantToParent[moduleV] = parent
+                }
+                if (moduleV === child || isOwnerOf(moduleV, child)) {
+                    found = true
+                    break
                 }
             }
         }
@@ -200,11 +202,10 @@ object FleetMemberHierarchy {
     }
 
     private fun collectModuleMembers(parent: ShipVariantAPI, fleet: CampaignFleetAPI, list: MutableList<FleetMemberAPI>) {
-        val members = fleet.fleetData.membersListCopy
         for (slotId in parent.stationModules.keys) {
             val childV = parent.getModuleVariant(slotId)
             if (childV != null) {
-                val moduleMember = members.find { it.checkRefitVariant() === childV }
+                val moduleMember = fleet.fleetData.membersListCopy.find { it.checkRefitVariant() === childV }
                 if (moduleMember != null) {
                     list.add(moduleMember)
                     collectModuleMembers(childV, fleet, list)
@@ -216,5 +217,8 @@ object FleetMemberHierarchy {
     private fun logError(message: String) {
         log(message, logger, Level.ERROR)
     }
-}
 
+    private fun logInfo(message: String) {
+        log(message, logger, Level.INFO)
+    }
+}
