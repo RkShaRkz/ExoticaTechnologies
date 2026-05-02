@@ -3,14 +3,14 @@ package exoticatechnologies.hullmods;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.BattleAPI;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
+import com.fs.starfarer.api.campaign.FleetDataAPI;
 import com.fs.starfarer.api.combat.BaseHullMod;
 import com.fs.starfarer.api.combat.MutableShipStatsAPI;
 import com.fs.starfarer.api.combat.ShipAPI;
 import com.fs.starfarer.api.combat.ShipVariantAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
-import exoticatechnologies.util.AnonymousLogger;
-import exoticatechnologies.util.ShipStatsRegistry;
+import exoticatechnologies.util.*;
 import exoticatechnologies.modifications.Modification;
 import exoticatechnologies.modifications.ShipModFactory;
 import exoticatechnologies.modifications.ShipModLoader;
@@ -20,12 +20,11 @@ import exoticatechnologies.modifications.exotics.ExoticData;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
 import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
-import exoticatechnologies.util.ExtensionsKt;
-import exoticatechnologies.util.FleetMemberUtils;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -55,6 +54,17 @@ public class ExoticaTechHM extends BaseHullMod {
 
             ExtensionsKt.fixVariant(member);
             variant.addPermaMod(HULLMOD_ID);
+
+            // And proceed to install the hullmod to all other ship's modules (children modules of this module)
+            //TODO check if this FMAPI is root - if it is, do what we're doing below
+            // if it isn't - grab root and do what we're doing below (apply to root as well)
+            for (String moduleVariantId : variant.getStationModules().keySet()) {
+                ShipVariantAPI moduleVariant = variant.getModuleVariant(moduleVariantId);
+
+                if (moduleVariant != null) {
+                    moduleVariant.addPermaMod(HULLMOD_ID);
+                }
+            }
 
             member.updateStats();
         }
@@ -174,17 +184,52 @@ public class ExoticaTechHM extends BaseHullMod {
         boolean thisModuleOwnsIt,
         boolean presentSomewhereOnShip
     ) {
+        AnonymousLogger.INSTANCE.log("--> shouldSkipModification_NEW()\tstats: "+stats+", mod: "+mod+", thisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, "ShouldSkipModification", Level.ERROR);
         boolean modAppliesToModules = mod.shouldAffectModule(stats);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
         boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmodAppliesToModules: "+modAppliesToModules+", modSharesEffectsWithAllModules: "+modSharesEffectsWithAllModules+", modShouldAffectModulesToShareEffectsToOtherModules: "+modShouldAffectModulesToShareEffectsToOtherModules+", presentSomewhereOnShip: "+presentSomewhereOnShip, "ShouldSkipModification", Level.ERROR);
 
         // Check whether these 'stats' belong to the root FleetMemberAPI (root module) or a child one
-        FleetMemberAPI rootModule = FleetMemberUtils.findMemberForStats(stats);
+//        FleetMemberAPI rootModule = FleetMemberUtils.findMemberForStats(stats);
         FleetMemberAPI moduleFMAPI = stats.getFleetMember();
-        boolean isModuleStats = moduleFMAPI != rootModule;
-        boolean isModuleStats2 = moduleFMAPI != null && moduleFMAPI.getShipName() == null;
+//        FleetMemberAPI rootModule2 = FleetMemberHierarchy.getRootMember(stats);
+        // this one is commented out just to rename it...
+//        FleetMemberAPI rootModule2 = FleetMemberHierarchy.getRootModule(stats);
+        FleetMemberAPI rootModule = FleetMemberHierarchy.getRootModule(stats);
+//        boolean isModuleStats = moduleFMAPI != rootModule;
+//        boolean isModuleStats2 = moduleFMAPI != null && moduleFMAPI.getShipName() == null;
+//        boolean isModuleStats3 = moduleFMAPI != rootModule2;
+//        boolean isModuleStats4 = moduleFMAPI != null && moduleFMAPI.getShipName() == null;
+        boolean isModuleStats = moduleFMAPI != rootModule && moduleFMAPI.getShipName() == null;
         //TODO `isModuleStats` always returns 'true' whereas `isModuleStats2` returns 'false' for modules
-        AnonymousLogger.INSTANCE.log("--> shouldSkipModification_NEW()\tisModuleStats: "+isModuleStats+", isModuleStats2: "+isModuleStats2, "ShouldSkipModification", Level.ERROR);
+//        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModuleStats: "+isModuleStats+", isModuleStats2: "+isModuleStats2, "ShouldSkipModification", Level.ERROR);
+//        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModuleStats3: "+isModuleStats3+", isModuleStats4: "+isModuleStats4, "ShouldSkipModification", Level.ERROR);
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModuleStats: "+isModuleStats, "ShouldSkipModification", Level.ERROR);
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule: "+rootModule, "ShouldSkipModification", Level.ERROR);
+        if (rootModule != null) {
+            // +rootModule+"\trootModule.getShipName(): "+(rootModule.getShipName() != null ? rootModule.getShipName() : "WAS NULL")
+            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule.getShipName(): "+(rootModule.getShipName() != null ? rootModule.getShipName() : "WAS NULL"), "ShouldSkipModification", Level.ERROR);
+            FleetDataAPI rootFleetData = rootModule.getFleetData();
+            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootFleetData: "+rootFleetData, "ShouldSkipModification", Level.ERROR);
+        }
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFMAPI: "+moduleFMAPI, "ShouldSkipModification", Level.ERROR);
+        if (moduleFMAPI != null) {
+            // +"\tmoduleFMAPI.getShipName(): "+(moduleFMAPI.getShipName() != null ? moduleFMAPI.getShipName() : "WAS NULL")
+            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFMAPI.getShipName(): "+(moduleFMAPI.getShipName() != null ? moduleFMAPI.getShipName() : "WAS NULL"), "ShouldSkipModification", Level.ERROR);
+            FleetDataAPI moduleFleetData = rootModule.getFleetData();
+            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFleetData: "+moduleFleetData, "ShouldSkipModification", Level.ERROR);
+        }
+        /*
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule2: "+rootModule2, "ShouldSkipModification", Level.ERROR);
+        if (rootModule2 != null) {
+            // +rootModule+"\trootModule.getShipName(): "+(rootModule.getShipName() != null ? rootModule.getShipName() : "WAS NULL")
+            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule2.getShipName(): "+(rootModule2.getShipName() != null ? rootModule2.getShipName() : "WAS NULL"), "ShouldSkipModification", Level.ERROR);
+            FleetDataAPI rootFleetData2 = rootModule2.getFleetData();
+            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootFleetData: "+rootFleetData2, "ShouldSkipModification", Level.ERROR);
+        }
+         */
+
 
         boolean skip = false;
 
@@ -207,6 +252,8 @@ public class ExoticaTechHM extends BaseHullMod {
                 skip = false;
             }
         }
+
+        AnonymousLogger.INSTANCE.log("<-- shouldSkipModification_NEW()\tskip: "+skip, "ShouldSkipModification", Level.ERROR);
         return skip;
     }
 
@@ -295,7 +342,7 @@ public class ExoticaTechHM extends BaseHullMod {
             }
 
             if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
-                AnonymousLogger.INSTANCE.log("[advanceInCombat] Skipping modification "+exotic+" on ship "+ship+", FM: "+ship.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
+                AnonymousLogger.INSTANCE.log("[advanceInCombat] SKIPPING modification "+exotic+" on ship "+ship+", FM: "+ship.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
                 continue;
             } else {
                 AnonymousLogger.INSTANCE.log("[advanceInCombat] NOT SKIPPING modification "+exotic+" on ship "+ship+", FM: "+ship.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
@@ -374,7 +421,8 @@ public class ExoticaTechHM extends BaseHullMod {
 
         // Now, lets try fetching all of ship's Modifications to derive/calculate the two new parameters
         FleetMemberAPI rootModuleMember = FleetMemberUtils.findMemberForStats(stats);    //this is root module
-        List<MutableShipStatsAPI> statsList = ShipStatsRegistry.getWholeShipsStatsFromSingleStats(stats);
+//        List<MutableShipStatsAPI> statsList = ShipStatsRegistry.getWholeShipsStatsFromSingleStats(stats);
+        List<MutableShipStatsAPI> statsList = FleetMemberHierarchy.getAllModulesStatsFromSingleStats(stats);
         List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForStats(stats);
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
@@ -393,6 +441,24 @@ public class ExoticaTechHM extends BaseHullMod {
                 }
             }
 
+            AnonymousLogger.INSTANCE.log("[applyEffectsBeforeShipCreation] [1] whole ship mods from single stats: "+wholeShipsMods, Level.INFO);
+
+            String stringifiedList = java.util.Arrays.toString(statsList.toArray());
+            AnonymousLogger.INSTANCE.log("[applyEffectsBeforeShipCreation] [1] whole ship stats from single stats: "+statsList, Level.INFO);
+            AnonymousLogger.INSTANCE.log("[applyEffectsBeforeShipCreation] [2] whole ship stats from single stats: "+stringifiedList, Level.INFO);
+            //temp code
+
+            //remap stats list to FMAPI list
+            List<FleetMemberAPI> fmapiList = new ArrayList<>();
+            for (MutableShipStatsAPI particularStats : statsList) {
+                fmapiList.add(particularStats.getFleetMember());
+            }
+
+            String stringifiedFmapiList = java.util.Arrays.toString(fmapiList.toArray());
+            AnonymousLogger.INSTANCE.log("[applyEffectsBeforeShipCreation] [3] whole ship FMAPIs from single stats: "+fmapiList, Level.INFO);
+            AnonymousLogger.INSTANCE.log("[applyEffectsBeforeShipCreation] [4] whole ship FMAPIs from single stats: "+stringifiedFmapiList, Level.INFO);
+
+            //end of temp code
             if (shouldSkipModification_NEW(stats, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
                 AnonymousLogger.INSTANCE.log("[applyEffectsBeforeShipCreation] Skipping modification "+exotic+" on stats "+stats+", FM: "+stats.getFleetMember()+"\tthisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, Level.INFO);
                 continue;

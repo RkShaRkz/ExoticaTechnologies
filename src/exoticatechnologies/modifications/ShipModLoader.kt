@@ -83,6 +83,7 @@ class ShipModLoader {
 
     private fun getAllDataFromStatsAPI(stats: MutableShipStatsAPI): List<ShipModifications> {
         // First, grab all ships' stats
+        //TODO get rid of ShipStatsRegistry in favor of FleetMemberHierarchy
         val allShipStats = ShipStatsRegistry.getWholeShipsStatsFromSingleStats(stats)
         val allShipFleetMembers = allShipStats.map { it.fleetMember }
         val rootModuleFleetMember = FleetMemberUtils.findMemberForStats(stats)
@@ -166,7 +167,7 @@ class ShipModLoader {
         @JvmStatic
         @Synchronized
         fun getAllForStats(stats: MutableShipStatsAPI): List<ShipModifications> {
-            return inst.getAllDataFromStatsAPI(stats)
+            return inst.getAllDataFromStatsAPI(stats).distinct()
         }
     }
 
