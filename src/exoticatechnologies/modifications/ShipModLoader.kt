@@ -5,7 +5,7 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
-import exoticatechnologies.util.ShipStatsRegistry
+import exoticatechnologies.util.FleetMemberHierarchy
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
@@ -82,27 +82,20 @@ class ShipModLoader {
     }
 
     private fun getAllDataFromStatsAPI(stats: MutableShipStatsAPI): List<ShipModifications> {
-        // First, grab all ships' stats
-        //TODO get rid of ShipStatsRegistry in favor of FleetMemberHierarchy
-        val allShipStats = ShipStatsRegistry.getWholeShipsStatsFromSingleStats(stats)
-        val allShipFleetMembers = allShipStats.map { it.fleetMember }
-        val rootModuleFleetMember = FleetMemberUtils.findMemberForStats(stats)
-
-        val allModsList = mutableListOf<ShipModifications>()
-        for (someStats in allShipStats) {
-            val someStatsFM: FleetMemberAPI? = someStats.fleetMember
-            // if some stats FMAPI is non-null, proceed
-            someStatsFM?.let { statsFM ->
-                val moduleMods = ShipModLoader.get(statsFM, someStats.getVariant())
-                moduleMods?.let {
-                    allModsList.add(it)
-                }
+        // First, grab all ships' modules from this stats
+        val allShipModulesFromStats = FleetMemberHierarchy.getAllModules(stats)
+        val allModsList = mutableSetOf<ShipModifications>()
+        for (someModule in allShipModulesFromStats) {
+            val moduleMods = ShipModLoader.get(someModule, someModule.variant)
+            moduleMods?.let {
+                allModsList.add(it)
             }
         }
 
         return allModsList.toList()
     }
 
+    //TODO remove this
     private fun assertTrue(value: Boolean, message: String) {
         return if (!value) {
             throw RuntimeException(message)
