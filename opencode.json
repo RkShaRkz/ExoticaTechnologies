@@ -18,7 +18,7 @@
   },
   "plugin": [
     "opencode-brain"
-  ]
+  ],
   "references": {
     "starsector_core": {
       "path": ".idea/libraries/starfarer_api.xml",
