@@ -6,11 +6,11 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
 import exoticatechnologies.util.FleetMemberHierarchy
-import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
 
 class ShipModLoader {
+
     private var providers: List<Provider> = mutableListOf(
         VariantTagProvider.inst,
         ZigguratDataProvider.inst,
@@ -55,16 +55,7 @@ class ShipModLoader {
         val allShipSections = getAllShipSections(ship)
         // Now, map them onto variants
         val allShipSectionVariants = allShipSections.map { it.variant }
-        // As well as to their FMAPIs
-//        val allShipSectionsFMAPIs = allShipSections.map { findMemberFromShip(it) }
-        val allShipSectionsFMAPIs = allShipSections.map { it.fleetMember }
-        val rootFMAPI = findMemberFromShip(ship)
-
-        // Now that we have all of this, we can build a list of ship mods, by grabbing
-        // each index and calling getData(fmapi, variant)
-        //TODO this is debug only, but will point out potential problems immediatelly
-        // even though it could very well be that e.g. installing exotica on just one module will make it's size 1 versus the others being fuller
-        assertTrue(allShipSections.size == allShipSectionVariants.size && allShipSectionVariants.size == allShipSectionsFMAPIs.size, "The sizes of three lists did not match")
+        val allShipSectionsFMAPIs = allShipSections.map { findMemberFromShip(it) }
 
         val allModsList = mutableListOf<ShipModifications>()
         for (index in allShipSectionVariants.indices) {
@@ -93,15 +84,6 @@ class ShipModLoader {
         }
 
         return allModsList.toList()
-    }
-
-    //TODO remove this
-    private fun assertTrue(value: Boolean, message: String) {
-        return if (!value) {
-            throw RuntimeException(message)
-        } else {
-//            value
-        }
     }
 
     companion object {
