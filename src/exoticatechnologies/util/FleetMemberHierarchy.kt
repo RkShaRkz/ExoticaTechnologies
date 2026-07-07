@@ -17,6 +17,16 @@ object FleetMemberHierarchy {
     private val logger: Logger = Logger.getLogger(FleetMemberHierarchy::class.java)
     private val variantToParent = WeakHashMap<ShipVariantAPI, ShipVariantAPI>()
 
+    /**
+     * Maps a child module variant's [ShipVariantAPI.hullVariantId] to its parent variant's
+     * [ShipVariantAPI.hullVariantId]. Populated alongside [variantToParent] during [mapVariantTree].
+     *
+     * Unlike [variantToParent] (which uses identity-based [WeakHashMap] keys), this map uses
+     * stable [String] keys, making it safe to query from [MutableShipStatsAPI]-based contexts
+     * where the concrete [ShipVariantAPI] instance may differ from the one cached in [variantToParent].
+     */
+    private val variantIdToParentId = HashMap<String, String>()
+
     @JvmStatic fun isRootModule(stats: MutableShipStatsAPI?): Boolean = isRootModule(stats?.fleetMember)
     @JvmStatic fun isRootModule(member: FleetMemberAPI?): Boolean {
         var result = false
@@ -77,7 +87,9 @@ object FleetMemberHierarchy {
         return getAllModules(stats).map { it.stats }
     }
 
-    @JvmStatic fun getAllModules(stats: MutableShipStatsAPI?): List<FleetMemberAPI> = getAllModules(stats?.fleetMember)
+    @JvmStatic fun getAllModules(stats: MutableShipStatsAPI?): List<FleetMemberAPI> = getAllModules(
+        if (stats != null) FleetMemberUtils.findMemberForStats(stats) else null
+    )
     @JvmStatic fun getAllModules(member: FleetMemberAPI?): List<FleetMemberAPI> {
         val resultList = mutableListOf<FleetMemberAPI>()
         val currentV = member?.checkRefitVariant()
@@ -96,6 +108,13 @@ object FleetMemberHierarchy {
         }
         return resultList.toList()
     }
+
+    @JvmStatic fun isChildStats(stats: MutableShipStatsAPI?): Boolean {
+        if (stats?.variant == null) return false
+        return variantIdToParentId.containsKey(stats.variant.hullVariantId)
+    }
+
+    @JvmStatic fun getCacheSize(): Int = variantIdToParentId.size
 
     @JvmStatic fun findRootVariant(variant: ShipVariantAPI): ShipVariantAPI {
         var current = variant
@@ -122,6 +141,7 @@ object FleetMemberHierarchy {
     @JvmStatic fun reinitialize() {
         // If Global.getSector() is non-null, call refreshAllCaches(), otherwise log error and bail out
         variantToParent.clear()
+        variantIdToParentId.clear()
         if (Global.getSector() != null) {
             refreshAllCaches()
         } else {
@@ -147,6 +167,7 @@ object FleetMemberHierarchy {
             val child = parent.getModuleVariant(slotId)
             if (child != null) {
                 variantToParent[child] = parent
+                variantIdToParentId[child.hullVariantId] = parent.hullVariantId
                 mapVariantTree(child)
             }
         }
