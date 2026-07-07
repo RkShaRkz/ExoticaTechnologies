@@ -137,11 +137,20 @@ public class ExoticaTechHM extends BaseHullMod {
         boolean thisModuleOwnsIt,
         boolean presentSomewhereOnShip
     ) {
+        AnonymousLogger.INSTANCE.log("--> shouldSkipModification_NEW()\tship: "+ship+", mod: "+mod+", thisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, "ShouldSkipModification [SHIP]", Level.ERROR);
         boolean modAppliesToModules = mod.shouldAffectModule(ship.getParentStation(), ship);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
         boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmodAppliesToModules: "+modAppliesToModules+", modSharesEffectsWithAllModules: "+modSharesEffectsWithAllModules+", modShouldAffectModulesToShareEffectsToOtherModules: "+modShouldAffectModulesToShareEffectsToOtherModules+", presentSomewhereOnShip: "+presentSomewhereOnShip, "ShouldSkipModification [SHIP]", Level.ERROR);
 
         boolean skip = false;
+        List<ShipAPI> allShipSections = ExtensionsKt.getAllShipSections(ship);
+        // *this* Ship is module if:
+        // 1. it (the whole 'ship') has more than one section
+        // 2. it is different from the root module (which is going to be the last member in the list containing all of it's sections)
+        boolean isModule1 = (allShipSections.size() > 1) && (allShipSections.get(allShipSections.size()-1) != ship);
+        boolean isModule2 = cachedCheckIsModule(ship);
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModule1: " + isModule1 + ", isModule2: " + isModule2, "ShouldSkipModification [SHIP]", Level.ERROR);
 
         if (!presentSomewhereOnShip) {
             // Modifications that are not on any part of the ship should be skipped
@@ -162,6 +171,8 @@ public class ExoticaTechHM extends BaseHullMod {
                 skip = false;
             }
         }
+
+        AnonymousLogger.INSTANCE.log("<-- shouldSkipModification_NEW()\tskip: "+skip, "ShouldSkipModification [SHIP]", Level.ERROR);
         return skip;
     }
 
@@ -184,11 +195,11 @@ public class ExoticaTechHM extends BaseHullMod {
         boolean thisModuleOwnsIt,
         boolean presentSomewhereOnShip
     ) {
-        AnonymousLogger.INSTANCE.log("--> shouldSkipModification_NEW()\tstats: "+stats+", mod: "+mod+", thisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, "ShouldSkipModification", Level.ERROR);
+        AnonymousLogger.INSTANCE.log("--> shouldSkipModification_NEW()\tstats: "+stats+", mod: "+mod+", thisModuleOwnsIt: "+thisModuleOwnsIt+", presentSomewhereOnShip: "+presentSomewhereOnShip, "ShouldSkipModification [STATS]", Level.ERROR);
         boolean modAppliesToModules = mod.shouldAffectModule(stats);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
         boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
-        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmodAppliesToModules: "+modAppliesToModules+", modSharesEffectsWithAllModules: "+modSharesEffectsWithAllModules+", modShouldAffectModulesToShareEffectsToOtherModules: "+modShouldAffectModulesToShareEffectsToOtherModules+", presentSomewhereOnShip: "+presentSomewhereOnShip, "ShouldSkipModification", Level.ERROR);
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmodAppliesToModules: "+modAppliesToModules+", modSharesEffectsWithAllModules: "+modSharesEffectsWithAllModules+", modShouldAffectModulesToShareEffectsToOtherModules: "+modShouldAffectModulesToShareEffectsToOtherModules+", presentSomewhereOnShip: "+presentSomewhereOnShip, "ShouldSkipModification [STATS]", Level.ERROR);
 
         // Check whether these 'stats' belong to the root FleetMemberAPI (root module) or a child one
 //        FleetMemberAPI rootModule = FleetMemberUtils.findMemberForStats(stats);
@@ -205,20 +216,20 @@ public class ExoticaTechHM extends BaseHullMod {
         //TODO `isModuleStats` always returns 'true' whereas `isModuleStats2` returns 'false' for modules
 //        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModuleStats: "+isModuleStats+", isModuleStats2: "+isModuleStats2, "ShouldSkipModification", Level.ERROR);
 //        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModuleStats3: "+isModuleStats3+", isModuleStats4: "+isModuleStats4, "ShouldSkipModification", Level.ERROR);
-        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModuleStats: "+isModuleStats, "ShouldSkipModification", Level.ERROR);
-        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule: "+rootModule, "ShouldSkipModification", Level.ERROR);
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModuleStats: "+isModuleStats, "ShouldSkipModification [STATS]", Level.ERROR);
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule: "+rootModule, "ShouldSkipModification [STATS]", Level.ERROR);
         if (rootModule != null) {
             // +rootModule+"\trootModule.getShipName(): "+(rootModule.getShipName() != null ? rootModule.getShipName() : "WAS NULL")
-            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule.getShipName(): "+(rootModule.getShipName() != null ? rootModule.getShipName() : "WAS NULL"), "ShouldSkipModification", Level.ERROR);
+            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule.getShipName(): "+(rootModule.getShipName() != null ? rootModule.getShipName() : "WAS NULL"), "ShouldSkipModification [STATS]", Level.ERROR);
             FleetDataAPI rootFleetData = rootModule.getFleetData();
-            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootFleetData: "+rootFleetData, "ShouldSkipModification", Level.ERROR);
+            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootFleetData: "+rootFleetData, "ShouldSkipModification [STATS]", Level.ERROR);
         }
-        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFMAPI: "+moduleFMAPI, "ShouldSkipModification", Level.ERROR);
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFMAPI: "+moduleFMAPI, "ShouldSkipModification [STATS]", Level.ERROR);
         if (moduleFMAPI != null) {
             // +"\tmoduleFMAPI.getShipName(): "+(moduleFMAPI.getShipName() != null ? moduleFMAPI.getShipName() : "WAS NULL")
-            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFMAPI.getShipName(): "+(moduleFMAPI.getShipName() != null ? moduleFMAPI.getShipName() : "WAS NULL"), "ShouldSkipModification", Level.ERROR);
+            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFMAPI.getShipName(): "+(moduleFMAPI.getShipName() != null ? moduleFMAPI.getShipName() : "WAS NULL"), "ShouldSkipModification [STATS]", Level.ERROR);
             FleetDataAPI moduleFleetData = rootModule.getFleetData();
-            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFleetData: "+moduleFleetData, "ShouldSkipModification", Level.ERROR);
+            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFleetData: "+moduleFleetData, "ShouldSkipModification [STATS]", Level.ERROR);
         }
         /*
         AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule2: "+rootModule2, "ShouldSkipModification", Level.ERROR);
@@ -253,7 +264,7 @@ public class ExoticaTechHM extends BaseHullMod {
             }
         }
 
-        AnonymousLogger.INSTANCE.log("<-- shouldSkipModification_NEW()\tskip: "+skip, "ShouldSkipModification", Level.ERROR);
+        AnonymousLogger.INSTANCE.log("<-- shouldSkipModification_NEW()\tskip: "+skip, "ShouldSkipModification [STATS]", Level.ERROR);
         return skip;
     }
 
