@@ -130,6 +130,20 @@ object FleetMemberHierarchy {
         return current
     }
 
+    @JvmStatic fun findRootVariantId(childVariantId: String): String? {
+        var current = childVariantId
+        val seen = HashSet<String>()
+        while (variantIdToParentId.containsKey(current)) {
+            val parent = variantIdToParentId[current]
+            if (parent != null && seen.add(current)) {
+                current = parent
+            } else {
+                break
+            }
+        }
+        return if (current == childVariantId) null else current
+    }
+
     @JvmStatic fun refreshAllCaches() {
         logInfo("--> refreshAllCaches()")
         for (fleet in CampaignEventListener.activeFleets) {
