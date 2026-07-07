@@ -436,6 +436,29 @@ class RefitButtonAdder : EveryFrameScript {
     }
 }
 
+/**
+ * Returns the variant that should be used for hierarchy lookups for [this] member.
+ *
+ * When the refit screen is open and [this] is the currently-selected member,
+ * returns [RefitButtonAdder.variant] (the hull spec from the ship display),
+ * **not** [this.variant] (which might be stale while the refit screen is active).
+ *
+ * ## Cast risk: HullVariantSpec → ShipVariantAPI
+ *
+ * [RefitButtonAdder.variant] is typed as `HullVariantSpec?` (obtained via reflection
+ * from the ship display). The `as ShipVariantAPI` cast succeeds if `HullVariantSpec`
+ * implements `ShipVariantAPI` in the current game version. If not, this function
+ * throws [ClassCastException] at runtime for the selected member in the refit screen.
+ *
+ * ## Child-member gap after fixVariant
+ *
+ * For child modules (when [RefitButtonAdder.member] is the root), this returns
+ * [this.variant] for the child. After [exoticatechnologies.util.fixVariant] replaces
+ * child variants *inside* the root variant tree with REFIT clones,
+ * [FleetMemberAPI.variant] for child members still points to the original (stock)
+ * variant. FleetMemberHierarchy identity-based lookups ([WeakHashMap]) may fail
+ * for these children until the caches are refreshed with [reinitialize].
+ */
 fun FleetMemberAPI.checkRefitVariant(): ShipVariantAPI {
     if (RefitButtonAdder.member == this) {
         return RefitButtonAdder.variant as ShipVariantAPI

@@ -15,6 +15,29 @@ import exoticatechnologies.refit.checkRefitVariant
 object FleetMemberHierarchy {
 
     private val logger: Logger = Logger.getLogger(FleetMemberHierarchy::class.java)
+
+    /**
+     * Identity-based map: child [ShipVariantAPI] → parent [ShipVariantAPI].
+     *
+     * ## INVALIDATION AFTER fixVariant
+     *
+     * [fixVariant] + [fixModuleVariants] replace variants inside the root variant's
+     * station module tree with [com.fs.starfarer.api.loading.VariantSource.REFIT] clones.
+     * The OLD child variant objects become orphaned. Since this is a [WeakHashMap], the
+     * old entries remain until the original variant objects are garbage collected.
+     *
+     * NEW refit clone variants are **not** registered in this map until:
+     * - [refreshAllCaches] is called (iterates fleet members and re-maps),
+     * - [isOwnerOf] is called during a fleet lookup (caches the newly-traversed refit clones).
+     *
+     * Until then, identity-based lookups ([===]) in [getFleetContext], [isOwnerOf],
+     * [collectModuleMembers], etc. WILL FAIL for the new refit clones.
+     *
+     * ## Preferred: [variantIdToParentId]
+     *
+     * For cross-instance lookups (after [fixVariant] churn), use [findRootVariantId]
+     * which operates on stable [String] keys.
+     */
     private val variantToParent = WeakHashMap<ShipVariantAPI, ShipVariantAPI>()
 
     /**
@@ -116,6 +139,15 @@ object FleetMemberHierarchy {
 
     @JvmStatic fun getCacheSize(): Int = variantIdToParentId.size
 
+    /**
+     * Walks [variantToParent] (identity-based [WeakHashMap]) to find the root variant.
+     *
+     * ## ⚠️ After [fixVariant] invalidation
+     *
+     * This will fail for new REFIT clone variants that were created by [fixModuleVariants]
+     * because they are not yet registered in [variantToParent]. Use [findRootVariantId]
+     * with stable [String] keys for cross-instance safety.
+     */
     @JvmStatic fun findRootVariant(variant: ShipVariantAPI): ShipVariantAPI {
         var current = variant
         val seen = HashSet<ShipVariantAPI>()
@@ -130,6 +162,19 @@ object FleetMemberHierarchy {
         return current
     }
 
+    /**
+     * Walks [variantIdToParentId] (stable [String] keys) to find the root variant ID.
+     *
+     * ## Safe across [fixVariant] churn
+     *
+     * Uses [ShipVariantAPI.hullVariantId] strings which are stable across variant
+     * instance re-creation (stock → REFIT clones). Unlike [findRootVariant] which
+     * uses object identity, this works correctly even after [fixModuleVariants]
+     * replaces variant objects in the root tree.
+     *
+     * Returns the root variant's hullVariantId, or `null` if [childVariantId] has
+     * no parent (i.e., it's already the root or not in the hierarchy).
+     */
     @JvmStatic fun findRootVariantId(childVariantId: String): String? {
         var current = childVariantId
         val seen = HashSet<String>()
@@ -152,6 +197,17 @@ object FleetMemberHierarchy {
         logInfo("<-- refreshAllCaches()")
     }
 
+    /**
+     * Clears both caches and re-maps the hierarchy from scratch.
+     *
+     * Must be called after any [fixVariant] or [fixModuleVariants] operation that
+     * replaces variant objects, to re-establish [variantToParent] entries for the
+     * new REFIT clone instances.
+     *
+     * [variantIdToParentId] (stable string keys) does NOT need clearing for
+     * correctness — it survives variant instance churn — but we clear it anyway
+     * for consistency.
+     */
     @JvmStatic fun reinitialize() {
         // If Global.getSector() is non-null, call refreshAllCaches(), otherwise log error and bail out
         variantToParent.clear()
@@ -187,6 +243,27 @@ object FleetMemberHierarchy {
         }
     }
 
+    /**
+     * Finds the [CampaignFleetAPI] that contains [member] by scanning active fleets
+     * and checking variant identity ([===]) and the [variantToParent] hierarchy.
+     *
+     * ## Known failure cases
+     *
+     * 1. **After [fixVariant]**: [member.checkRefitVariant] may return a new REFIT
+     *    clone variant not yet registered in [variantToParent]. Identity-based fleet
+     *    scanning ([isVariantInFleet]) fails because the clone is a different object
+     *    from what is stored in the hierarchy.
+     *
+     * 2. **Module members in refit screen**: When a child module is selected in the
+     *    refit screen, [checkRefitVariant] returns [FleetMemberAPI.variant] (the
+     *    original stock variant). [fixModuleVariants] replaced child variants inside
+     *    the root tree with REFIT clones. [isOwnerOf] traverses the refit clones
+     *    and compares with `===` against the original stock → no match → null.
+     *
+     *    The ERROR log "Fleet context missing for member: ..." is emitted for these
+     *    cases but is a consequence of the variant instance churn, not a logic error
+     *    in the caller.
+     */
     private fun getFleetContext(member: FleetMemberAPI?): CampaignFleetAPI? {
         var result: CampaignFleetAPI? = null
         val targetV = member?.checkRefitVariant() ?: return null
