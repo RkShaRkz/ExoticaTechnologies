@@ -3,13 +3,13 @@ package exoticatechnologies.hullmods;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.BattleAPI;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
-import com.fs.starfarer.api.campaign.FleetDataAPI;
 import com.fs.starfarer.api.combat.BaseHullMod;
 import com.fs.starfarer.api.combat.MutableShipStatsAPI;
 import com.fs.starfarer.api.combat.ShipAPI;
 import com.fs.starfarer.api.combat.ShipVariantAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
+import exoticatechnologies.campaign.listeners.CampaignEventListener;
 import exoticatechnologies.util.*;
 import exoticatechnologies.modifications.Modification;
 import exoticatechnologies.modifications.ShipModFactory;
@@ -22,6 +22,7 @@ import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
 import java.util.ArrayList;
@@ -51,23 +52,97 @@ public class ExoticaTechHM extends BaseHullMod {
         }
 
         if (mods.shouldApplyHullmod()) {
-
             ExtensionsKt.fixVariant(member);
-            variant.addPermaMod(HULLMOD_ID);
 
-            // And proceed to install the hullmod to all other ship's modules (children modules of this module)
-            //TODO check if this FMAPI is root - if it is, do what we're doing below
-            // if it isn't - grab root and do what we're doing below (apply to root as well)
-            for (String moduleVariantId : variant.getStationModules().keySet()) {
-                ShipVariantAPI moduleVariant = variant.getModuleVariant(moduleVariantId);
-
-                if (moduleVariant != null) {
-                    moduleVariant.addPermaMod(HULLMOD_ID);
+            // Install the hullmod on the full ship tree: root, this variant, and all children recursively.
+            // If this variant has station modules, it IS the tree root — just install from here.
+            // If it doesn't, find the actual root member so the entire ship gets the hullmod.
+            // TODO fix this so it works fine for child->root direction in refit/simulation
+            if (!variant.getStationModules().isEmpty()) {
+                // This variant is the root (or a parent with modules) — install recursively
+                installHullmodRecursive(variant);
+            } else {
+                // Leaf child module — install on this variant, then find root and install on the whole tree
+                variant.addPermaMod(HULLMOD_ID);
+                FleetMemberAPI rootMember = findRootMember(member, variant);
+                if (rootMember != null && rootMember != member) {
+                    ShipVariantAPI rootVariant = rootMember.getVariant();
+                    if (rootVariant != null) {
+                        installHullmodRecursive(rootVariant);
+                    }
                 }
             }
 
             member.updateStats();
         }
+    }
+
+    // Recursively adds HULLMOD_ID to a variant and all its station module children.
+    private static void installHullmodRecursive(ShipVariantAPI v) {
+        v.addPermaMod(HULLMOD_ID);
+        for (String slotId : v.getStationModules().keySet()) {
+            ShipVariantAPI childV = v.getModuleVariant(slotId);
+            if (childV != null) {
+                installHullmodRecursive(childV);
+            }
+        }
+    }
+
+    // Tries to find the root FleetMemberAPI for a given child member/variant by searching
+    // the fleet for a member whose variant tree contains our variant's hullVariantId.
+    private static @Nullable FleetMemberAPI findRootMember(FleetMemberAPI member, ShipVariantAPI variant) {
+        String targetId = variant.getHullVariantId();
+
+        // 1. Try FleetMemberHierarchy (uses cached parent map)
+        FleetMemberAPI root = FleetMemberHierarchy.getRootModule(member);
+        if (root != null) return root;
+
+        // 2. Try via member.getFleetData()
+        if (member.getFleetData() != null && member.getFleetData().getFleet() != null) {
+            FleetMemberAPI found = searchFleetForParent(member.getFleetData().getFleet(), targetId, variant);
+            if (found != null) return found;
+        }
+
+        // 3. Try activeFleets from CampaignEventListener
+        for (CampaignFleetAPI fleet : CampaignEventListener.Companion.getActiveFleets()) {
+            if (fleet == null) continue;
+            FleetMemberAPI found = searchFleetForParent(fleet, targetId, variant);
+            if (found != null) return found;
+        }
+
+        // 4. Try player fleet
+        CampaignFleetAPI playerFleet = Global.getSector().getPlayerFleet();
+        if (playerFleet != null) {
+            FleetMemberAPI found = searchFleetForParent(playerFleet, targetId, variant);
+            if (found != null) return found;
+        }
+
+        return null;
+    }
+
+    // Searches a single fleet for a member whose variant tree contains the given childVariantId.
+    private static @Nullable FleetMemberAPI searchFleetForParent(CampaignFleetAPI fleet, String childVariantId, ShipVariantAPI variant) {
+        for (FleetMemberAPI fm : fleet.getMembersWithFightersCopy()) {
+            ShipVariantAPI fmV = fm.getVariant();
+            if (fmV == null) continue;
+            if (fmV == variant) continue;
+            if (hasChildVariant(fmV, childVariantId)) {
+                return fm;
+            }
+        }
+        return null;
+    }
+
+    // Checks whether a variant (or any of its station module children) has the given hullVariantId.
+    private static boolean hasChildVariant(ShipVariantAPI parent, String childVariantId) {
+        for (String slotId : parent.getStationModules().keySet()) {
+            ShipVariantAPI child = parent.getModuleVariant(slotId);
+            if (child != null) {
+                if (child.getHullVariantId().equals(childVariantId)) return true;
+                if (hasChildVariant(child, childVariantId)) return true;
+            }
+        }
+        return false;
     }
 
     public static void addToFleetMember(FleetMemberAPI member) {
@@ -141,16 +216,12 @@ public class ExoticaTechHM extends BaseHullMod {
         boolean modAppliesToModules = mod.shouldAffectModule(ship.getParentStation(), ship);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
         boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
-        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmodAppliesToModules: "+modAppliesToModules+", modSharesEffectsWithAllModules: "+modSharesEffectsWithAllModules+", modShouldAffectModulesToShareEffectsToOtherModules: "+modShouldAffectModulesToShareEffectsToOtherModules+", presentSomewhereOnShip: "+presentSomewhereOnShip, "ShouldSkipModification [SHIP]", Level.ERROR);
+        String shipHullId = ship.getHullSpec() != null ? ship.getHullSpec().getHullId() : "NULL_HULL";
+        boolean isModuleResult = cachedCheckIsModule(ship);
+        int fhCacheSize = FleetMemberHierarchy.getCacheSize();
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\t[TRUTH_TABLE] sharesEffects=" + modSharesEffectsWithAllModules + " | appliesToModules=" + modAppliesToModules + " | affectToShare=" + modShouldAffectModulesToShareEffectsToOtherModules + " | thisModuleOwnsIt=" + thisModuleOwnsIt + " | isModule=" + isModuleResult + " | presentSomewhereOnShip=" + presentSomewhereOnShip + " | shipHullId=" + shipHullId + " | fhCacheSize=" + fhCacheSize, "ShouldSkipModification [SHIP]", Level.ERROR);
 
         boolean skip = false;
-        List<ShipAPI> allShipSections = ExtensionsKt.getAllShipSections(ship);
-        // *this* Ship is module if:
-        // 1. it (the whole 'ship') has more than one section
-        // 2. it is different from the root module (which is going to be the last member in the list containing all of it's sections)
-        boolean isModule1 = (allShipSections.size() > 1) && (allShipSections.get(allShipSections.size()-1) != ship);
-        boolean isModule2 = cachedCheckIsModule(ship);
-        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModule1: " + isModule1 + ", isModule2: " + isModule2, "ShouldSkipModification [SHIP]", Level.ERROR);
 
         if (!presentSomewhereOnShip) {
             // Modifications that are not on any part of the ship should be skipped
@@ -201,45 +272,18 @@ public class ExoticaTechHM extends BaseHullMod {
         boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
         AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmodAppliesToModules: "+modAppliesToModules+", modSharesEffectsWithAllModules: "+modSharesEffectsWithAllModules+", modShouldAffectModulesToShareEffectsToOtherModules: "+modShouldAffectModulesToShareEffectsToOtherModules+", presentSomewhereOnShip: "+presentSomewhereOnShip, "ShouldSkipModification [STATS]", Level.ERROR);
 
-        // Check whether these 'stats' belong to the root FleetMemberAPI (root module) or a child one
-//        FleetMemberAPI rootModule = FleetMemberUtils.findMemberForStats(stats);
-        FleetMemberAPI moduleFMAPI = stats.getFleetMember();
-//        FleetMemberAPI rootModule2 = FleetMemberHierarchy.getRootMember(stats);
-        // this one is commented out just to rename it...
-//        FleetMemberAPI rootModule2 = FleetMemberHierarchy.getRootModule(stats);
-        FleetMemberAPI rootModule = FleetMemberHierarchy.getRootModule(stats);
-//        boolean isModuleStats = moduleFMAPI != rootModule;
-//        boolean isModuleStats2 = moduleFMAPI != null && moduleFMAPI.getShipName() == null;
-//        boolean isModuleStats3 = moduleFMAPI != rootModule2;
-//        boolean isModuleStats4 = moduleFMAPI != null && moduleFMAPI.getShipName() == null;
-        boolean isModuleStats = moduleFMAPI != rootModule && moduleFMAPI.getShipName() == null;
-        //TODO `isModuleStats` always returns 'true' whereas `isModuleStats2` returns 'false' for modules
-//        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModuleStats: "+isModuleStats+", isModuleStats2: "+isModuleStats2, "ShouldSkipModification", Level.ERROR);
-//        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModuleStats3: "+isModuleStats3+", isModuleStats4: "+isModuleStats4, "ShouldSkipModification", Level.ERROR);
-        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tisModuleStats: "+isModuleStats, "ShouldSkipModification [STATS]", Level.ERROR);
-        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule: "+rootModule, "ShouldSkipModification [STATS]", Level.ERROR);
-        if (rootModule != null) {
-            // +rootModule+"\trootModule.getShipName(): "+(rootModule.getShipName() != null ? rootModule.getShipName() : "WAS NULL")
-            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule.getShipName(): "+(rootModule.getShipName() != null ? rootModule.getShipName() : "WAS NULL"), "ShouldSkipModification [STATS]", Level.ERROR);
-            FleetDataAPI rootFleetData = rootModule.getFleetData();
-            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootFleetData: "+rootFleetData, "ShouldSkipModification [STATS]", Level.ERROR);
-        }
-        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFMAPI: "+moduleFMAPI, "ShouldSkipModification [STATS]", Level.ERROR);
-        if (moduleFMAPI != null) {
-            // +"\tmoduleFMAPI.getShipName(): "+(moduleFMAPI.getShipName() != null ? moduleFMAPI.getShipName() : "WAS NULL")
-            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFMAPI.getShipName(): "+(moduleFMAPI.getShipName() != null ? moduleFMAPI.getShipName() : "WAS NULL"), "ShouldSkipModification [STATS]", Level.ERROR);
-            FleetDataAPI moduleFleetData = rootModule.getFleetData();
-            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\tmoduleFleetData: "+moduleFleetData, "ShouldSkipModification [STATS]", Level.ERROR);
-        }
-        /*
-        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule2: "+rootModule2, "ShouldSkipModification", Level.ERROR);
-        if (rootModule2 != null) {
-            // +rootModule+"\trootModule.getShipName(): "+(rootModule.getShipName() != null ? rootModule.getShipName() : "WAS NULL")
-            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootModule2.getShipName(): "+(rootModule2.getShipName() != null ? rootModule2.getShipName() : "WAS NULL"), "ShouldSkipModification", Level.ERROR);
-            FleetDataAPI rootFleetData2 = rootModule2.getFleetData();
-            AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\trootFleetData: "+rootFleetData2, "ShouldSkipModification", Level.ERROR);
-        }
-         */
+        // DIAGNOSTIC: check module detection from multiple sources
+        String variantId = stats.getVariant() != null ? stats.getVariant().getHullVariantId() : "NULL_VARIANT";
+        String hullId = stats.getVariant() != null ? stats.getVariant().getHullSpec().getHullId() : "NULL_HULL";
+        FleetMemberAPI fmapi = stats.getFleetMember();
+        String fmapiInfo = (fmapi != null ? fmapi.getId() + "/" + fmapi.getShipName() : "NULL_FMAPI");
+        boolean isModuleStats = FleetMemberHierarchy.isChildStats(stats);
+        boolean moduleMapContains = FleetMemberUtils.moduleMap.containsKey(variantId);
+        int fhCacheSize = FleetMemberHierarchy.getCacheSize(); // exposed for diag
+        int mmSize = FleetMemberUtils.moduleMap.size();
+        String mmKeys = mmSize > 0 ? StringUtils.join(",", FleetMemberUtils.moduleMap.keySet()) : "EMPTY";
+        boolean hasStationModules = stats.getVariant() != null && !stats.getVariant().getStationModules().isEmpty();
+        AnonymousLogger.INSTANCE.log("shouldSkipModification_NEW()\t[TRUTH_TABLE] sharesEffects=" + modSharesEffectsWithAllModules + " | appliesToModules=" + modAppliesToModules + " | affectToShare=" + modShouldAffectModulesToShareEffectsToOtherModules + " | thisModuleOwnsIt=" + thisModuleOwnsIt + " | isModuleStats(FH)=" + isModuleStats + " | moduleMapContains=" + moduleMapContains + " | presentSomewhereOnShip=" + presentSomewhereOnShip + " | variantId=" + variantId + " | hullId=" + hullId + " | fmapi=" + fmapiInfo + " | fhCacheSize=" + fhCacheSize + " | mmSize=" + mmSize + " | mmKeys=" + mmKeys + " | hasStationModules=" + hasStationModules, "ShouldSkipModification [STATS]", Level.ERROR);
 
 
         boolean skip = false;
