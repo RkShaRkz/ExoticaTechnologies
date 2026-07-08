@@ -169,7 +169,7 @@ public class ExoticaTechHM extends BaseHullMod {
      * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(ShipAPI, ShipAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
      * @see Modification#shouldAffectModulesToShareEffectsToOtherModules()
      */
-    public boolean shouldSkipModification_NEW(
+    public boolean shouldSkipModification(
         ShipAPI ship,
         Modification mod,
         boolean thisModuleOwnsIt,
@@ -218,7 +218,7 @@ public class ExoticaTechHM extends BaseHullMod {
      * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(MutableShipStatsAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
      * @see Modification#shouldAffectModulesToShareEffectsToOtherModules()
      */
-    public boolean shouldSkipModification_NEW(
+    public boolean shouldSkipModification(
         MutableShipStatsAPI stats,
         Modification mod,
         boolean thisModuleOwnsIt,
@@ -227,7 +227,7 @@ public class ExoticaTechHM extends BaseHullMod {
         boolean modAppliesToModules = mod.shouldAffectModule(stats);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
         boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
-
+        boolean isModuleStats = FleetMemberHierarchy.isChildStats(stats);
 
         boolean skip = false;
 
@@ -255,66 +255,6 @@ public class ExoticaTechHM extends BaseHullMod {
     }
 
 
-    /**
-     * Method for checking whether a {@link Modification} should be skipped before processing (calling it's callbacks on it)
-     * <br>
-     * Called in:<br>
-     * - {@link ExoticaTechHM#advanceInCombat(ShipAPI, float)}<br>
-     * - {@link ExoticaTechHM#applyEffectsAfterShipCreation(ShipAPI, String)}<br>
-     * - {@link ExoticaTechHM#applyEffectsToFighterSpawnedByShip(ShipAPI, ShipAPI, String)}<br>
-     *
-     * @param ship the ship/module on which the modification is installed
-     * @param mod  the modification in question
-     * @return whether it should be skipped or not, dependant on {@link Modification#shouldAffectModule(ShipAPI, ShipAPI)} and {@link Modification#shouldShareEffectToOtherModules(ShipAPI, ShipAPI)}
-     * @see Modification#shouldAffectModulesToShareEffectsToOtherModules()
-     */
-    public boolean shouldSkipModification(ShipAPI ship, Modification mod) { //TODO delete his after second one proves working
-        boolean modAppliesToModules = mod.shouldAffectModule(ship.getParentStation(), ship);
-        boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(ship.getParentStation(), ship);
-        boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
-
-        if (cachedCheckIsModule(ship)) {
-            // if should affect modules to share effects but doesn't apply to modules - skip
-            if (modShouldAffectModulesToShareEffectsToOtherModules && !modAppliesToModules) {
-                return true;
-            } else {
-                // If applies to modules or has special flag set - check if effects are shared, if not - skip
-                if (!modSharesEffectsWithAllModules) {
-                    return true;
-                }
-                // If it should share to all modules, we don't skip
-            }
-        }
-        // If the ship that we're checking isn't a module, we don't skip either
-        return false;
-    }
-
-
-    public boolean shouldSkipModification(MutableShipStatsAPI stats, Modification mod) { //TODO delete his after second one proves working
-        boolean fleetMemberNonNull = stats.getFleetMember() != null;
-        // lets just default to 'false' if fleetmember is null - it won't go into the if() anyways
-        // since the first condition is for the fleetmember to be non-null
-        boolean fleetMemberShipNameIsNull = (stats.getFleetMember() != null) ? stats.getFleetMember().getShipName() == null : false;
-        boolean modAppliesToModules = mod.shouldAffectModule(stats);
-        boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
-        boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
-
-        if (fleetMemberNonNull && fleetMemberShipNameIsNull) {
-            // if needs to apply to modules to share effects but doesn't apply to modules - skip
-            if (modShouldAffectModulesToShareEffectsToOtherModules && !modAppliesToModules) {
-                return true;
-            } else {
-                // If applies to modules or has special flag set - check if effects are shared, if not - skip
-                if (!modSharesEffectsWithAllModules) {
-                    return true;
-                }
-                // If it should share to all modules, we don't skip
-            }
-        }
-        // If the ship that we're checking isn't a module, we don't skip either
-        return false;
-    }
-
     @Override
     public void advanceInCombat(ShipAPI ship, float amount) {
         FleetMemberAPI member = FleetMemberUtils.findMemberFromShip(ship);
@@ -338,7 +278,7 @@ public class ExoticaTechHM extends BaseHullMod {
                 }
             }
 
-            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
+            if (shouldSkipModification(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
                 continue;
             }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
@@ -369,7 +309,9 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisUpgradesMods = tempMods;
                 }
             }
-            if (shouldSkipModification_NEW(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            if (shouldSkipModification(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) {
+                continue;
+            }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
@@ -435,7 +377,7 @@ public class ExoticaTechHM extends BaseHullMod {
                 }
             }
 
-            if (shouldSkipModification_NEW(stats, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
+            if (shouldSkipModification(stats, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
                 continue;
             }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
@@ -470,7 +412,9 @@ public class ExoticaTechHM extends BaseHullMod {
                 }
             }
 
-            if (shouldSkipModification_NEW(stats, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            if (shouldSkipModification(stats, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) {
+                continue;
+            }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
@@ -509,7 +453,7 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisExoticasMods = tempMods;
                 }
             }
-            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
+            if (shouldSkipModification(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
                 continue;
             }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
@@ -541,7 +485,9 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisUpgradesMods = tempMods;
                 }
             }
-            if (shouldSkipModification_NEW(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            if (shouldSkipModification(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) {
+                continue;
+            }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
@@ -583,7 +529,7 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisExoticasMods = tempMods;
                 }
             }
-            if (shouldSkipModification_NEW(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
+            if (shouldSkipModification(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
                 continue;
             }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
@@ -614,7 +560,9 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisUpgradesMods = tempMods;
                 }
             }
-            if (shouldSkipModification_NEW(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) continue;
+            if (shouldSkipModification(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) {
+                continue;
+            }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
