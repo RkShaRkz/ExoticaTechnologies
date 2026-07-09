@@ -40,36 +40,33 @@ public class ExoticaTechHM extends BaseHullMod {
     private static final Level MIN_LOG_LEVEL = Level.WARN;
 
     public static void addToFleetMember(FleetMemberAPI member, ShipVariantAPI variant) {
-        if (variant == null) {
-            return;
-        }
+        if (variant == null) return;
 
         ShipModifications mods = ShipModFactory.generateForFleetMember(member);
-
-        if (variant.hasHullMod(HULLMOD_ID)) {
-            variant.removePermaMod(HULLMOD_ID);
-        }
 
         if (mods.shouldApplyHullmod()) {
             ExtensionsKt.fixVariant(member);
 
-            // Walk variantIdToParentId (string-keyed cache in FleetMemberHierarchy) to find the
-            // root variant ID. Uses hullVariantId strings, stable across campaign/combat/refit,
-            // unlike ShipVariantAPI object identity which breaks with instance churn.
             String rootVariantId = FleetMemberHierarchy.findRootVariantId(variant.getHullVariantId());
             if (rootVariantId != null) {
-                // This is a child module — install on itself first, then on the root's full tree
                 variant.addPermaMod(HULLMOD_ID);
                 FleetMemberAPI rootMember = findMemberByVariantId(member, rootVariantId);
                 if (rootMember != null) {
                     installHullmodRecursive(rootMember.getVariant());
                 }
             } else {
-                // No parent registered in cache — this IS the root (or single-module ship)
-                installHullmodRecursive(variant);
+                installHullmodRecursive(member.getVariant());
+            }
+
+            if (variant != member.getVariant() && !variant.hasHullMod(HULLMOD_ID)) {
+                variant.addPermaMod(HULLMOD_ID);
             }
 
             member.updateStats();
+        } else {
+            if (member.getVariant().hasHullMod(HULLMOD_ID)) {
+                member.getVariant().removePermaMod(HULLMOD_ID);
+            }
         }
     }
 
