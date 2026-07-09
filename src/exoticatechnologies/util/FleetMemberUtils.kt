@@ -178,3 +178,34 @@ object FleetMemberUtils {
 fun FleetMemberAPI.getFleetModuleSafe(): CampaignFleetAPI? {
     return findFleetForVariant(this.variant, this)
 }
+
+fun FleetMemberAPI.propagateHullmodToChildFms(hullmodId: String) {
+    if (this.variant.stationModules.isEmpty()) return
+    val fleet = findFleetForVariant(this.variant, this) ?: return
+    val fleetMembers = fleet.fleetData.membersListCopy
+    val matched = HashSet<FleetMemberAPI>().also { it.add(this) }
+    addHullmodToChildFms(this.variant, fleetMembers, matched, hullmodId)
+}
+
+private fun addHullmodToChildFms(
+    parentV: ShipVariantAPI,
+    fleetMembers: List<FleetMemberAPI>,
+    matched: MutableSet<FleetMemberAPI>,
+    hullmodId: String
+) {
+    for ((slotId, _) in parentV.stationModules) {
+        val childV = parentV.getModuleVariant(slotId) ?: continue
+        // Match each station module slot to the first fleet member with the same hullVariantId
+        // that hasn't already been matched (handles symmetric modules sharing a hullVariantId).
+        val childFM = fleetMembers.firstOrNull { fm ->
+            fm !in matched && fm.variant.hullVariantId == childV.hullVariantId
+        }
+        if (childFM != null) {
+            matched.add(childFM)
+            if (!childFM.variant.hasHullMod(hullmodId)) {
+                childFM.variant.addPermaMod(hullmodId)
+            }
+        }
+        addHullmodToChildFms(childV, fleetMembers, matched, hullmodId)
+    }
+}

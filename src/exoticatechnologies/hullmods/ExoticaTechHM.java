@@ -47,23 +47,40 @@ public class ExoticaTechHM extends BaseHullMod {
         if (mods.shouldApplyHullmod()) {
             ExtensionsKt.fixVariant(member);
 
+            // Determine the root member so we can operate on the full variant tree.
+            // FleetMemberHierarchy uses hullVariantId strings (stable across combat/refit)
+            // to cache parent→child relationships. Returns null for root or single-module ships.
             String rootVariantId = FleetMemberHierarchy.findRootVariantId(variant.getHullVariantId());
+            FleetMemberAPI rootMember = member;
             if (rootVariantId != null) {
+                // Child display variant needs the hullmod for refit screen highlighting
                 variant.addPermaMod(HULLMOD_ID);
-                FleetMemberAPI rootMember = findMemberByVariantId(member, rootVariantId);
-                if (rootMember != null) {
-                    installHullmodRecursive(rootMember.getVariant());
-                }
-            } else {
-                installHullmodRecursive(member.getVariant());
+                FleetMemberAPI foundRoot = findMemberByVariantId(member, rootVariantId);
+                if (foundRoot != null) rootMember = foundRoot;
             }
 
+            // Add hullmod to every variant in the root's station module tree
+            installHullmodRecursive(rootMember.getVariant());
+
+            // After REFIT cloning (fixVariant above), child FleetMemberAPI.variant objects
+            // are separate from the module variants inside the root tree. The refit screen
+            // reads each FM's variant independently, so we must addPermaMod on child FMs
+            // directly — installHullmodRecursive alone is invisible to child FM instances.
+            if (!rootMember.getVariant().getStationModules().isEmpty()) {
+                FleetMemberUtilsKt.propagateHullmodToChildFms(rootMember, HULLMOD_ID);
+            }
+
+            // fixVariant replaces member.getVariant() with a REFIT clone, but the variant
+            // parameter still points to the old object. If the refit screen is showing this
+            // variant (display copy), it also needs the hullmod for the highlight to appear.
             if (variant != member.getVariant() && !variant.hasHullMod(HULLMOD_ID)) {
                 variant.addPermaMod(HULLMOD_ID);
             }
 
             member.updateStats();
         } else {
+            // Was unconditional before — removing the hullmod before checking shouldApplyHullmod
+            // caused the corruption bug (cleared hullmod when ship still had modifications).
             if (member.getVariant().hasHullMod(HULLMOD_ID)) {
                 member.getVariant().removePermaMod(HULLMOD_ID);
             }
