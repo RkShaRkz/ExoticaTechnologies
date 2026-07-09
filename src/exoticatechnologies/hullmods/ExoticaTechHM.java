@@ -45,8 +45,6 @@ public class ExoticaTechHM extends BaseHullMod {
         ShipModifications mods = ShipModFactory.generateForFleetMember(member);
 
         if (mods.shouldApplyHullmod()) {
-            ExtensionsKt.fixVariant(member);
-
             // Determine the root member so we can operate on the full variant tree.
             // FleetMemberHierarchy uses hullVariantId strings (stable across combat/refit)
             // to cache parent→child relationships. Returns null for root or single-module ships.
@@ -62,13 +60,15 @@ public class ExoticaTechHM extends BaseHullMod {
             // Add hullmod to every variant in the root's station module tree
             installHullmodRecursive(rootMember.getVariant());
 
-            // After REFIT cloning (fixVariant above), child FleetMemberAPI.variant objects
-            // are separate from the module variants inside the root tree. The refit screen
-            // reads each FM's variant independently, so we must addPermaMod on child FMs
-            // directly — installHullmodRecursive alone is invisible to child FM instances.
+            // Propagate hullmod to each child FleetMemberAPI's own .variant so the refit
+            // screen (which reads each FM independently) shows the highlight on modules.
+            // Must run before fixVariant — identity matching relies on original variants.
             if (!rootMember.getVariant().getStationModules().isEmpty()) {
                 FleetMemberUtilsKt.propagateHullmodToChildFms(rootMember, HULLMOD_ID);
             }
+
+            // Create REFIT clones of the fixed variants (clones inherit hullmods from originals).
+            ExtensionsKt.fixVariant(member);
 
             // fixVariant replaces member.getVariant() with a REFIT clone, but the variant
             // parameter still points to the old object. If the refit screen is showing this
