@@ -49,19 +49,6 @@ open class VariantTagProvider : ShipModLoader.Provider {
             }
             return it
         }
-
-        // Fallback: the passed variant may be a display copy without tags.
-        // Check the member's own variant which was tagged during set().
-        if (variant != member.variant) {
-            getFromVariant(member.variant)?.let {
-                if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT || Global.getSector().campaignUI.currentCoreTab == CoreUITabId.FLEET) {
-                    return it
-                } else {
-                    cache[member] = it
-                }
-                return it
-            }
-        }
         return null
     }
 
