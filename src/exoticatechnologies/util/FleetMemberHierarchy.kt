@@ -123,7 +123,10 @@ object FleetMemberHierarchy {
             val rootMember = fleet.fleetData.membersListCopy.find { it.checkRefitVariant() === rootV }
 
             if (rootMember != null) {
-                collectModuleMembers(rootV, fleet, resultList)
+                collectModuleMembers2(rootV, fleet, resultList)
+                if (resultList.isEmpty() && rootV.stationModules.isNotEmpty()) {
+                    collectModuleMembers(rootV, fleet, resultList)
+                }
                 resultList.add(rootMember) // Root module is ALWAYS last
             }
         } else if (member != null) {
@@ -187,6 +190,10 @@ object FleetMemberHierarchy {
             }
         }
         return if (current == childVariantId) null else current
+    }
+
+    @JvmStatic fun refreshFleetCache(variant: ShipVariantAPI) {
+        mapVariantTree(variant)
     }
 
     @JvmStatic fun refreshAllCaches() {
@@ -321,6 +328,22 @@ object FleetMemberHierarchy {
                 if (moduleMember != null) {
                     list.add(moduleMember)
                     collectModuleMembers(childV, fleet, list)
+                }
+            }
+        }
+    }
+
+    private fun collectModuleMembers2(parent: ShipVariantAPI, fleet: CampaignFleetAPI, list: MutableList<FleetMemberAPI>) {
+        for (slotId in parent.stationModules.keys) {
+            val childV = parent.getModuleVariant(slotId)
+            if (childV != null) {
+                val childStats = runCatching { childV.statsForOpCosts }.getOrNull()
+                val moduleMember = if (childStats != null) FleetMemberUtils.findMemberForStats(childStats) else null
+                if (moduleMember != null) {
+                    if (!list.contains(moduleMember)) {
+                        list.add(moduleMember)
+                    }
+                    collectModuleMembers2(childV, fleet, list)
                 }
             }
         }

@@ -10,6 +10,8 @@ import com.fs.starfarer.api.combat.ShipVariantAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import exoticatechnologies.campaign.listeners.CampaignEventListener;
+import exoticatechnologies.refit.RefitButtonAdder;
+import exoticatechnologies.refit.RefitButtonAdderKt;
 import exoticatechnologies.util.*;
 import exoticatechnologies.modifications.Modification;
 import exoticatechnologies.modifications.ShipModFactory;
@@ -43,6 +45,7 @@ public class ExoticaTechHM extends BaseHullMod {
         if (variant == null) return;
 
         ShipModifications mods = ShipModFactory.generateForFleetMember(member);
+        ShipVariantAPI memberRefitVarient = RefitButtonAdderKt.checkRefitVariant(member);
 
         if (mods.shouldApplyHullmod()) {
             // Determine the root member so we can operate on the full variant tree.
@@ -51,7 +54,7 @@ public class ExoticaTechHM extends BaseHullMod {
             String rootVariantId = FleetMemberHierarchy.findRootVariantId(variant.getHullVariantId());
             FleetMemberAPI rootMember = member;
             if (rootVariantId != null) {
-                // Child display variant needs the hullmod for refit screen highlighting
+                // Child display variant needs the hullmod
                 variant.addPermaMod(HULLMOD_ID);
                 FleetMemberAPI foundRoot = findMemberByVariantId(member, rootVariantId);
                 if (foundRoot != null) rootMember = foundRoot;
@@ -59,21 +62,29 @@ public class ExoticaTechHM extends BaseHullMod {
 
             // Add hullmod to every variant in the root's station module tree
             installHullmodRecursive(rootMember.getVariant());
+            installHullmodRecursive(RefitButtonAdderKt.checkRefitVariant(rootMember));
 
             // Propagate hullmod to each child FleetMemberAPI's own .variant so the refit
             // screen (which reads each FM independently) shows the highlight on modules.
-            // Must run before fixVariant — identity matching relies on original variants.
             if (!rootMember.getVariant().getStationModules().isEmpty()) {
-                FleetMemberUtilsKt.propagateHullmodToChildFms(rootMember, HULLMOD_ID);
+                FleetMemberUtilsKt.propagateFromVariantTree(rootMember, HULLMOD_ID);
             }
 
             // Create REFIT clones of the fixed variants (clones inherit hullmods from originals).
             ExtensionsKt.fixVariant(member);
 
-            // fixVariant replaces member.getVariant() with a REFIT clone, but the variant
-            // parameter still points to the old object. If the refit screen is showing this
-            // variant (display copy), it also needs the hullmod for the highlight to appear.
-            if (variant != member.getVariant() && !variant.hasHullMod(HULLMOD_ID)) {
+            // Refresh hierarchy cache so getAllModules can find the new REFIT clone variants.
+            FleetMemberHierarchy.refreshFleetCache(rootMember.getVariant());
+            FleetMemberHierarchy.refreshFleetCache(RefitButtonAdderKt.checkRefitVariant(rootMember));
+
+            // Ensure the refit display variant has the hullmod for highlight to appear.
+            ShipVariantAPI refitVariant = RefitButtonAdderKt.checkRefitVariant(member);
+            if (!refitVariant.hasHullMod(HULLMOD_ID)) {
+                refitVariant.addPermaMod(HULLMOD_ID);
+            }
+            // The variant parameter may also differ from member.getVariant() — backstop it too.
+//            if (variant != refitVariant && variant != member.getVariant() && !variant.hasHullMod(HULLMOD_ID)) {
+            if (!variant.hasHullMod(HULLMOD_ID)) {
                 variant.addPermaMod(HULLMOD_ID);
             }
 
@@ -83,6 +94,9 @@ public class ExoticaTechHM extends BaseHullMod {
             // caused the corruption bug (cleared hullmod when ship still had modifications).
             if (member.getVariant().hasHullMod(HULLMOD_ID)) {
                 member.getVariant().removePermaMod(HULLMOD_ID);
+            }
+            if (memberRefitVarient.hasHullMod(HULLMOD_ID)) {
+                memberRefitVarient.removePermaMod(HULLMOD_ID);
             }
         }
     }
@@ -134,6 +148,46 @@ public class ExoticaTechHM extends BaseHullMod {
         ShipVariantAPI shipVariant = member.getVariant();
         if (shipVariant.hasHullMod(HULLMOD_ID)) {
             shipVariant.removePermaMod(HULLMOD_ID);
+        }
+
+        // Also remove from all child module variants in the tree
+        removeHullmodRecursive(shipVariant);
+        // And from any child FMAPIs reachable via statsForOpCosts (refit screen)
+        removeFromChildFmsByStats(shipVariant);
+    }
+
+    // Recursively removes HULLMOD_ID from a variant and all its station module children.
+    private static void removeHullmodRecursive(ShipVariantAPI v) {
+        for (String slotId : v.getStationModules().keySet()) {
+            ShipVariantAPI childV = v.getModuleVariant(slotId);
+            if (childV != null) {
+                if (childV.hasHullMod(HULLMOD_ID)) {
+                    childV.removePermaMod(HULLMOD_ID);
+                }
+                removeHullmodRecursive(childV);
+            }
+        }
+    }
+
+    // Walks the variant tree via statsForOpCosts to remove the hullmod from child FMAPIs.
+    private static void removeFromChildFmsByStats(ShipVariantAPI v) {
+        for (String slotId : v.getStationModules().keySet()) {
+            ShipVariantAPI childV = v.getModuleVariant(slotId);
+            if (childV != null) {
+                FleetMemberAPI childFM = null;
+                try {
+                    MutableShipStatsAPI childStats = childV.getStatsForOpCosts();
+                    if (childStats != null) {
+                        childFM = FleetMemberUtils.findMemberForStats(childStats);
+                    }
+                } catch (Exception e) {
+                    // statsForOpCosts can throw if the variant hasn't been resolved yet
+                }
+                if (childFM != null && childFM.getVariant().hasHullMod(HULLMOD_ID)) {
+                    childFM.getVariant().removePermaMod(HULLMOD_ID);
+                }
+                removeFromChildFmsByStats(childV);
+            }
         }
     }
 

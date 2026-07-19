@@ -8,6 +8,8 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import exoticatechnologies.campaign.listeners.CampaignEventListener.Companion.activeFleets
 import exoticatechnologies.util.FleetMemberUtils.findFleetForVariant
+import org.apache.log4j.Level
+import org.apache.log4j.Logger
 
 object FleetMemberUtils {
     @JvmField
@@ -175,63 +177,63 @@ object FleetMemberUtils {
 
 }
 
+private val propagateLogger: Logger = Logger.getLogger("exoticatechnologies.util.FleetMemberUtils")
+
 /**
- * Propagates [hullmodId] from this (root) FM's variant tree to each child
- * [FleetMemberAPI]'s own [.variant] in the fleet.  The refit screen reads
- * each FM's variant independently — adding the hullmod to the root variant
- * tree alone ([installHullmodRecursive]) is invisible to child FM instances.
+ * Walks the root variant's station module tree, resolving each child variant
+ * to its [FleetMemberAPI] via [ShipVariantAPI.statsForOpCosts.fleetMember],
+ * then adds [hullmodId] to the child FM's own variant.  This is necessary
+ * because the refit screen reads each FM's variant independently — adding the
+ * hullmod to the root variant tree alone is invisible to child FM instances.
  *
- * ## Why identity-based matching?
- *
- * Before [fixVariant] runs, the root variant tree and all child FM variants
- * share the same [ShipVariantAPI] objects.  By matching on `===` we avoid
- * the hullVariantId ambiguity that occurs when multiple ships or modules
- * share the same hull variant string.
- *
- * ## Ordering requirement
- *
- * Must be called **before** [fixVariant] — once REFIT clones are created
- * the variant objects diverge and identity matching fails.
- *
- * @param hullmodId the hullmod ID to add (e.g. [ExoticaTechHM.HULLMOD_ID]).
+ * Unlike the identity-based approach (which relied on `membersListCopy`),
+ * this uses `statsForOpCosts` which lets us reach child FMAPIs that are
+ * never added to the fleet's mutable member lists.
  */
-fun FleetMemberAPI.propagateHullmodToChildFms(hullmodId: String) {
-    if (this.variant.stationModules.isEmpty()) return
-    val fleet = this.fleetData?.fleet ?: return
-
-    // Build variant-identity -> FleetMemberAPI map from the fleet's members.
-    // Matching by ShipVariantAPI object identity (===) is unambiguous across
-    // duplicate hullVariantIds — each module slot has its own variant instance.
-    val variantToFm = HashMap<ShipVariantAPI, FleetMemberAPI>()
-    for (fm in fleet.fleetData.membersListCopy) {
-        if (fm.isFighterWing || fm === this) continue
-        variantToFm[fm.variant] = fm
-    }
-
-    addHullmodToChildFmsByIdentity(this.variant, variantToFm, hullmodId)
+fun FleetMemberAPI.propagateFromVariantTree(hullmodId: String) {
+    propagateLogger.info("=== propagateFromVariantTree ===")
+    propagateLogger.info("rootFM: id=${this.id} hullId=${this.hullId} shipName=${this.shipName} variantId=${this.variant.hullVariantId}")
+    propagateFromVariantRecursive(this, this.variant, hullmodId)
 }
 
-/**
- * Recursive helper: for each module slot in [parentV], looks up the slot's
- * child variant by identity in [variantToFm] and adds [hullmodId] to the
- * matching FM's variant.  Continues recursively into nested modules.
- *
- * No [matched]-set is needed because each [ShipVariantAPI] instance belongs
- * to exactly one slot — `===` comparison is unambiguous even when two slots
- * share the same `hullVariantId`.
- */
-private fun addHullmodToChildFmsByIdentity(
-    parentV: ShipVariantAPI,
-    variantToFm: HashMap<ShipVariantAPI, FleetMemberAPI>,
-    hullmodId: String
-) {
-    for (slotId in parentV.stationModules.keys) {
+private fun propagateFromVariantRecursive(rootMember: FleetMemberAPI, parentV: ShipVariantAPI, hullmodId: String) {
+    for ((slotId, _) in parentV.stationModules) {
         val childV = parentV.getModuleVariant(slotId) ?: continue
-        val childFM = variantToFm[childV]
-        if (childFM != null && !childFM.variant.hasHullMod(hullmodId)) {
+        propagateLogger.info("--- slot=$slotId ---")
+        propagateLogger.info("childV: hullVariantId=${childV.hullVariantId} hullId=${childV.hullSpec.hullId}")
+
+        // Approach A: add hullmod to the variant in the tree (same as installHullmodRecursive)
+        val hadOnV = childV.hasHullMod(hullmodId)
+        childV.addPermaMod(hullmodId)
+        propagateLogger.info("[variantTree] had=$hadOnV now=${childV.hasHullMod(hullmodId)}")
+
+        // Approach B: resolve child FM via findMemberForStats (searches broader than .fleetMember)
+        val childStats = runCatching { childV.statsForOpCosts }.getOrNull()
+        val childFM = if (childStats != null) FleetMemberUtils.findMemberForStats(childStats) else null
+        if (childFM != null) {
+            val hadOnFm = childFM.variant.hasHullMod(hullmodId)
             childFM.variant.addPermaMod(hullmodId)
-            addHullmodToChildFmsByIdentity(childV, variantToFm, hullmodId)
+            propagateLogger.info("[statsFm] id=${childFM.id} hullId=${childFM.hullId} variantId=${childFM.variant.hullVariantId} shipName=${childFM.shipName}")
+            propagateLogger.info("[statsFm] had=$hadOnFm now=${childFM.variant.hasHullMod(hullmodId)}")
+            if (childFM.variant.stationModules.isNotEmpty()) {
+                propagateLogger.info("[statsFm] has nested modules: ${childFM.variant.stationModules.keys}")
+            }
+        } else {
+            propagateLogger.info("[statsFm] NULL (no FM reachable via statsForOpCosts)")
         }
+
+        // Approach C: check if membersListCopy has this child FM (using ==)
+        if (childFM != null) {
+            val fleet = rootMember.fleetData?.fleet
+            if (fleet != null) {
+                val found = fleet.fleetData.membersListCopy.find { it == childFM }
+                propagateLogger.info("[membersListCopy] fm==match=${found != null} ${found?.let { "(id=${it.id})" } ?: ""}")
+                val byHull = fleet.fleetData.membersListCopy.filter { it.hullId == childFM.hullId }
+                propagateLogger.info("[membersListCopy] byHullId=${byHull.size} entries: ${byHull.joinToString { "${it.id}/${it.shipName}" }}")
+            }
+        }
+
+        propagateFromVariantRecursive(rootMember, childV, hullmodId)
     }
 }
 
