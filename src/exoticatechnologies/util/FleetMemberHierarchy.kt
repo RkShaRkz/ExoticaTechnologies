@@ -289,7 +289,7 @@ object FleetMemberHierarchy {
         }
 
         if (result == null) {
-            logError("Fleet context missing for member: ${member.shipName} [${member.hullId}]")
+            logError("Fleet context missing for member: ${member.shipName} [${member.hullId}]\tvariant: ${member.variant} [${member.variant.hullVariantId}]")
         }
         return result
     }
