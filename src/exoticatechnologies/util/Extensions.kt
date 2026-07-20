@@ -49,12 +49,24 @@ fun FleetMemberAPI.getMods(): ShipModifications = ShipModFactory.generateForFlee
 
 fun ShipVariantAPI.getRefitVariant(): ShipVariantAPI {
     var shipVariant = this
+    val originalShipVariantTags = shipVariant.tags
     if (shipVariant.isStockVariant || shipVariant.source != VariantSource.REFIT) {
         shipVariant = shipVariant.clone()
         shipVariant.originalVariant = null
         shipVariant.source = VariantSource.REFIT
+        // if ship variant tags are empty and original ones are not, refresh them
+        if (shipVariant.tags.isNullOrEmpty() && originalShipVariantTags.isNotEmpty()) {
+            refreshShipVariantTags(shipVariant, originalShipVariantTags)
+        }
     }
     return shipVariant
+}
+
+private fun refreshShipVariantTags(variant: ShipVariantAPI, originalTags: Collection<String>) {
+    variant.clearTags()
+    for (tag in originalTags) {
+        variant.addTag(tag)
+    }
 }
 
 fun FleetMemberAPI.fixVariant() {
