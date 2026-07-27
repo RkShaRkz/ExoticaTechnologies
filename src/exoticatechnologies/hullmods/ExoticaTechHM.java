@@ -10,7 +10,6 @@ import com.fs.starfarer.api.combat.ShipVariantAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import exoticatechnologies.campaign.listeners.CampaignEventListener;
-import exoticatechnologies.refit.RefitButtonAdder;
 import exoticatechnologies.refit.RefitButtonAdderKt;
 import exoticatechnologies.util.*;
 import exoticatechnologies.modifications.Modification;
@@ -27,6 +26,7 @@ import org.apache.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -41,11 +41,24 @@ public class ExoticaTechHM extends BaseHullMod {
     private static final Logger log = Logger.getLogger(ExoticaTechHM.class);
     private static final Level MIN_LOG_LEVEL = Level.WARN;
 
+    private static void diagnosticLog(String message) {
+        log.info("[DIAG] " + message);
+    }
+
     public static void addToFleetMember(FleetMemberAPI member, ShipVariantAPI variant) {
         if (variant == null) return;
 
         ShipModifications mods = ShipModFactory.generateForFleetMember(member);
         ShipVariantAPI memberRefitVarient = RefitButtonAdderKt.checkRefitVariant(member);
+
+        diagnosticLog("addToFleetMember | member=" + member.getId() + " variant=" + variant.getHullVariantId() +
+            " mods=" + (mods == null ? "null" : "UPGRADES: "+ (mods.getUpgradeMap() + ", EXOTICS: " + mods.getExoticSet())) +
+            " shouldApply=" + mods.shouldApplyHullmod() +
+            " memberVariant.hasHM=" + member.getVariant().hasHullMod(HULLMOD_ID) +
+            " refitVariant.hasHM=" + memberRefitVarient.hasHullMod(HULLMOD_ID) +
+            " variant.hasHM=" + variant.hasHullMod(HULLMOD_ID) +
+            " variant.source=" + variant.getSource() +
+            " variant.tags=" + variant.getTags().size());
 
         if (mods.shouldApplyHullmod()) {
             // Determine the root member so we can operate on the full variant tree.
@@ -70,6 +83,21 @@ public class ExoticaTechHM extends BaseHullMod {
                 FleetMemberUtilsKt.propagateFromVariantTree(rootMember, HULLMOD_ID);
             }
 
+            // Diagnostic: check if child modules have Exotica data after hullmod propagation
+            for (Map.Entry<String, String> e : rootMember.getVariant().getStationModules().entrySet()) {
+                ShipVariantAPI childV = rootMember.getVariant().getModuleVariant(e.getKey());
+                if (childV != null) {
+//                    boolean hasExoticaTag = childV.getTags().stream().anyMatch(t -> t.startsWith("$$EXOTICA$$"));
+                    boolean hasExoticaTag = checkTagsForExotica(childV.getTags());
+                    ShipModifications childMods = hasExoticaTag ? ShipModLoader.getFromVariant(childV) : null;
+                    diagnosticLog("addToFleetMember | child slot=" + e.getKey()
+                        + " variantId=" + childV.getHullVariantId()
+                        + " hasHM=" + childV.hasHullMod(HULLMOD_ID)
+                        + " hasExoticaTag=" + hasExoticaTag
+                        + " childMods=" + (childMods == null ? "null" : "present"));
+                }
+            }
+
             // Create REFIT clones of the fixed variants (clones inherit hullmods from originals).
             ExtensionsKt.fixVariant(member);
 
@@ -89,9 +117,18 @@ public class ExoticaTechHM extends BaseHullMod {
             }
 
             member.updateStats();
+
+            diagnosticLog("addToFleetMember | AFTER APPLY | member=" + member.getId() +
+                " memberVariant.hasHM=" + member.getVariant().hasHullMod(HULLMOD_ID) +
+                " refitVariant.hasHM=" + refitVariant.hasHullMod(HULLMOD_ID) +
+                " variant.hasHM=" + variant.hasHullMod(HULLMOD_ID) +
+                " rootMember.id=" + rootMember.getId() +
+                " rootVariantId=" + rootVariantId);
+
         } else {
-            // Was unconditional before — removing the hullmod before checking shouldApplyHullmod
-            // caused the corruption bug (cleared hullmod when ship still had modifications).
+            diagnosticLog("addToFleetMember | REMOVING hullmod | member=" + member.getId() +
+                " memberVariant.hasHM=" + member.getVariant().hasHullMod(HULLMOD_ID) +
+                " refitVariant.hasHM=" + memberRefitVarient.hasHullMod(HULLMOD_ID));
             if (member.getVariant().hasHullMod(HULLMOD_ID)) {
                 member.getVariant().removePermaMod(HULLMOD_ID);
             }
@@ -99,6 +136,16 @@ public class ExoticaTechHM extends BaseHullMod {
                 memberRefitVarient.removePermaMod(HULLMOD_ID);
             }
         }
+    }
+
+    private static boolean checkTagsForExotica(Collection<String> tags) {
+        if (tags == null || tags.isEmpty()) return false;
+        for (String tag : tags) {
+            if (tag.startsWith("$$EXOTICA$$")) return true;
+        }
+
+        // We didn't find anything, return false
+        return false;
     }
 
     // Recursively adds HULLMOD_ID to a variant and all its station module children.
@@ -204,8 +251,15 @@ public class ExoticaTechHM extends BaseHullMod {
     @Override
     public void advanceInCampaign(FleetMemberAPI member, float amount) {
         ShipModifications mods = ShipModLoader.get(member, member.getVariant());
+        diagnosticLog("advanceInCampaign | member=" + member.getId() +
+            " variant=" + member.getVariant().getHullVariantId() +
+            " mods=" + (mods == null ? "null" : "UPGRADES: "+ (mods.getUpgradeMap() + ", EXOTICS: " + mods.getExoticSet())) +
+            " variant.hasHM=" + member.getVariant().hasHullMod(HULLMOD_ID) +
+            " variant.tags=" + member.getVariant().getTags().size() +
+            " variant.source=" + member.getVariant().getSource());
         if (mods == null) {
             member.getVariant().removePermaMod(HULLMOD_ID);
+            diagnosticLog("advanceInCampaign | NULL mods => removed HM | member=" + member.getId());
             return;
         }
 
@@ -418,8 +472,37 @@ public class ExoticaTechHM extends BaseHullMod {
 
         ShipModifications mods = ShipModLoader.get(member, stats.getVariant());
 
+        diagnosticLog("applyEffectsBeforeShipCreation | member=" + member.getId() +
+            " variant=" + stats.getVariant().getHullVariantId() +
+            " mods=" + (mods == null ? "null" : "UPGRADES: "+ (mods.getUpgradeMap() + ", EXOTICS: " + mods.getExoticSet())) +
+            " variant.hasHM=" + stats.getVariant().hasHullMod(HULLMOD_ID) +
+            " variant.tags=" + stats.getVariant().getTags().size() +
+            " variant.source=" + stats.getVariant().getSource());
+
         if (mods == null) {
-            member.getVariant().removePermaMod(HULLMOD_ID);
+            //TODO when removing HULLMOD_ID, remove it from everywhere if it's empty
+            // because, if no modules have exoticas, none of them should have the hullmod.
+            // if any module has at least one exotic - all ship's modules should have the hullmod.
+            if (stats.getVariant().getHullVariantId().equals(member.getVariant().getHullVariantId())) {
+                diagnosticLog("applyEffectsBeforeShipCreation | NULL mods => removed HM | member=" + member.getId() + " variant=" + stats.getVariant().getHullVariantId());
+                // this is the root module's own stats variant with no Exotica data —
+                // safe to strip the hullmod since there are no exotics on this ship.
+                // we skip this for child module variants because:
+                //   a) member.getVariant() always points to the ROOT FM's variant here
+                //      (findMemberForStats returns root FM for children via moduleMap),
+                //      so calling member.getVariant().removePermaMod() would incorrectly
+                //      strip the hullmod from the root variant.
+                //   b) children legitimately have no Exotica tag of their own — null is
+                //      expected; exotics from the root should still share effects to
+                //      children via shouldSkipModification. removing the child's hullmod
+                //      would break that sharing and the refit highlight.
+                member.getVariant().removePermaMod(HULLMOD_ID);
+            }
+            diagnosticLog("applyEffectsBeforeShipCreation | NULL mods | member=" + member.getId()
+                + " variant=" + stats.getVariant().getHullVariantId()
+                + " isRoot=" + stats.getVariant().getHullVariantId().equals(member.getVariant().getHullVariantId())
+                + " hasHM=" + stats.getVariant().hasHullMod(HULLMOD_ID)
+                + " tags=" + StringUtils.join(",", stats.getVariant().getTags()));
             return;
         }
 
@@ -504,6 +587,13 @@ public class ExoticaTechHM extends BaseHullMod {
         if (member == null) return;
 
         ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
+        diagnosticLog("applyEffectsAfterShipCreation | member=" + (member == null ? "null" : member.getId()) +
+            " variant=" + ship.getVariant().getHullVariantId() +
+            " mods=" + (mods == null ? "null" : "UPGRADES: "+ (mods.getUpgradeMap() + ", EXOTICS: " + mods.getExoticSet())) +
+            " variant.hasHM=" + ship.getVariant().hasHullMod(HULLMOD_ID) +
+            " variant.tags=" + ship.getVariant().getTags().size() +
+            " isStationModule=" + ship.isStationModule() +
+            " parentStation=" + (ship.getParentStation() == null ? "null" : "present"));
         if (mods == null)
             return;   //FIXME obviously, in case of a module that has no exoticas, it can't be shared to...
 
@@ -662,6 +752,9 @@ public class ExoticaTechHM extends BaseHullMod {
         if (member == null) return;
 
         ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
+        log.info("addPostDescriptionSection | member=" + member.getId() +
+            " variant=" + ship.getVariant().getHullVariantId() +
+            " mods=" + (mods == null ? "null" : "UPGRADES: "+ (mods.getUpgradeMap() + ", EXOTICS: " + mods.getExoticSet())));
         if (mods == null) return;
 
 

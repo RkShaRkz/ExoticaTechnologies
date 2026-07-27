@@ -1,5 +1,6 @@
 package exoticatechnologies.modifications
 
+import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
@@ -8,8 +9,11 @@ import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySp
 import exoticatechnologies.util.FleetMemberHierarchy
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
+import org.apache.log4j.Logger
+import java.util.logging.Level
 
 class ShipModLoader {
+    private val log = Logger.getLogger(ShipModLoader::class.java)
 
     private var providers: List<Provider> = mutableListOf(
         VariantTagProvider.inst,
@@ -17,8 +21,19 @@ class ShipModLoader {
         PersistentDataProvider.inst
     )
 
+    private val LOG_TAG = "ShipModLoader"
+
+    private fun diagnosticLog(message: String) {
+        log.info("[DIAG] $message")
+    }
+
     private fun getData(member: FleetMemberAPI, variant: ShipVariantAPI = member.variant): ShipModifications? {
-        return providers.firstNotNullOfOrNull { it.get(member, variant) }
+        val result = providers.firstNotNullOfOrNull { it.get(member, variant) }
+        diagnosticLog(
+            "getData | member=${member.id} variant=${variant.hullVariantId} " +
+            "variantTags=${variant.tags.size} result=${if (result == null) "null" else "mods(UPGRADES: ${result.getUpgradeMap()}, EXOTICS: ${result.getExoticSet()})"}"
+        )
+        return result
     }
 
     private fun saveData(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {
