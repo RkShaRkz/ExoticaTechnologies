@@ -26,7 +26,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
     var currGets: Int = 0
     val maxGetsPerMember: Int = 10
 
-    val cache: MutableMap<FleetMemberAPI, ShipModifications> = WeakHashMap()
+    val cache: MutableMap<FleetMemberAPI, MutableMap<String, ShipModifications>> = WeakHashMap()
     val EXOTICA_INDICATOR = "$\$EXOTICA$$"
 
     override fun get(member: FleetMemberAPI, variant: ShipVariantAPI): ShipModifications? {
@@ -36,12 +36,11 @@ open class VariantTagProvider : ShipModLoader.Provider {
             currGets = 0
         }
 
-        val cacheMods: ShipModifications? = cache.keys
-            .filter { it == member && it.specId == member.specId }
-            .firstNotNullOfOrNull { cache[it] }
+        val variantId = variant.hullVariantId
+        val cacheMods: ShipModifications? = cache[member]?.get(variantId)
 
         if (cacheMods != null) {
-            diagnosticLog("VariantTagProvider.get | CACHE HIT | member=${member.id} variant=${variant.hullVariantId} variantTags=${variant.tags.size} result=UPGRADES: ${cacheMods.getUpgradeMap()}, EXOTICS: ${cacheMods.getExoticSet()}")
+            diagnosticLog("VariantTagProvider.get | CACHE HIT | member=${member.id} variant=$variantId variantTags=${variant.tags.size} result=UPGRADES: ${cacheMods.getUpgradeMap()}, EXOTICS: ${cacheMods.getExoticSet()}")
             return cacheMods
         }
 
@@ -51,15 +50,15 @@ open class VariantTagProvider : ShipModLoader.Provider {
 
         getFromVariant(variant)?.let {
             if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT || Global.getSector().campaignUI.currentCoreTab == CoreUITabId.FLEET) {
-                diagnosticLog("VariantTagProvider.get | TAG READ (no cache) | member=${member.id} variant=${variant.hullVariantId} variantTags=${variant.tags.size} result=UPGRADES: ${it.getUpgradeMap()}, EXOTICS: ${it.getExoticSet()}")
+                diagnosticLog("VariantTagProvider.get | TAG READ (no cache) | member=${member.id} variant=$variantId variantTags=${variant.tags.size} result=UPGRADES: ${it.getUpgradeMap()}, EXOTICS: ${it.getExoticSet()}")
                 return it
             } else {
-                cache[member] = it
+                cache.getOrPut(member) { mutableMapOf() }[variantId] = it
             }
-            diagnosticLog("VariantTagProvider.get | TAG READ + cache | member=${member.id} variant=${variant.hullVariantId} variantTags=${variant.tags.size} result=UPGRADES: ${it.getUpgradeMap()}, EXOTICS: ${it.getExoticSet()}")
+            diagnosticLog("VariantTagProvider.get | TAG READ + cache | member=${member.id} variant=$variantId variantTags=${variant.tags.size} result=UPGRADES: ${it.getUpgradeMap()}, EXOTICS: ${it.getExoticSet()}")
             return it
         }
-        diagnosticLog("VariantTagProvider.get | NULL  | member=${member.id} variant=${variant.hullVariantId} variantTags=${variant.tags.size}")
+        diagnosticLog("VariantTagProvider.get | NULL  | member=${member.id} variant=$variantId variantTags=${variant.tags.size}")
         return null
     }
 
@@ -72,11 +71,8 @@ open class VariantTagProvider : ShipModLoader.Provider {
 
         val tag = EXOTICA_INDICATOR + convertToJson(member, mods)
         variant.addTag(tag)
-        if (variant != member.variant) {
-            member.variant.addTag(tag)
-        }
 
-        cache[member] = mods
+        cache.getOrPut(member) { mutableMapOf() }[variant.hullVariantId] = mods
     }
 
     override fun remove(member: FleetMemberAPI, variant: ShipVariantAPI) {
