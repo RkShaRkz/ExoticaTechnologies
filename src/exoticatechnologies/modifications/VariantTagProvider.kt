@@ -6,6 +6,7 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.loading.VariantSource
 import exoticatechnologies.util.fixVariant
+import exoticatechnologies.util.getRefitVariant
 import org.apache.log4j.Logger
 import org.json.JSONException
 import org.json.JSONObject
@@ -71,6 +72,16 @@ open class VariantTagProvider : ShipModLoader.Provider {
 
         val tag = EXOTICA_INDICATOR + convertToJson(member, mods)
         variant.addTag(tag)
+        // Add to refit variant if it's not already there
+        if (variant.getRefitVariant().tags.contains(tag).not()) {
+            // This is new
+            variant.getRefitVariant().addTag(tag)
+        }
+        if (variant != member.variant) {
+            // TODO we add the tag to member variant if we're dealing with root module's member and variant
+            // TODO otherwise, if we're dealing with child's member/variant, we add the tag to the respective "laxer" variant.
+            member.variant.addTag(tag)
+        }
 
         cache.getOrPut(member) { mutableMapOf() }[variant.hullVariantId] = mods
     }

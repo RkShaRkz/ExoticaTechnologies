@@ -60,9 +60,12 @@ fun ShipVariantAPI.getRefitVariant(): ShipVariantAPI {
         shipVariant = shipVariant.clone()
         shipVariant.originalVariant = null
         shipVariant.source = VariantSource.REFIT
+        diagnosticLog(log, "getRefitVariant | CLONED | variant=${shipVariant.hullVariantId} clonedTags=${shipVariant.tags.size} source=${shipVariant.source}  clonedTags.containsAll(originalTags) ? ${shipVariant.tags.containsAll(originalShipVariantTags)}")
+        diagnosticLog(log, "getRefitVariant | tags1 |  shipVariant.tags == originalTags ? ${shipVariant.tags == originalShipVariantTags}")
+        diagnosticLog(log, "getRefitVariant | tags2 |  shipVariant.tags === originalTags ? ${shipVariant.tags === originalShipVariantTags}")
         // if ship variant tags are empty and original ones are not, refresh them
         if (shipVariant.tags.isNullOrEmpty() && originalShipVariantTags.isNotEmpty()) {
-            diagnosticLog(log, "getRefitVariant | REFRESHING TAGS | variant=${this.hullVariantId} cloneTags=${shipVariant.tags.size} restoring ${originalShipVariantTags.size} tags")
+            diagnosticLog(log, "getRefitVariant | REFRESHING TAGS | variant=${this.hullVariantId} clonedTags=${shipVariant.tags.size} restoring ${originalShipVariantTags.size} tags")
             refreshShipVariantTags(shipVariant, originalShipVariantTags)
         }
     } else {
