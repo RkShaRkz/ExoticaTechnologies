@@ -120,8 +120,10 @@ open class VariantTagProvider : ShipModLoader.Provider {
                 // We use this to match "different" variants we get from the game for the same member
                 // e.g. 'tbj_overslaught_left_0' to 'tbj_overslaught_left_Start' and 'tbj_overslaught_right_1' to 'tbj_overslaught_right_Start'
                 for (cacheVariantId in cacheForMember.keys) {
-                    if (cacheVariantId.startsWith(prefix)) {
-                        Optional.of(cacheVariantId)
+                    val lastCacheUnderscoreIndex = cacheVariantId.lastIndexOf("_")
+                    val sanitizedCacheVariantId = cacheVariantId.substring(0, lastCacheUnderscoreIndex)
+                    if (sanitizedCacheVariantId.contentEquals(prefix)) {
+                        return Optional.of(cacheVariantId)
                     }
                 }
             }
