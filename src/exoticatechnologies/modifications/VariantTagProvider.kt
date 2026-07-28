@@ -5,13 +5,13 @@ import com.fs.starfarer.api.campaign.CoreUITabId
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.loading.VariantSource
+import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.fixVariant
 import exoticatechnologies.util.getRefitVariant
 import org.apache.log4j.Logger
 import org.json.JSONException
 import org.json.JSONObject
 import java.util.WeakHashMap
-import java.util.logging.Level
 
 open class VariantTagProvider : ShipModLoader.Provider {
     companion object {
@@ -46,9 +46,10 @@ open class VariantTagProvider : ShipModLoader.Provider {
         }
 
         val fuzzyKey = findFuzzyKey(member, variantId)
-        if (fuzzyKey != null) {
-            val fuzzyMods = cache[member]!![fuzzyKey]
-            diagnosticLog("VariantTagProvider.get | FUZZY CACHE HIT | member=${member.id} query=$variantId match=$fuzzyKey")
+        if (fuzzyKey.isPresent) {
+            val matchId = fuzzyKey.get()
+            val fuzzyMods = cache[member]!![matchId]
+            diagnosticLog("VariantTagProvider.get | FUZZY CACHE HIT | member=${member.id} query=$variantId match=$matchId")
             return fuzzyMods
         }
 
@@ -101,17 +102,17 @@ open class VariantTagProvider : ShipModLoader.Provider {
         variant.tags.removeAll { it.startsWith(EXOTICA_INDICATOR) }
     }
 
-    private fun findFuzzyKey(member: FleetMemberAPI, variantId: String): String? {
-        val cacheForMember = cache[member] ?: return null
-        val lastUnderscore = variantId.lastIndexOf('_')
-        if (lastUnderscore <= 0) return null
-        val prefix = variantId.substring(0, lastUnderscore)
+    private fun findFuzzyKey(member: FleetMemberAPI, variantId: String): Optional<String> {
+        val cacheForMember = cache[member] ?: return Optional.empty()
+        val lastUnderscoreIndex = variantId.lastIndexOf('_')
+        if (lastUnderscoreIndex <= 0) return Optional.empty()
+        val prefix = variantId.substring(0, lastUnderscoreIndex)
         for (cachedId in cacheForMember.keys) {
             if (cachedId.startsWith(prefix) && cachedId != variantId) {
-                return cachedId
+                return Optional.of(cachedId)
             }
         }
-        return null
+        return Optional.empty()
     }
 
     fun getFromVariant(variant: ShipVariantAPI): ShipModifications? {
