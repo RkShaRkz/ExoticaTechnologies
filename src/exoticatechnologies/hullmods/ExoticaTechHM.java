@@ -45,6 +45,24 @@ public class ExoticaTechHM extends BaseHullMod {
         log.info("[DIAG] " + message);
     }
 
+    // refit screen clones variant IDs with numeric suffixes (e.g. "_0" instead of "_Start"),
+    // so exact string comparison between stats variant and member variant can fail.
+    // strip the last "_suffix" from both and compare the prefixes to determine root-variant identity.
+    private static boolean fuzzyVariantMatch(ShipVariantAPI first, ShipVariantAPI second) {
+        // First, get hullVariantIds of these variants
+        String a = first.getHullVariantId();
+        String b = second.getHullVariantId();
+        // Then, strip everything after last '_'
+        int aIdx = a.lastIndexOf('_');
+        int bIdx = b.lastIndexOf('_');
+        // If we managed to strip them both, compare them both without the last _suffix,
+        // otherwise compare them raw as-is
+        if (aIdx > 0 && bIdx > 0) {
+            return a.substring(0, aIdx).contentEquals(b.substring(0, bIdx));
+        }
+        return a.contentEquals(b);
+    }
+
     public static void addToFleetMember(FleetMemberAPI member, ShipVariantAPI variant) {
         if (variant == null) return;
 
@@ -491,18 +509,25 @@ public class ExoticaTechHM extends BaseHullMod {
 
         ShipModifications mods = ShipModLoader.get(member, stats.getVariant());
 
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForStats(stats);
+        List<MutableShipStatsAPI> statsList = FleetMemberHierarchy.getAllModulesStatsFromSingleStats(stats);
+
         diagnosticLog("applyEffectsBeforeShipCreation | member=" + member.getId() +
             " variant=" + stats.getVariant().getHullVariantId() +
             " mods=" + (mods == null ? "null" : "UPGRADES: "+ (mods.getUpgradeMap() + ", EXOTICS: " + mods.getExoticSet())) +
             " variant.hasHM=" + stats.getVariant().hasHullMod(HULLMOD_ID) +
             " variant.tags=" + stats.getVariant().getTags().size() +
-            " variant.source=" + stats.getVariant().getSource());
+            " variant.source=" + stats.getVariant().getSource() +
+            " wholeShipsMods.size=" + wholeShipsMods.size() +
+            " statsList.size=" + statsList.size());
 
-        if (mods == null) {
+        // combined guard: bail only when this module AND all other modules have no exotic data
+        if (mods == null && wholeShipsMods.isEmpty()) {
             //TODO when removing HULLMOD_ID, remove it from everywhere if it's empty
             // because, if no modules have exoticas, none of them should have the hullmod.
             // if any module has at least one exotic - all ship's modules should have the hullmod.
-            if (stats.getVariant().getHullVariantId().equals(member.getVariant().getHullVariantId())) {
+
+            if (fuzzyVariantMatch(stats.getVariant(), member.getVariant())) {
                 diagnosticLog("applyEffectsBeforeShipCreation | NULL mods => removed HM | member=" + member.getId() + " variant=" + stats.getVariant().getHullVariantId());
                 // this is the root module's own stats variant with no Exotica data —
                 // safe to strip the hullmod since there are no exotics on this ship.
@@ -519,17 +544,12 @@ public class ExoticaTechHM extends BaseHullMod {
             }
             diagnosticLog("applyEffectsBeforeShipCreation | NULL mods | member=" + member.getId()
                 + " variant=" + stats.getVariant().getHullVariantId()
-                + " isRoot=" + stats.getVariant().getHullVariantId().equals(member.getVariant().getHullVariantId())
+//                + " isRoot=" + stats.getVariant().getHullVariantId().equals(member.getVariant().getHullVariantId())
+                + " stats.getVariant matches member.getVariant ? " + fuzzyVariantMatch(stats.getVariant(), member.getVariant())
                 + " hasHM=" + stats.getVariant().hasHullMod(HULLMOD_ID)
                 + " tags=" + StringUtils.join(",", stats.getVariant().getTags()));
             return;
         }
-
-        // Now, lets try fetching all of ship's Modifications to derive/calculate the two new parameters
-        FleetMemberAPI rootModuleMember = FleetMemberUtils.findMemberForStats(stats);    //this is root module
-//        List<MutableShipStatsAPI> statsList = ShipStatsRegistry.getWholeShipsStatsFromSingleStats(stats);
-        List<MutableShipStatsAPI> statsList = FleetMemberHierarchy.getAllModulesStatsFromSingleStats(stats);
-        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForStats(stats);
 
         diagnosticLog("applyEffectsBeforeShipCreation | LOOP START member=" + member.getId() +
             " variant=" + stats.getVariant().getHullVariantId() +
@@ -541,7 +561,7 @@ public class ExoticaTechHM extends BaseHullMod {
 //            if (shouldSkipModification(stats, exotic)) continue;
 //
 //            exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
-            boolean thisModuleOwnsIt = mods.hasExotic(exotic);
+            boolean thisModuleOwnsIt = mods != null && mods.hasExotic(exotic);
             boolean presentSomewhereOnShip = false;
             ShipModifications thisExoticasMods = null;
             for (int i = 0; i < wholeShipsMods.size(); i++) {
@@ -566,9 +586,9 @@ public class ExoticaTechHM extends BaseHullMod {
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
             ExoticData exoticDataToUse = null;
-            if (mods.hasExotic(exotic)) {
+            if (mods != null && mods.hasExotic(exotic)) {
                 shipModsToUse = mods;
-            } else if (thisExoticasMods.hasExotic(exotic)) {
+            } else if (thisExoticasMods != null && thisExoticasMods.hasExotic(exotic)) {
                 shipModsToUse = thisExoticasMods;
             } else {
                 throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it... exotic: " + exotic);
@@ -587,7 +607,7 @@ public class ExoticaTechHM extends BaseHullMod {
 //            if (shouldSkipModification(stats, upgrade)) continue;
 //
 //            upgrade.applyUpgradeToStats(stats, member, mods, mods.getUpgrade(upgrade));
-            boolean thisModuleOwnsIt = mods.hasUpgrade(upgrade);
+            boolean thisModuleOwnsIt = mods != null && mods.hasUpgrade(upgrade);
             boolean presentSomewhereOnShip = false;
             ShipModifications thisUpgradesMods = null;
             for (int i = 0; i < wholeShipsMods.size(); i++) {
@@ -604,9 +624,9 @@ public class ExoticaTechHM extends BaseHullMod {
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
-            if (mods.hasUpgrade(upgrade)) {
+            if (mods != null && mods.hasUpgrade(upgrade)) {
                 shipModsToUse = mods;
-            } else if (thisUpgradesMods.hasUpgrade(upgrade)) {
+            } else if (thisUpgradesMods != null && thisUpgradesMods.hasUpgrade(upgrade)) {
                 shipModsToUse = thisUpgradesMods;
             } else {
                 throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the upgrade have it... upgrade: " + upgrade);
