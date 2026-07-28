@@ -8,6 +8,8 @@ import com.fs.starfarer.api.loading.VariantSource
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.fixVariant
 import exoticatechnologies.util.getRefitVariant
+import exoticatechnologies.util.log
+import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.json.JSONException
 import org.json.JSONObject
@@ -17,10 +19,10 @@ open class VariantTagProvider : ShipModLoader.Provider {
     companion object {
         @JvmStatic
         var inst: VariantTagProvider = VariantTagProvider()
-        private val log = Logger.getLogger(VariantTagProvider::class.java)
+        private val logger = Logger.getLogger(VariantTagProvider::class.java)
 
         private fun diagnosticLog(message: String) {
-            log.info("[DIAG] $message")
+            logger.info("[DIAG] $message")
         }
     }
 
@@ -46,7 +48,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
         }
 
         val fuzzyKey = findFuzzyKey(member, variantId)
-        if (fuzzyKey.isPresent) {
+        if (fuzzyKey.isPresent()) {
             val matchId = fuzzyKey.get()
             val fuzzyMods = cache[member]!![matchId]
             diagnosticLog("VariantTagProvider.get | FUZZY CACHE HIT | member=${member.id} query=$variantId match=$matchId")
@@ -103,16 +105,33 @@ open class VariantTagProvider : ShipModLoader.Provider {
     }
 
     private fun findFuzzyKey(member: FleetMemberAPI, variantId: String): Optional<String> {
-        val cacheForMember = cache[member] ?: return Optional.empty()
-        val lastUnderscoreIndex = variantId.lastIndexOf('_')
-        if (lastUnderscoreIndex <= 0) return Optional.empty()
-        val prefix = variantId.substring(0, lastUnderscoreIndex)
-        for (cachedId in cacheForMember.keys) {
-            if (cachedId.startsWith(prefix) && cachedId != variantId) {
-                return Optional.of(cachedId)
+        val cacheForMember = cache[member]
+        return if (cacheForMember != null) {
+            // we have it, so find the best-matching key
+            val lastUnderscoreIndex = variantId.lastIndexOf("_")
+            // hopefully all ship variants have the snakecase naming scheme but if they don't...
+            if (lastUnderscoreIndex <= 0) {
+                // no underscore, bail out
+                log(logMsg = "No underscore found in cache keyset for variantId ${variantId} - bailing out!", logger = logger, logLevel = Level.INFO)
+            } else {
+                val prefix = variantId.substring(0, lastUnderscoreIndex)
+                // Now, find the best-matching key to this prefix
+                // If it matches completely on everything but the last '_suffix' part - we'll consider it "fuzzy equal"
+                // We use this to match "different" variants we get from the game for the same member
+                // e.g. 'tbj_overslaught_left_0' to 'tbj_overslaught_left_Start' and 'tbj_overslaught_right_1' to 'tbj_overslaught_right_Start'
+                for (cacheVariantId in cacheForMember.keys) {
+                    if (cacheVariantId.startsWith(prefix)) {
+                        Optional.of(cacheVariantId)
+                    }
+                }
             }
+
+            // In case we didn't find a fuzzy-matching key or we bailed out due to index - return empty
+            Optional.empty()
+        } else {
+            // Nothing in the cache, bail out
+            Optional.empty()
         }
-        return Optional.empty()
     }
 
     fun getFromVariant(variant: ShipVariantAPI): ShipModifications? {
