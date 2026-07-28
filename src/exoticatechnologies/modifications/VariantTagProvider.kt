@@ -45,6 +45,13 @@ open class VariantTagProvider : ShipModLoader.Provider {
             return cacheMods
         }
 
+        val fuzzyKey = findFuzzyKey(member, variantId)
+        if (fuzzyKey != null) {
+            val fuzzyMods = cache[member]!![fuzzyKey]
+            diagnosticLog("VariantTagProvider.get | FUZZY CACHE HIT | member=${member.id} query=$variantId match=$fuzzyKey")
+            return fuzzyMods
+        }
+
         if (variant == member.variant && variant.source != VariantSource.REFIT) {
             member.fixVariant()
         }
@@ -92,6 +99,19 @@ open class VariantTagProvider : ShipModLoader.Provider {
 
     private fun removeFromTags(variant: ShipVariantAPI) {
         variant.tags.removeAll { it.startsWith(EXOTICA_INDICATOR) }
+    }
+
+    private fun findFuzzyKey(member: FleetMemberAPI, variantId: String): String? {
+        val cacheForMember = cache[member] ?: return null
+        val lastUnderscore = variantId.lastIndexOf('_')
+        if (lastUnderscore <= 0) return null
+        val prefix = variantId.substring(0, lastUnderscore)
+        for (cachedId in cacheForMember.keys) {
+            if (cachedId.startsWith(prefix) && cachedId != variantId) {
+                return cachedId
+            }
+        }
+        return null
     }
 
     fun getFromVariant(variant: ShipVariantAPI): ShipModifications? {
