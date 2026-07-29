@@ -402,9 +402,19 @@ public class ExoticaTechHM extends BaseHullMod {
 
         ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
 
-        // Load whole-ship mods BEFORE the null guard so children with mods=null
-        // but root exotics don't bail out.
-        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
+        // We cannot use ShipModLoader.getAllForShipAPI(ship) here because ShipAPI
+        // modules (childModulesCopy / parentStation) aren't reliably connected to
+        // each other in refit and simulation contexts — parentStation can be null
+        // on child ShipAPIs, so getAllShipSections fails to discover siblings/root.
+        // ShipModLoader.getAllForStats(ship.getMutableStats()) piggybacks off the
+        // stats → FleetMember resolution path (moduleMap + variant tree walk) which
+        // correctly resolves all modules to the root FM's cached exotic data.
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForStats(ship.getMutableStats());
+
+        FleetMemberAPI fmForStats = FleetMemberUtils.findMemberForStats(ship.getMutableStats());
+        diagnosticLog("advanceInCombat | fmForStats: variantId=" + ship.getVariant().getHullVariantId()
+            + " -> hullId=" + (fmForStats == null ? "null" : fmForStats.getHullId())
+            + " fmVariantId=" + (fmForStats == null ? "null" : fmForStats.getVariant().getHullVariantId()));
 
         diagnosticLog("advanceInCombat | ENTER member=" + member.getId() +
             " ship.variant=" + ship.getVariant().getHullVariantId() +
@@ -651,8 +661,19 @@ public class ExoticaTechHM extends BaseHullMod {
         }
 
         ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
-        // Now, lets try fetching all of ship's Modifications to derive/calculate the two new parameters
-        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
+        // We cannot use ShipModLoader.getAllForShipAPI(ship) here because ShipAPI
+        // modules (childModulesCopy / parentStation) aren't reliably connected to
+        // each other in refit and simulation contexts — parentStation can be null
+        // on child ShipAPIs, so getAllShipSections fails to discover siblings/root.
+        // ShipModLoader.getAllForStats(ship.getMutableStats()) piggybacks off the
+        // stats → FleetMember resolution path (moduleMap + variant tree walk) which
+        // correctly resolves all modules to the root FM's cached exotic data.
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForStats(ship.getMutableStats());
+
+        FleetMemberAPI fmForStats = FleetMemberUtils.findMemberForStats(ship.getMutableStats());
+        diagnosticLog("applyEffectsAfterShipCreation | fmForStats: variantId=" + ship.getVariant().getHullVariantId()
+            + " -> hullId=" + (fmForStats == null ? "null" : fmForStats.getHullId())
+            + " fmVariantId=" + (fmForStats == null ? "null" : fmForStats.getVariant().getHullVariantId()));
 
         diagnosticLog("applyEffectsAfterShipCreation | member=" + (member == null ? "null" : member.getId()) +
             " variant=" + ship.getVariant().getHullVariantId() +
@@ -750,9 +771,19 @@ public class ExoticaTechHM extends BaseHullMod {
 
         ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
 
-        // Load whole-ship mods BEFORE the null guard so children with mods=null
-        // but root exotics don't bail out.
-        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
+        // We cannot use ShipModLoader.getAllForShipAPI(ship) here because ShipAPI
+        // modules (childModulesCopy / parentStation) aren't reliably connected to
+        // each other in refit and simulation contexts — parentStation can be null
+        // on child ShipAPIs, so getAllShipSections fails to discover siblings/root.
+        // ShipModLoader.getAllForStats(ship.getMutableStats()) piggybacks off the
+        // stats → FleetMember resolution path (moduleMap + variant tree walk) which
+        // correctly resolves all modules to the root FM's cached exotic data.
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForStats(ship.getMutableStats());
+
+        FleetMemberAPI fmForStats = FleetMemberUtils.findMemberForStats(ship.getMutableStats());
+        diagnosticLog("applyEffectsToFighterSpawnedByShip | fmForStats: variantId=" + ship.getVariant().getHullVariantId()
+            + " -> hullId=" + (fmForStats == null ? "null" : fmForStats.getHullId())
+            + " fmVariantId=" + (fmForStats == null ? "null" : fmForStats.getVariant().getHullVariantId()));
 
         diagnosticLog("applyEffectsToFighterSpawnedByShip | ENTER member=" + member.getId() +
             " ship.variant=" + ship.getVariant().getHullVariantId() +
