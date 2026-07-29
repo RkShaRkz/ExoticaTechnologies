@@ -509,6 +509,7 @@ public class ExoticaTechHM extends BaseHullMod {
 
         ShipModifications mods = ShipModLoader.get(member, stats.getVariant());
 
+        //FIXME problem is that both of these calls end up using FleetMemberHierarchy which cannot connect child-to-child.
         List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForStats(stats);
         List<MutableShipStatsAPI> statsList = FleetMemberHierarchy.getAllModulesStatsFromSingleStats(stats);
 
