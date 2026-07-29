@@ -7,6 +7,7 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
 import exoticatechnologies.util.FleetMemberHierarchy
+import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
 import org.apache.log4j.Logger
@@ -88,17 +89,42 @@ class ShipModLoader {
     }
 
     private fun getAllDataFromStatsAPI(stats: MutableShipStatsAPI): List<ShipModifications> {
-        // First, grab all ships' modules from this stats
-        val allShipModulesFromStats = FleetMemberHierarchy.getAllModules(stats)
         val allModsList = mutableSetOf<ShipModifications>()
+
+        // FleetMemberHierarchy cannot connect child-to-child, so it may collapse
+        // all module variants to rootFM. Keep this loop as a fallback.
+        val allShipModulesFromStats = FleetMemberHierarchy.getAllModules(stats)
+        diagnosticLog("getAllDataFromStatsAPI | allShipModulesFromStats.size: ${allShipModulesFromStats.size} | allShipModulesFromStats hullVariantIds: ${allShipModulesFromStats.map { it.variant.hullVariantId }}")
         for (someModule in allShipModulesFromStats) {
+            val variantId = someModule.variant.hullVariantId
+            diagnosticLog("getAllDataFromStatsAPI | FM loop | member=${someModule.id} variantId=$variantId")
             val moduleMods = ShipModLoader.get(someModule, someModule.variant)
             moduleMods?.let {
                 allModsList.add(it)
             }
         }
 
+        // Walk the variant tree to catch all module variants — FM hierarchy
+        // collapses child modules to rootFM, so sibling modules are missed.
+        val rootFM = FleetMemberUtils.findMemberForStats(stats)
+        if (rootFM != null) {
+            collectModuleMods(rootFM, rootFM.variant, allModsList)
+        }
+
         return allModsList.toList()
+    }
+
+    private fun collectModuleMods(member: FleetMemberAPI, variant: ShipVariantAPI, result: MutableSet<ShipModifications>) {
+        for (slotId in variant.stationModules.keys) {
+            val childV = variant.getModuleVariant(slotId) ?: continue
+            val variantId = childV.hullVariantId
+            diagnosticLog("getAllDataFromStatsAPI | variant tree | slot=$slotId variantId=$variantId")
+            val childMods = ShipModLoader.get(member, childV)
+            childMods?.let {
+                result.add(it)
+            }
+            collectModuleMods(member, childV, result)
+        }
     }
 
     companion object {
