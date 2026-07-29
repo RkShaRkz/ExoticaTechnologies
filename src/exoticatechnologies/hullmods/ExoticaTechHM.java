@@ -401,21 +401,25 @@ public class ExoticaTechHM extends BaseHullMod {
         if (member == null) return;
 
         ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
-        if (mods == null) return;
+
+        // Load whole-ship mods BEFORE the null guard so children with mods=null
+        // but root exotics don't bail out.
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
 
         diagnosticLog("advanceInCombat | ENTER member=" + member.getId() +
             " ship.variant=" + ship.getVariant().getHullVariantId() +
             " member.variant=" + member.getVariant().getHullVariantId() +
             " isStationModule=" + ship.isStationModule() +
             " parentStation=" + (ship.getParentStation() == null ? "null" : ship.getParentStation().getFleetMemberId()) +
-            " mods.exotics=" + mods.getExoticSet());
+            " mods=" + (mods == null ? "null" : "exotics=" + mods.getExoticSet()) +
+            " wholeShipsMods.size=" + wholeShipsMods.size());
 
-        // Now, lets try fetching all of ship's Modifications to derive/calculate the two new parameters
-        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
-        diagnosticLog("advanceInCombat | wholeShipsMods.size=" + wholeShipsMods.size());
+        if (mods == null && wholeShipsMods.isEmpty()) {
+            return;
+        }
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
-            boolean thisModuleOwnsIt = mods.hasExotic(exotic);
+            boolean thisModuleOwnsIt = mods != null && mods.hasExotic(exotic);
             boolean presentSomewhereOnShip = false;
             ShipModifications thisExoticasMods = null;
             for (int i = 0; i < wholeShipsMods.size(); i++) {
@@ -440,9 +444,9 @@ public class ExoticaTechHM extends BaseHullMod {
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
             ExoticData exoticDataToUse = null;
-            if (mods.hasExotic(exotic)) {
+            if (mods != null && mods.hasExotic(exotic)) {
                 shipModsToUse = mods;
-            } else if (thisExoticasMods.hasExotic(exotic)) {
+            } else if (thisExoticasMods != null && thisExoticasMods.hasExotic(exotic)) {
                 shipModsToUse = thisExoticasMods;
             } else {
                 throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it... exotic: " + exotic);
@@ -457,7 +461,7 @@ public class ExoticaTechHM extends BaseHullMod {
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
-            boolean thisModuleOwnsIt = mods.hasUpgrade(upgrade);
+            boolean thisModuleOwnsIt = mods != null && mods.hasUpgrade(upgrade);
             boolean presentSomewhereOnShip = false;
             ShipModifications thisUpgradesMods = null;
             for (int i = 0; i < wholeShipsMods.size(); i++) {
@@ -474,9 +478,9 @@ public class ExoticaTechHM extends BaseHullMod {
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
-            if (mods.hasUpgrade(upgrade)) {
+            if (mods != null && mods.hasUpgrade(upgrade)) {
                 shipModsToUse = mods;
-            } else if (thisUpgradesMods.hasUpgrade(upgrade)) {
+            } else if (thisUpgradesMods != null && thisUpgradesMods.hasUpgrade(upgrade)) {
                 shipModsToUse = thisUpgradesMods;
             } else {
                 throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the upgrade have it... upgrade: " + upgrade);
@@ -745,23 +749,24 @@ public class ExoticaTechHM extends BaseHullMod {
         if (member == null) return;
 
         ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
-        if (mods == null) return;   //TODO if we have no mods AND whole ship's mods are empty ...
+
+        // Load whole-ship mods BEFORE the null guard so children with mods=null
+        // but root exotics don't bail out.
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
 
         diagnosticLog("applyEffectsToFighterSpawnedByShip | ENTER member=" + member.getId() +
             " ship.variant=" + ship.getVariant().getHullVariantId() +
             " fighter=" + fighter.getHullSpec().getHullId() +
             " isStationModule=" + ship.isStationModule() +
-            " mods.exotics=" + mods.getExoticSet());
+            " mods=" + (mods == null ? "null" : "exotics=" + mods.getExoticSet()) +
+            " wholeShipsMods.size=" + wholeShipsMods.size());
 
-        // Now, lets try fetching all of ship's Modifications to derive/calculate the two new parameters
-        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForShipAPI(ship);
+        if (mods == null && wholeShipsMods.isEmpty()) {
+            return;
+        }
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
-            //TODO SHARK HERE
-//            if (!mods.hasExotic(exotic)) continue;
-//            if (shouldSkipModification(ship, exotic)) continue;
-
-            boolean thisModuleOwnsIt = mods.hasExotic(exotic);
+            boolean thisModuleOwnsIt = mods != null && mods.hasExotic(exotic);
             boolean presentSomewhereOnShip = false;
             ShipModifications thisExoticasMods = null;
             for (int i = 0; i < wholeShipsMods.size(); i++) {
@@ -784,9 +789,9 @@ public class ExoticaTechHM extends BaseHullMod {
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
-            if (mods.hasExotic(exotic)) {
+            if (mods != null && mods.hasExotic(exotic)) {
                 shipModsToUse = mods;
-            } else if (thisExoticasMods.hasExotic(exotic)) {
+            } else if (thisExoticasMods != null && thisExoticasMods.hasExotic(exotic)) {
                 shipModsToUse = thisExoticasMods;
             } else {
                 throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it... exotic: " + exotic);
@@ -801,7 +806,7 @@ public class ExoticaTechHM extends BaseHullMod {
 //            if (!mods.hasUpgrade(upgrade)) continue;
 //            if (shouldSkipModification(ship, upgrade)) continue;
 //            upgrade.applyToFighters(member, ship, fighter, mods);
-            boolean thisModuleOwnsIt = mods.hasUpgrade(upgrade);
+            boolean thisModuleOwnsIt = mods != null && mods.hasUpgrade(upgrade);
             boolean presentSomewhereOnShip = false;
             ShipModifications thisUpgradesMods = null;
             for (int i = 0; i < wholeShipsMods.size(); i++) {
@@ -817,9 +822,9 @@ public class ExoticaTechHM extends BaseHullMod {
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
             // otherwise, lets call it with the other one that we identified above
             ShipModifications shipModsToUse = mods;
-            if (mods.hasUpgrade(upgrade)) {
+            if (mods != null && mods.hasUpgrade(upgrade)) {
                 shipModsToUse = mods;
-            } else if (thisUpgradesMods.hasUpgrade(upgrade)) {
+            } else if (thisUpgradesMods != null && thisUpgradesMods.hasUpgrade(upgrade)) {
                 shipModsToUse = thisUpgradesMods;
             } else {
                 throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the upgrade have it... upgrade: " + upgrade);
