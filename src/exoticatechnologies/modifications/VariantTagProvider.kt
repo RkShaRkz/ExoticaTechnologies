@@ -34,6 +34,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
 
     override fun get(member: FleetMemberAPI, variant: ShipVariantAPI): ShipModifications? {
         val members: Int = Global.getSector()?.playerFleet?.numMembersFast ?: 0
+        //TODO implement proper cache invalidation, this is nonsense
         if (currGets++ >= maxGetsPerMember * members) {
             cache.clear()
             currGets = 0
@@ -52,6 +53,12 @@ open class VariantTagProvider : ShipModLoader.Provider {
             val matchId = fuzzyKey.get()
             val fuzzyMods = cache[member]!![matchId]
             diagnosticLog("VariantTagProvider.get | FUZZY CACHE HIT | member=${member.id} query=$variantId match=$matchId")
+            //TODO in case the map has "tbj_overslaught_Start", "tbj_overslaught_left_Start", "tbj_overslaught_right_Start"
+            // and we're currently processing "tbj_overslauhgt_Start", "tbj_overslaught_left_0", "tbj_overslaught_right_0"
+            // since the cache will empty itself in an undetermined-but-very-quick amount of time, we should also
+            // grab everything on those original mods, and copy/clone it to our variants (which we're doing by returning here)
+            // but also copy this into the map as well. after copying, the next fetch for "tbj_overslaught_left_0"
+            // will simply return on line 48 instead of entering here again.
             return fuzzyMods
         }
 
