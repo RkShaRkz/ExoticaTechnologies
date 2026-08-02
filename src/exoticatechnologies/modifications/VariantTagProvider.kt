@@ -24,42 +24,85 @@ open class VariantTagProvider : ShipModLoader.Provider {
         private fun diagnosticLog(message: String) {
             logger.info("[DIAG] $message")
         }
-    }
 
-    var currGets: Int = 0
-    val maxGetsPerMember: Int = 10
+        /**
+         * How many in-game days a member's cached data may live before it must be re-synced
+         * from the variant tags (the durable source of truth). Measured from the last WRITE,
+         * not the last read — otherwise a member that is polled every frame (refit screen,
+         * campaign fleet render) would never age out and stale data would be served forever.
+         */
+        private const val CACHE_TTL_GAME_DAYS = 2L
+
+        /** Sentinel: forces eviction when time can't be measured (null sector/clock) or is mismatched.
+         * Deliberately 2x the TTL: a genuine floored elapsed can never be that large at the FIRST
+         * expiry (floored days first reach CACHE_TTL_GAME_DAYS+1), so the log label branching on
+         * elapsed == EVICT_FROM_CACHE_DAYS stays unambiguous. It is still > CACHE_TTL_GAME_DAYS, so
+         * the plain Long comparison triggers the eviction exactly as before. */
+        private const val EVICT_FROM_CACHE_DAYS = CACHE_TTL_GAME_DAYS * 2L
+
+        /** How often we do a full sweep for expired entries (every N calls to get()). */
+        private const val CLEANUP_INTERVAL = 1000
+    }
 
     val cache: MutableMap<FleetMemberAPI, MutableMap<String, ShipModifications>> = WeakHashMap()
     val EXOTICA_INDICATOR = "$\$EXOTICA$$"
 
+    /**
+     * Tracks the last game-time each member's cached data was WRITTEN (data-age TTL eviction).
+     * Updated only on set()/cache insert — cache HITS must NOT extend the lifetime.
+     */
+    private val lastWrite: MutableMap<FleetMemberAPI, Long> = WeakHashMap()
+
+    /** Lightweight counter for periodic sweeps. */
+    private var accessCounter: Long = 0
+
     override fun get(member: FleetMemberAPI, variant: ShipVariantAPI): ShipModifications? {
-        val members: Int = Global.getSector()?.playerFleet?.numMembersFast ?: 0
-        //TODO implement proper cache invalidation, this is nonsense
-        if (currGets++ >= maxGetsPerMember * members) {
-            cache.clear()
-            currGets = 0
-        }
-
         val variantId = variant.hullVariantId
-        val cacheMods: ShipModifications? = cache[member]?.get(variantId)
 
-        if (cacheMods != null) {
-            diagnosticLog("VariantTagProvider.get | CACHE HIT | member=${member.id} variant=$variantId variantTags=${variant.tags.size} result=UPGRADES: ${cacheMods.getUpgradeMap()}, EXOTICS: ${cacheMods.getExoticSet()}")
-            return cacheMods
+        // Periodic sweep for members whose cached data age has exceeded the TTL
+        if (++accessCounter % CLEANUP_INTERVAL == 0L) {
+            sweepExpired()
         }
 
-        val fuzzyKey = findFuzzyKey(member, variantId)
-        if (fuzzyKey.isPresent()) {
-            val matchId = fuzzyKey.get()
-            val fuzzyMods = cache[member]!![matchId]
-            diagnosticLog("VariantTagProvider.get | FUZZY CACHE HIT | member=${member.id} query=$variantId match=$matchId")
-            //TODO in case the map has "tbj_overslaught_Start", "tbj_overslaught_left_Start", "tbj_overslaught_right_Start"
-            // and we're currently processing "tbj_overslauhgt_Start", "tbj_overslaught_left_0", "tbj_overslaught_right_0"
-            // since the cache will empty itself in an undetermined-but-very-quick amount of time, we should also
-            // grab everything on those original mods, and copy/clone it to our variants (which we're doing by returning here)
-            // but also copy this into the map as well. after copying, the next fetch for "tbj_overslaught_left_0"
-            // will simply return on line 48 instead of entering here again.
-            return fuzzyMods
+        val memberCache = cache[member]
+        if (memberCache != null) {
+            val writeTime = lastWrite[member]
+            if (writeTime != null) {
+                // TTL is measured from the last WRITE, not the last read. A member read every
+                // frame must still re-sync from its tags once CACHE_TTL_GAME_DAYS have passed
+                // since its data was written — otherwise the mirror never ages out and stale
+                // data would be served indefinitely.
+                val elapsed = elapsedSince(writeTime)
+                if (elapsed > CACHE_TTL_GAME_DAYS) {
+                    cache.remove(member)
+                    lastWrite.remove(member)
+                    // Two distinct failure modes, logged separately so genuine data-age evictions
+                    // can be told apart from the clock-unavailable sentinel:
+                    //   days=N            -> data genuinely older than the TTL
+                    //   CLOCK-UNAVAILABLE -> elapsed == EVICT_FROM_CACHE_DAYS, i.e. time could not
+                    //                        be measured (null sector/clock or clock mismatch).
+                    if (elapsed == EVICT_FROM_CACHE_DAYS) {
+                        diagnosticLog("VariantTagProvider.get | EVICTED CLOCK-UNAVAILABLE | member=${member.id} | cache.size = ${cache.size}")
+                    } else {
+                        diagnosticLog("VariantTagProvider.get | EVICTED EXPIRED | member=${member.id} days=$elapsed | cache.size = ${cache.size}")
+                    }
+                    // fall through to tag read below
+                } else {
+                    val cacheMods = memberCache[variantId]
+                    if (cacheMods != null) {
+                        diagnosticLog("VariantTagProvider.get | CACHE HIT | member=${member.id} variant=$variantId variantTags=${variant.tags.size} result=UPGRADES: ${cacheMods.getUpgradeMap()}, EXOTICS: ${cacheMods.getExoticSet()}")
+                        return cacheMods
+                    }
+
+                    val fuzzyKey = findFuzzyKey(member, variantId)
+                    if (fuzzyKey.isPresent()) {
+                        val matchId = fuzzyKey.get()
+                        val fuzzyMods = memberCache[matchId]
+                        diagnosticLog("VariantTagProvider.get | FUZZY CACHE HIT | member=${member.id} query=$variantId match=$matchId")
+                        return fuzzyMods
+                    }
+                }
+            }
         }
 
         if (variant == member.variant && variant.source != VariantSource.REFIT) {
@@ -72,6 +115,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
                 return it
             } else {
                 cache.getOrPut(member) { mutableMapOf() }[variantId] = it
+                lastWrite[member] = currentGameTime()
             }
             diagnosticLog("VariantTagProvider.get | TAG READ + cache | member=${member.id} variant=$variantId variantTags=${variant.tags.size} result=UPGRADES: ${it.getUpgradeMap()}, EXOTICS: ${it.getExoticSet()}")
             return it
@@ -101,6 +145,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
         }
 
         cache.getOrPut(member) { mutableMapOf() }[variant.hullVariantId] = mods
+        lastWrite[member] = currentGameTime()
     }
 
     override fun remove(member: FleetMemberAPI, variant: ShipVariantAPI) {
@@ -109,6 +154,61 @@ open class VariantTagProvider : ShipModLoader.Provider {
 
     private fun removeFromTags(variant: ShipVariantAPI) {
         variant.tags.removeAll { it.startsWith(EXOTICA_INDICATOR) }
+    }
+
+    /**
+     * Current in-game timestamp (days). Falls back to 0L if clock isn't available.
+     */
+    private fun currentGameTime(): Long {
+        return Global.getSector()?.clock?.timestamp ?: 0L
+    }
+
+    /**
+     * Whole days elapsed since the given timestamp, as a whole number (floored).
+     *
+     * **NOTE:** Instead of returning e.g. "1.9" this floors towards 0 and returns "1". The Long
+     * comparison against CACHE_TTL_GAME_DAYS is deliberately kept cheaper than a float compare — the
+     * exact 2-vs-3-day boundary is irrelevant, it only needs to be "short".
+     *
+     * @param lastTime the last "timestamp" to check [com.fs.starfarer.api.campaign.CampaignClockAPI.getElapsedDaysSince] from
+     *
+     * @return number of days since [lastTime] (floored), **OR** [EVICT_FROM_CACHE_DAYS] when time
+     * can't be measured (main menu / null sector) or when the clock is mismatched (negative elapsed).
+     * The sentinel is deliberately 2x the TTL: it still triggers an eviction, yet a genuine floored
+     * elapsed can never collide with it at first expiry — stale entries are never served as fresh,
+     * and the cache stays bounded.
+     */
+    private fun elapsedSince(lastTime: Long): Long {
+        val elapsed = Global.getSector()?.clock?.getElapsedDaysSince(lastTime)
+        return when {
+            elapsed == null || elapsed < 0f -> EVICT_FROM_CACHE_DAYS
+            else -> elapsed.toLong()
+        }
+    }
+
+    /**
+     * Periodic full sweep: drops members whose cached data is older than CACHE_TTL_GAME_DAYS,
+     * or whose age cannot be measured (clock unavailable / mismatched) — the sentinel is also
+     * > CACHE_TTL_GAME_DAYS, so a bounded cache is guaranteed even across save/load transitions.
+     */
+    private fun sweepExpired() {
+        val iter = cache.entries.iterator()
+        while (iter.hasNext()) {
+            val (member, _) = iter.next()
+            val last = lastWrite[member]
+            if (last != null) {
+                val elapsed = elapsedSince(last)
+                if (elapsed > CACHE_TTL_GAME_DAYS) {
+                    iter.remove()
+                    lastWrite.remove(member)
+                    if (elapsed == EVICT_FROM_CACHE_DAYS) {
+                        diagnosticLog("VariantTagProvider | SWEEP EVICTED CLOCK-UNAVAILABLE member=${member.id}\tcache.size: ${cache.size}")
+                    } else {
+                        diagnosticLog("VariantTagProvider | SWEEP EVICTED member=${member.id} days=$elapsed\tcache.size: ${cache.size}")
+                    }
+                }
+            }
+        }
     }
 
     private fun findFuzzyKey(member: FleetMemberAPI, variantId: String): Optional<String> {
