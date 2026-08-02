@@ -142,6 +142,11 @@ open class VariantTagProvider : ShipModLoader.Provider {
     }
 
     override fun set(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {
+        // Write-side invalidation BEFORE the fresh write: purge stale mirrors of this variantId
+        // from every member's cache so the new data can never be shadowed by a stale sibling
+        // served via exact or fuzzy match on a later read.
+        invalidateVariantAcrossAll(variant.hullVariantId)
+
         if (variant == member.variant && variant.source != VariantSource.REFIT) {
             member.fixVariant()
         }
@@ -166,6 +171,9 @@ open class VariantTagProvider : ShipModLoader.Provider {
     }
 
     override fun remove(member: FleetMemberAPI, variant: ShipVariantAPI) {
+        // A removal must purge the cached mirrors too, or the removed exotic keeps being served
+        // from another FM key until the TTL sweep happens to re-sync it.
+        invalidateVariantAcrossAll(variant.hullVariantId)
         removeFromTags(variant)
     }
 
@@ -225,6 +233,53 @@ open class VariantTagProvider : ShipModLoader.Provider {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Write-side cross-instance invalidation.
+     *
+     * The cache is keyed by FleetMemberAPI identity, but a variant can be written under one FM
+     * instance (a transient refit FM) and later read under a different one (combat FM, or the root
+     * FM for child modules via the variant-tree walk). FleetMemberAPI has no stable id usable as a
+     * cache key across those identities — but the variantId is stable. So on every write/removal we
+     * purge every cached mirror of that variantId across ALL members, exact-match or prefix-fuzzy.
+     *
+     * This runs only on the cold write path (install/remove), never inside get(). The mirrors it
+     * drops are re-synced from the variant tags (the durable source of truth) on their next read —
+     * the cost is one tag read per affected member, only when it is next requested. Fuzzy matching
+     * (stripping the last '_suffix', mirroring [findFuzzyKey]) is required because the same module
+     * variant appears under many suffixes ('left_0' / 'left_Start' / 'left_Hull') depending on where
+     * the engine sourced it; writing any one of them must invalidate all siblings.
+     *
+     * @param variantId the variantId whose mirrors must be dropped
+     */
+    private fun invalidateVariantAcrossAll(variantId: String) {
+        // Mirrors findFuzzyKey's prefix derivation; precomputed once, not per entry.
+        // substringBeforeLast("_", variantId) falls back to the whole id when there's no
+        // underscore, degrading cleanly to exact-match-only for flat variant names.
+        val prefix = variantId.substringBeforeLast("_", variantId)
+
+        var invalidated = 0
+        val iter = cache.entries.iterator()
+        while (iter.hasNext()) {
+            val (member, memberCache) = iter.next()
+            val purged = memberCache.keys.removeAll { cachedId ->
+                cachedId == variantId || cachedId.substringBeforeLast("_", cachedId) == prefix
+            }
+            if (purged) {
+                invalidated += 1
+                if (memberCache.isEmpty()) {
+                    // No data left for this member — drop the member entirely so neither the
+                    // inner map nor its lastWrite timestamp lingers as dead weight.
+                    iter.remove()
+                    lastWrite.remove(member)
+                }
+            }
+        }
+
+        if (invalidated > 0) {
+            diagnosticLog("VariantTagProvider | INVALIDATED $invalidated member mirror(s) for variant=$variantId | cache.size = ${cache.size}")
         }
     }
 
