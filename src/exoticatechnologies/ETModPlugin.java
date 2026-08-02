@@ -16,16 +16,15 @@ import exoticatechnologies.hullmods.ExoticaTechHM;
 import exoticatechnologies.hullmods.exotics.HullmodExoticHandler;
 import exoticatechnologies.integration.indevo.IndEvoUtil;
 import exoticatechnologies.modifications.ShipModLoader;
+import exoticatechnologies.modifications.VariantTagProvider;
 import exoticatechnologies.modifications.bandwidth.Bandwidth;
 import exoticatechnologies.modifications.exotics.ExoticSpecialItemPlugin;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
-import exoticatechnologies.modifications.exotics.GenericExoticItemPlugin;
 import exoticatechnologies.modifications.stats.impl.logistics.CrewSalaryEffect;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
 import exoticatechnologies.refit.RefitButtonAdder;
 import exoticatechnologies.ui.impl.shop.ShopManager;
 import exoticatechnologies.ui.impl.shop.overview.OverviewPanelUIPlugin;
-import exoticatechnologies.util.AnonymousLogger;
 import exoticatechnologies.util.FleetMemberHierarchy;
 import exoticatechnologies.util.FleetMemberUtils;
 import exoticatechnologies.util.Utilities;
@@ -66,6 +65,8 @@ public class ETModPlugin extends BaseModPlugin {
         HullmodExoticHandler.INSTANCE.reinitialize();
         // And refresh caches for FleetMemberHierarchy
         FleetMemberHierarchy.reinitialize();
+        // And refresh the VariantTagProvider's cache
+        VariantTagProvider.getInstance().clearCache();
     }
 
     @Override
@@ -92,6 +93,8 @@ public class ETModPlugin extends BaseModPlugin {
         HullmodExoticHandler.INSTANCE.reinitialize();
         // And refresh caches for FleetMemberHierarchy
         FleetMemberHierarchy.reinitialize();
+        // And refresh the VariantTagProvider's cache
+        VariantTagProvider.getInstance().clearCache();
     }
 
     public static String getSectorSeedString() {

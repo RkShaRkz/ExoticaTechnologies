@@ -70,7 +70,7 @@ public class DerelictsEFScript implements EveryFrameScript {
             String memberId = member.getId();
             ShipVariantAPI var = member.getVariant();
             if (var != null) {
-                mods = VariantTagProvider.getInst().getFromVariant(var);
+                mods = VariantTagProvider.getInstance().getFromVariant(var);
             }
 
             if (mods == null) {

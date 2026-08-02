@@ -18,7 +18,9 @@ import java.util.WeakHashMap
 open class VariantTagProvider : ShipModLoader.Provider {
     companion object {
         @JvmStatic
-        var inst: VariantTagProvider = VariantTagProvider()
+        private var inst: VariantTagProvider = VariantTagProvider()
+        @JvmStatic
+        fun getInstance(): VariantTagProvider { return inst }
         private val logger = Logger.getLogger(VariantTagProvider::class.java)
 
         private fun diagnosticLog(message: String) {
@@ -44,8 +46,9 @@ open class VariantTagProvider : ShipModLoader.Provider {
         private const val CLEANUP_INTERVAL = 1000
     }
 
-    val cache: MutableMap<FleetMemberAPI, MutableMap<String, ShipModifications>> = WeakHashMap()
-    val EXOTICA_INDICATOR = "$\$EXOTICA$$"
+    private val cache: MutableMap<FleetMemberAPI, MutableMap<String, ShipModifications>> = WeakHashMap()
+//    val EXOTICA_INDICATOR = "$\$EXOTICA$$" //this one was in before
+    private val EXOTICA_INDICATOR = "$\$EXOTICA$$"
 
     /**
      * Tracks the last game-time each member's cached data was WRITTEN (data-age TTL eviction).
@@ -55,6 +58,20 @@ open class VariantTagProvider : ShipModLoader.Provider {
 
     /** Lightweight counter for periodic sweeps. */
     private var accessCounter: Long = 0
+
+    /**
+     * Drops every cached ship modification mirror and its write timestamp.
+     *
+     * Safe to call at any time: the cache is only a mirror of the variant tags (the durable source
+     * of truth), so clearing it merely forces the next reads to re-sync straight from those tags.
+     * Intended for lifecycle boundaries (application load / game load) where the FleetMemberAPI
+     * instances held by the WeakHashMap keys may reference stale or discarded fleet members.
+     */
+    fun clearCache() {
+        cache.clear()
+        lastWrite.clear()
+        accessCounter = 0
+    }
 
     override fun get(member: FleetMemberAPI, variant: ShipVariantAPI): ShipModifications? {
         val variantId = variant.hullVariantId

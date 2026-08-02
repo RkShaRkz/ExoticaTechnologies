@@ -1,6 +1,5 @@
 package exoticatechnologies.modifications
 
-import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
@@ -11,13 +10,12 @@ import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
 import org.apache.log4j.Logger
-import java.util.logging.Level
 
 class ShipModLoader {
     private val log = Logger.getLogger(ShipModLoader::class.java)
 
     private var providers: List<Provider> = mutableListOf(
-        VariantTagProvider.inst,
+        VariantTagProvider.getInstance(),
         ZigguratDataProvider.inst,
         PersistentDataProvider.inst
     )
@@ -98,7 +96,7 @@ class ShipModLoader {
         for (someModule in allShipModulesFromStats) {
             val variantId = someModule.variant.hullVariantId
             diagnosticLog("getAllDataFromStatsAPI | FM loop | member=${someModule.id} variantId=$variantId")
-            val moduleMods = ShipModLoader.get(someModule, someModule.variant)
+            val moduleMods = get(someModule, someModule.variant)
             moduleMods?.let {
                 allModsList.add(it)
             }
@@ -119,7 +117,7 @@ class ShipModLoader {
             val childV = variant.getModuleVariant(slotId) ?: continue
             val variantId = childV.hullVariantId
             diagnosticLog("getAllDataFromStatsAPI | variant tree | slot=$slotId variantId=$variantId")
-            val childMods = ShipModLoader.get(member, childV)
+            val childMods = get(member, childV)
             childMods?.let {
                 result.add(it)
             }
@@ -152,7 +150,7 @@ class ShipModLoader {
         @Synchronized
         fun getForSpecialData(shipData: ShipRecoverySpecial.PerShipData): ShipModifications? {
             if (shipData.getVariant() != null) {
-                val mods = VariantTagProvider.inst.getFromVariant(shipData.getVariant())
+                val mods = VariantTagProvider.getInstance().getFromVariant(shipData.getVariant())
                 if (mods != null) {
                     return mods
                 }
@@ -171,7 +169,7 @@ class ShipModLoader {
         @JvmStatic
         @Synchronized
         fun getFromVariant(variant: ShipVariantAPI): ShipModifications? {
-            return VariantTagProvider.inst.getFromVariant(variant)
+            return VariantTagProvider.getInstance().getFromVariant(variant)
         }
 
         @JvmStatic
