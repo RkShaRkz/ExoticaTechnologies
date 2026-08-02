@@ -23,10 +23,6 @@ open class VariantTagProvider : ShipModLoader.Provider {
         fun getInstance(): VariantTagProvider { return inst }
         private val logger = Logger.getLogger(VariantTagProvider::class.java)
 
-        private fun diagnosticLog(message: String) {
-            logger.info("[DIAG] $message")
-        }
-
         /**
          * How many in-game days a member's cached data may live before it must be re-synced
          * from the variant tags (the durable source of truth). Measured from the last WRITE,
@@ -35,7 +31,8 @@ open class VariantTagProvider : ShipModLoader.Provider {
          */
         private const val CACHE_TTL_GAME_DAYS = 2L
 
-        /** Sentinel: forces eviction when time can't be measured (null sector/clock) or is mismatched.
+        /**
+         * Sentinel: forces eviction when time can't be measured (null sector/clock) or is mismatched.
          * Deliberately 2x the TTL: a genuine floored elapsed can never be that large at the FIRST
          * expiry (floored days first reach CACHE_TTL_GAME_DAYS+1), so the log label branching on
          * elapsed == EVICT_FROM_CACHE_DAYS stays unambiguous. It is still > CACHE_TTL_GAME_DAYS, so
@@ -47,7 +44,6 @@ open class VariantTagProvider : ShipModLoader.Provider {
     }
 
     private val cache: MutableMap<FleetMemberAPI, MutableMap<String, ShipModifications>> = WeakHashMap()
-//    val EXOTICA_INDICATOR = "$\$EXOTICA$$" //this one was in before
     private val EXOTICA_INDICATOR = "$\$EXOTICA$$"
 
     /**
@@ -91,23 +87,17 @@ open class VariantTagProvider : ShipModLoader.Provider {
                 // data would be served indefinitely.
                 val elapsed = elapsedSince(writeTime)
                 if (elapsed > CACHE_TTL_GAME_DAYS) {
-                    cache.remove(member)
-                    lastWrite.remove(member)
                     // Two distinct failure modes, logged separately so genuine data-age evictions
                     // can be told apart from the clock-unavailable sentinel:
                     //   days=N            -> data genuinely older than the TTL
                     //   CLOCK-UNAVAILABLE -> elapsed == EVICT_FROM_CACHE_DAYS, i.e. time could not
                     //                        be measured (null sector/clock or clock mismatch).
-                    if (elapsed == EVICT_FROM_CACHE_DAYS) {
-                        diagnosticLog("VariantTagProvider.get | EVICTED CLOCK-UNAVAILABLE | member=${member.id} | cache.size = ${cache.size}")
-                    } else {
-                        diagnosticLog("VariantTagProvider.get | EVICTED EXPIRED | member=${member.id} days=$elapsed | cache.size = ${cache.size}")
-                    }
+                    cache.remove(member)
+                    lastWrite.remove(member)
                     // fall through to tag read below
                 } else {
                     val cacheMods = memberCache[variantId]
                     if (cacheMods != null) {
-                        diagnosticLog("VariantTagProvider.get | CACHE HIT | member=${member.id} variant=$variantId variantTags=${variant.tags.size} result=UPGRADES: ${cacheMods.getUpgradeMap()}, EXOTICS: ${cacheMods.getExoticSet()}")
                         return cacheMods
                     }
 
@@ -115,7 +105,6 @@ open class VariantTagProvider : ShipModLoader.Provider {
                     if (fuzzyKey.isPresent()) {
                         val matchId = fuzzyKey.get()
                         val fuzzyMods = memberCache[matchId]
-                        diagnosticLog("VariantTagProvider.get | FUZZY CACHE HIT | member=${member.id} query=$variantId match=$matchId")
                         return fuzzyMods
                     }
                 }
@@ -127,17 +116,15 @@ open class VariantTagProvider : ShipModLoader.Provider {
         }
 
         getFromVariant(variant)?.let {
+            //TODO use StarsectorAPIInteractor here instead of this condition
             if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT || Global.getSector().campaignUI.currentCoreTab == CoreUITabId.FLEET) {
-                diagnosticLog("VariantTagProvider.get | TAG READ (no cache) | member=${member.id} variant=$variantId variantTags=${variant.tags.size} result=UPGRADES: ${it.getUpgradeMap()}, EXOTICS: ${it.getExoticSet()}")
                 return it
             } else {
                 cache.getOrPut(member) { mutableMapOf() }[variantId] = it
                 lastWrite[member] = currentGameTime()
             }
-            diagnosticLog("VariantTagProvider.get | TAG READ + cache | member=${member.id} variant=$variantId variantTags=${variant.tags.size} result=UPGRADES: ${it.getUpgradeMap()}, EXOTICS: ${it.getExoticSet()}")
             return it
         }
-        diagnosticLog("VariantTagProvider.get | NULL  | member=${member.id} variant=$variantId variantTags=${variant.tags.size}")
         return null
     }
 
@@ -157,13 +144,14 @@ open class VariantTagProvider : ShipModLoader.Provider {
         variant.addTag(tag)
         // Add to refit variant if it's not already there
         if (variant.getRefitVariant().tags.contains(tag).not()) {
-            // This is new
             variant.getRefitVariant().addTag(tag)
         }
         if (variant != member.variant) {
-            // TODO we add the tag to member variant if we're dealing with root module's member and variant
-            // TODO otherwise, if we're dealing with child's member/variant, we add the tag to the respective "laxer" variant.
-            member.variant.addTag(tag)
+            // we need this because the REFIT transient variant is a different object than our
+            // own member variant, so when we write to the transient variant we should also
+            // persist the just-installed Modifications on our real variant so they aren't lost.
+            val memberVariant = member.variant
+            memberVariant.addTag(tag)
         }
 
         cache.getOrPut(member) { mutableMapOf() }[variant.hullVariantId] = mods
@@ -226,11 +214,6 @@ open class VariantTagProvider : ShipModLoader.Provider {
                 if (elapsed > CACHE_TTL_GAME_DAYS) {
                     iter.remove()
                     lastWrite.remove(member)
-                    if (elapsed == EVICT_FROM_CACHE_DAYS) {
-                        diagnosticLog("VariantTagProvider | SWEEP EVICTED CLOCK-UNAVAILABLE member=${member.id}\tcache.size: ${cache.size}")
-                    } else {
-                        diagnosticLog("VariantTagProvider | SWEEP EVICTED member=${member.id} days=$elapsed\tcache.size: ${cache.size}")
-                    }
                 }
             }
         }
@@ -260,15 +243,14 @@ open class VariantTagProvider : ShipModLoader.Provider {
         // underscore, degrading cleanly to exact-match-only for flat variant names.
         val prefix = variantId.substringBeforeLast("_", variantId)
 
-        var invalidated = 0
         val iter = cache.entries.iterator()
         while (iter.hasNext()) {
             val (member, memberCache) = iter.next()
             val purged = memberCache.keys.removeAll { cachedId ->
                 cachedId == variantId || cachedId.substringBeforeLast("_", cachedId) == prefix
             }
+            // if we ended up purging something, check if we ended up purging everything...
             if (purged) {
-                invalidated += 1
                 if (memberCache.isEmpty()) {
                     // No data left for this member — drop the member entirely so neither the
                     // inner map nor its lastWrite timestamp lingers as dead weight.
@@ -276,10 +258,6 @@ open class VariantTagProvider : ShipModLoader.Provider {
                     lastWrite.remove(member)
                 }
             }
-        }
-
-        if (invalidated > 0) {
-            diagnosticLog("VariantTagProvider | INVALIDATED $invalidated member mirror(s) for variant=$variantId | cache.size = ${cache.size}")
         }
     }
 
