@@ -1,10 +1,10 @@
 package exoticatechnologies.modifications
 
 import com.fs.starfarer.api.Global
-import com.fs.starfarer.api.campaign.CoreUITabId
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.loading.VariantSource
+import exoticatechnologies.util.StarsectorAPIInteractor
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.fixVariant
 import exoticatechnologies.util.getRefitVariant
@@ -116,8 +116,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
         }
 
         getFromVariant(variant)?.let {
-            //TODO use StarsectorAPIInteractor here instead of this condition
-            if (Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT || Global.getSector().campaignUI.currentCoreTab == CoreUITabId.FLEET) {
+            if (StarsectorAPIInteractor.runningFromRefitOrFleetScreen()) {
                 return it
             } else {
                 cache.getOrPut(member) { mutableMapOf() }[variantId] = it

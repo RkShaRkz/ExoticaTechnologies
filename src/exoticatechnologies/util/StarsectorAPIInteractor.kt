@@ -45,6 +45,22 @@ object StarsectorAPIInteractor {
         }
     }
 
+    /**
+     * Returns whether the current core UI tab is the Refit or Fleet screen.
+     *
+     * Broader than [runningFromRefitScreen]: it ignores the interaction dialog's
+     * options panel entirely, matching the legacy tab-only check used by the
+     * variant-tag cache write path.
+     */
+    fun runningFromRefitOrFleetScreen(): Boolean {
+        return if (IS_IN_TEST_MODE) {
+            TEST_MODE_VALUE
+        } else {
+            val coreTab = Global.getSector()?.campaignUI?.currentCoreTab
+            coreTab == CoreUITabId.REFIT || coreTab == CoreUITabId.FLEET
+        }
+    }
+
     private fun actualStarsectorAPIrunningFromRefitScreen(): Boolean {
         // Refit screen is going to be on the REFIT core UI tab and won't have options
         val optional = getSectorHasOptionsOptional()
