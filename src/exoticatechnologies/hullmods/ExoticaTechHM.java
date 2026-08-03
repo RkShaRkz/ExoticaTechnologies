@@ -78,6 +78,11 @@ public class ExoticaTechHM extends BaseHullMod {
             " variant.source=" + variant.getSource() +
             " variant.tags=" + variant.getTags().size());
 
+        //TODO if 'member' is root member (and/or variant is root module's variant) - the following 'if' should not depend on it's mods alone
+        // it should depend on whether there are any non-empty ShipModifications along the variant tree.
+        // if any child has any Modification - the hullmod should be applied to the root.
+        // additionally, the else branch (uninstall branch) should not remove hullmod as long as any child has anything
+        // other modules can work like this, root ones need different treatment
         if (mods.shouldApplyHullmod()) {
             // Determine the root member so we can operate on the full variant tree.
             // FleetMemberHierarchy uses hullVariantId strings (stable across combat/refit)
