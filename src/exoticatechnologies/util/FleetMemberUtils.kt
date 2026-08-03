@@ -8,7 +8,6 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import exoticatechnologies.campaign.listeners.CampaignEventListener.Companion.activeFleets
 import exoticatechnologies.util.FleetMemberUtils.findFleetForVariant
-import org.apache.log4j.Level
 import org.apache.log4j.Logger
 
 object FleetMemberUtils {
@@ -37,14 +36,25 @@ object FleetMemberUtils {
         if (moduleMap.containsKey(id)) {
             return moduleMap[id]
         }
-        if (stats.fleetMember != null) {
-            return stats.fleetMember
-        }
+
+        // Leaf-module stats must resolve to the ROOT member, mirroring findMemberFromShip's
+        // parentStation climb. Without this, module stats fall through to stats.fleetMember
+        // (the module's own leaf FM), so getAllDataFromStatsAPI's variant-tree walk starts
+        // from a leaf variant, never discovers sibling/root modules, and module-owned
+        // exotics get skipped.
+        // Synthetic statsForOpCosts objects (propagateFromVariantTree, collectModuleMembers2,
+        // removeFromChildFmsByStats) have no entity and bypass this branch unchanged.
         if (stats.entity is ShipAPI) {
             val ship = stats.entity as ShipAPI
-            if (ship.fleetMember != null) {
+            if (ship.parentStation != null) {
+                findMemberFromShip(ship.parentStation)?.let { return it }
+            } else if (ship.fleetMember != null) {
                 return ship.fleetMember
             }
+        }
+
+        if (stats.fleetMember != null) {
+            return stats.fleetMember
         }
 
         //note: this looks awful, but it actually doesn't go into this loop all that often.
