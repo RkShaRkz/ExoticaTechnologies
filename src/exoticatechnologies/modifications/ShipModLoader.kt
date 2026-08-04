@@ -5,6 +5,8 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
+import exoticatechnologies.campaign.listeners.CampaignEventListener
+import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.FleetMemberHierarchy
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
@@ -125,6 +127,66 @@ class ShipModLoader {
         }
     }
 
+    private fun getWholeShipModsData(member: FleetMemberAPI, variant: ShipVariantAPI): List<ShipModifications> {
+        val result = ArrayList<ShipModifications>(4)
+        val seenVariantIds = HashSet<String>(8)
+        val rootVariant = resolveRootVariant(member, variant)
+        collectWholeShipMods(member, rootVariant, result, seenVariantIds)
+        // The REFIT display variant tree is a second object graph carrying the same tags
+        // (refit clones preserve child tags 1:1). Union it in so a read never depends on
+        // which variant instance the engine happened to hand us.
+        val refitVariant = runCatching { member.checkRefitVariant() }.getOrNull()
+        if (refitVariant != null && refitVariant !== rootVariant) {
+            collectWholeShipMods(member, refitVariant, result, seenVariantIds)
+        }
+        return result
+    }
+
+    // A variant that owns station modules IS the root of its tree. A leaf is either a
+    // single-module ship (no parent -> itself) or a child module -> climb to the root via
+    // stable hullVariantId keys (FleetMemberHierarchy.findRootVariantId), NOT the identity
+    // map, which breaks after fixVariant churn.
+    private fun resolveRootVariant(member: FleetMemberAPI, variant: ShipVariantAPI): ShipVariantAPI {
+        if (variant.stationModules.isNotEmpty()) return variant
+        val rootVariantId = FleetMemberHierarchy.findRootVariantId(variant.hullVariantId) ?: return variant
+        return findRootVariantByHullId(member, rootVariantId) ?: variant
+    }
+
+    private fun findRootVariantByHullId(member: FleetMemberAPI, targetVariantId: String): ShipVariantAPI? {
+        member.fleetData?.fleet?.let { fleet ->
+            for (fm in fleet.membersWithFightersCopy) {
+                val v = fm.checkRefitVariant() ?: continue
+                if (v.hullVariantId == targetVariantId) return v
+            }
+        }
+        for (fleet in CampaignEventListener.activeFleets) {
+            if (fleet == null) continue
+            for (fm in fleet.membersWithFightersCopy) {
+                val v = fm.checkRefitVariant() ?: continue
+                if (v.hullVariantId == targetVariantId) return v
+            }
+        }
+        return null
+    }
+
+    // Recursive stationModules walk. Dedupes by hullVariantId so the same logical variant
+    // (stock / REFIT clone / combat clone) is never collected twice — otherwise a single
+    // installation would be iterated multiple times by whole-ship consumers like
+    // advanceInCampaign. Includes the variant's own ShipModifications.
+    private fun collectWholeShipMods(
+        member: FleetMemberAPI,
+        variant: ShipVariantAPI,
+        result: MutableList<ShipModifications>,
+        seenVariantIds: MutableSet<String>
+    ) {
+        if (!seenVariantIds.add(variant.hullVariantId)) return
+        get(member, variant)?.let { result.add(it) }
+        for (slotId in variant.stationModules.keys) {
+            val childV = variant.getModuleVariant(slotId) ?: continue
+            collectWholeShipMods(member, childV, result, seenVariantIds)
+        }
+    }
+
     companion object {
         private val inst = ShipModLoader()
 
@@ -182,6 +244,42 @@ class ShipModLoader {
         @Synchronized
         fun getAllForStats(stats: MutableShipStatsAPI): List<ShipModifications> {
             return inst.getAllDataFromStatsAPI(stats).distinct()
+        }
+
+        /**
+         * All ShipModifications present anywhere on the ship's variant tree (root + station module
+         * children), deduped by hullVariantId. Used by the hullmod install/uninstall decision and by
+         * campaign-layer effects so child-owned modifications are never missed.
+         */
+        @JvmStatic
+        @Synchronized
+        fun getWholeShipMods(member: FleetMemberAPI, variant: ShipVariantAPI): List<ShipModifications> {
+            return inst.getWholeShipModsData(member, variant)
+        }
+
+        /**
+         * Whether the hullmod should be present on the ship: true when either this member's own
+         * ShipModifications OR any module anywhere on the ship has any Upgrade/Exotic installed.
+         * Exotic and Upgrade subclasses of Modification are both covered by shouldApplyHullmod().
+         */
+        @JvmStatic
+        @Synchronized
+        fun consolidateHullmod(mods: ShipModifications?, wholeShipMods: List<ShipModifications>): Boolean {
+            //TODO start using this commented out code
+//            val checkList = mutableListOf<ShipModifications?>()
+//            // add everything to checkList
+//            checkList.add(mods)
+//            checkList.addAll(wholeShipMods)
+//            checkList
+//                    .filterNotNull()
+//                    .distinct()
+//                    .any { moduleMods -> moduleMods.shouldApplyHullmod() }
+
+            if (mods != null && mods.shouldApplyHullmod()) return true
+            for (m in wholeShipMods) {
+                if (m.shouldApplyHullmod()) return true
+            }
+            return false
         }
     }
 
