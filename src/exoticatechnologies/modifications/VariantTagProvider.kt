@@ -4,10 +4,12 @@ import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.loading.VariantSource
+import exoticatechnologies.refit.checkRefitVariant
+import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.StarsectorAPIInteractor
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.fixVariant
-import exoticatechnologies.util.getRefitVariant
+import exoticatechnologies.util.forEachModuleVariant
 import exoticatechnologies.util.log
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -141,17 +143,15 @@ open class VariantTagProvider : ShipModLoader.Provider {
 
         val tag = EXOTICA_INDICATOR + convertToJson(member, mods)
         variant.addTag(tag)
-        // Add to refit variant if it's not already there
-        if (variant.getRefitVariant().tags.contains(tag).not()) {
-            variant.getRefitVariant().addTag(tag)
-        }
-        if (variant != member.variant) {
-            // we need this because the REFIT transient variant is a different object than our
-            // own member variant, so when we write to the transient variant we should also
-            // persist the just-installed Modifications on our real variant so they aren't lost.
-            val memberVariant = member.variant
-            memberVariant.addTag(tag)
-        }
+
+        // Write-through: mirror the write onto every object graph a later whole-ship read may
+        // walk (the member's own variant tree, the resolved root tree, the REFIT display tree).
+        // An install/removal that lands on a transient child FM variant or a refit clone must
+        // reach the equivalent node in each sibling graph, or the whole-ship decision keeps
+        // reading stale tags. Matching is fuzzy by variantId prefix so 'left_0' finds the
+        // root-tree's 'left_Start' copy; only the matching node is touched, never the root —
+        // blanket-tagging the root would duplicate a child's installation across entries.
+        writeThrough(member, variant, tag)
 
         cache.getOrPut(member) { mutableMapOf() }[variant.hullVariantId] = mods
         lastWrite[member] = currentGameTime()
@@ -162,6 +162,66 @@ open class VariantTagProvider : ShipModLoader.Provider {
         // from another FM key until the TTL sweep happens to re-sync it.
         invalidateVariantAcrossAll(variant.hullVariantId)
         removeFromTags(variant)
+        // Write-through removal: strip the stale EXOTICA tags from every sibling object graph the
+        // whole-ship read may walk. This is the core fix for the strip bug — without it a removal
+        // that lands on a child FM variant leaves the old tag on the root tree's clone, so
+        // getWholeShipMods keeps decoding the removed exotic and the hullmod is never stripped.
+        writeThrough(member, variant, null)
+    }
+
+    /**
+     * Mirrors a single tag write ([tag] == null means strip) onto every object graph a later
+     * whole-ship read may walk: the member's own variant tree, the resolved root tree (which may
+     * be a different object after fixVariant churn), and the REFIT display tree. Each graph is
+     * independently written at the node fuzzy-matching the target variant — see [findVariantInTree].
+     */
+    private fun writeThrough(member: FleetMemberAPI, variant: ShipVariantAPI, tag: String?) {
+        val targetId = variant.hullVariantId
+
+        val graphs = ArrayList<ShipVariantAPI>(3)
+        member.variant?.let { graphs.add(it) }
+        val rootVariant = FleetMemberUtils.findRootVariant(member, variant)
+        if (rootVariant !== member.variant) graphs.add(rootVariant)
+        val refitVariant = runCatching { member.checkRefitVariant() }.getOrNull()
+        if (refitVariant != null && graphs.none { it === refitVariant }) graphs.add(refitVariant)
+
+        for (graph in graphs) {
+            val target = findVariantInTree(graph, targetId) ?: continue
+            removeFromTags(target)
+            if (tag != null) {
+                target.addTag(tag)
+            }
+        }
+    }
+
+    /**
+     * Finds the node in [root]'s variant tree corresponding to [targetId]: an exact hullVariantId
+     * match first, then a fuzzy match (same prefix before the last '_suffix'). Returns null when
+     * the tree has no such node (e.g. a child variant whose tree is unreachable from [root]).
+     */
+    private fun findVariantInTree(root: ShipVariantAPI, targetId: String): ShipVariantAPI? {
+        // The root IS fuzzy-matched too: for a single-module ship the whole tree is just the root,
+        // and the write target can be a refit clone ('ship_0') of the member's variant ('ship_Start')
+        // — exact-only matching would skip member.variant entirely and the whole-ship read on it
+        // would then see nothing. For module ships the root's prefix differs from every child's, so
+        // a root fuzzy-match never collides with a child target.
+        if (root.hullVariantId == targetId || fuzzyVariantIdEquals(root.hullVariantId, targetId)) return root
+        var exact: ShipVariantAPI? = null
+        var fuzzy: ShipVariantAPI? = null
+        root.forEachModuleVariant { childV ->
+            when {
+                exact != null -> { /* already found an exact node, keep looking for nothing */ }
+                childV.hullVariantId == targetId -> exact = childV
+                fuzzy == null && fuzzyVariantIdEquals(childV.hullVariantId, targetId) -> fuzzy = childV
+            }
+        }
+        return exact ?: fuzzy
+    }
+
+    // Same rule as findFuzzyKey/invalidateVariantAcrossAll: refit/combat clones differ only in
+    // the last '_suffix' ('left_0' vs 'left_Start' vs 'left_Hull'), so compare stripped prefixes.
+    private fun fuzzyVariantIdEquals(a: String, b: String): Boolean {
+        return a.substringBeforeLast("_", a) == b.substringBeforeLast("_", b)
     }
 
     private fun removeFromTags(variant: ShipVariantAPI) {

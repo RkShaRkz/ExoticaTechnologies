@@ -16,6 +16,7 @@ import exoticatechnologies.modifications.Modification;
 import exoticatechnologies.modifications.ShipModFactory;
 import exoticatechnologies.modifications.ShipModLoader;
 import exoticatechnologies.modifications.ShipModifications;
+import exoticatechnologies.modifications.ShipModificationsKt;
 import exoticatechnologies.modifications.exotics.Exotic;
 import exoticatechnologies.modifications.exotics.ExoticData;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
@@ -23,6 +24,7 @@ import exoticatechnologies.modifications.upgrades.Upgrade;
 import exoticatechnologies.modifications.upgrades.UpgradesHandler;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
@@ -86,7 +88,7 @@ public class ExoticaTechHM extends BaseHullMod {
 
         diagnosticLog("addToFleetMember | member=" + member.getId() + " variant=" + variant.getHullVariantId() +
             " mods=" + (mods == null ? "null" : "UPGRADES: "+ (mods.getUpgradeMap() + ", EXOTICS: " + mods.getExoticSet())) +
-            " shouldApply=" + ShipModLoader.consolidateHullmod(mods, wholeShipMods) +
+            " shouldApply=" + consolidateHullmod(mods, wholeShipMods) +
             " wholeShipMods=" + wholeShipMods.size() +
             " memberVariant.hasHM=" + member.getVariant().hasHullMod(HULLMOD_ID) +
             " refitVariant.hasHM=" + memberRefitVarient.hasHullMod(HULLMOD_ID) +
@@ -98,13 +100,10 @@ public class ExoticaTechHM extends BaseHullMod {
         // (Exotic or Upgrade — shouldApplyHullmod covers both). A child member that owns the exotic
         // still lands here (its own mods are non-empty), so the APPLY branch below propagates to the
         // root; a root member whose exotics live on children now lands here too via wholeShipMods.
-        if (ShipModLoader.consolidateHullmod(mods, wholeShipMods)) {
+        if (consolidateHullmod(mods, wholeShipMods)) {
             // Child display variant needs the hullmod
             if (rootVariantId != null) {
                 variant.addPermaMod(HULLMOD_ID);
-                //FIXME this was in before, but got removed?
-//                FleetMemberAPI foundRoot = findMemberByVariantId(member, rootVariantId);
-//                if (foundRoot != null) rootMember = foundRoot;
             }
 
             // Add hullmod to every variant in the root's station module tree
@@ -161,30 +160,14 @@ public class ExoticaTechHM extends BaseHullMod {
 
         } else {
             // consolidateHullmod == false => NO module anywhere in the ship has ANY Modification.
-            // Strip the hullmod from the ENTIRE ship tree (root + all module variants + child FMs),
-            // not just this member — otherwise the root/other modules keep a stale hullmod.
+            // Strip the hullmod from the ENTIRE ship (root + all module variants + child FMs +
+            // refit tree), not just this member — otherwise the root/other modules keep a stale
+            // hullmod.
             diagnosticLog("addToFleetMember | REMOVING hullmod (whole ship empty) | member=" + member.getId() +
                 " rootMember=" + rootMember.getId() +
                 " memberVariant.hasHM=" + member.getVariant().hasHullMod(HULLMOD_ID) +
                 " refitVariant.hasHM=" + memberRefitVarient.hasHullMod(HULLMOD_ID));
-            removeFromFleetMember(rootMember);
-            ShipVariantAPI rootRefitVariant = RefitButtonAdderKt.checkRefitVariant(rootMember);
-            if (rootRefitVariant.hasHullMod(HULLMOD_ID)) {
-//                rootRefitVariant.removePermaMod(HULLMOD_ID);
-                removeHullModFromVariant(rootRefitVariant);
-            }
-            if (member.getVariant().hasHullMod(HULLMOD_ID)) {
-//                member.getVariant().removePermaMod(HULLMOD_ID);
-                removeHullModFromVariant(member.getVariant());
-            }
-            if (memberRefitVarient.hasHullMod(HULLMOD_ID)) {
-//                memberRefitVarient.removePermaMod(HULLMOD_ID);
-                removeHullModFromVariant(memberRefitVarient);
-            }
-            if (variant.hasHullMod(HULLMOD_ID)) {
-//                variant.removePermaMod(HULLMOD_ID);
-                removeHullModFromVariant(variant);
-            }
+            removeHullmodEverywhere(rootMember);
         }
     }
 
@@ -199,14 +182,16 @@ public class ExoticaTechHM extends BaseHullMod {
     }
 
     // Recursively adds HULLMOD_ID to a variant and all its station module children.
+    // Shared pre-order walk (ExtensionsKt.forEachModuleVariant) over the descendants; the lambda
+    // captures only the compile-time HULLMOD_ID constant, so it is stateless and JVM-cached.
     private static void installHullmodRecursive(ShipVariantAPI v) {
         v.addPermaMod(HULLMOD_ID);
-        for (String slotId : v.getStationModules().keySet()) {
-            ShipVariantAPI childV = v.getModuleVariant(slotId);
-            if (childV != null) {
-                installHullmodRecursive(childV);
+        ExtensionsKt.forEachModuleVariant(v, new ModuleVariantAction() {
+            @Override
+            public void accept(@NotNull ShipVariantAPI child) {
+                child.addPermaMod(HULLMOD_ID);
             }
-        }
+        });
     }
 
     // Finds a FleetMemberAPI whose variant's hullVariantId matches the target, scanning
@@ -238,60 +223,70 @@ public class ExoticaTechHM extends BaseHullMod {
     }
 
     public static void removeFromFleetMember(FleetMemberAPI member) {
-        if (member.getVariant() == null) {
+        removeHullmodEverywhere(member);
+    }
+
+    // Strips HULLMOD_ID from the ENTIRE ship: the member's own variant, every station-module
+    // child in the tree, every child FM reachable via statsForOpCosts, AND the REFIT display
+    // tree. Used whenever no module anywhere on the ship has any Modification left — leaving a
+    // single stale hullmod on any object graph would keep the refit highlight (or the campaign
+    // effects) alive for a ship that no longer has any exotica.
+    private static void removeHullmodEverywhere(FleetMemberAPI member) {
+        if (member == null || member.getVariant() == null) {
             return;
         }
 
         ShipVariantAPI shipVariant = member.getVariant();
-        if (shipVariant.hasHullMod(HULLMOD_ID)) {
-            removeHullModFromVariant(shipVariant);
-        }
-
-        // Also remove from all child module variants in the tree
+        removeHullModFromVariant(shipVariant);
         removeHullmodRecursive(shipVariant);
-        // And from any child FMAPIs reachable via statsForOpCosts (refit screen)
         removeFromChildFmsByStats(shipVariant);
-        //TODO And the same for refit variant too
+
         ShipVariantAPI refitVariant = RefitButtonAdderKt.checkRefitVariant(member);
-        removeHullmodRecursive(refitVariant);
-        removeFromChildFmsByStats(refitVariant);
+        if (refitVariant != shipVariant) {
+            removeHullModFromVariant(refitVariant);
+            removeHullmodRecursive(refitVariant);
+            removeFromChildFmsByStats(refitVariant);
+        }
     }
 
-    // Recursively removes HULLMOD_ID from a variant and all its station module children.
+    // Removes HULLMOD_ID from all station module children of a variant (the caller removes it
+    // from the root itself). Walker-visits every descendant via the shared pre-order walk.
     private static void removeHullmodRecursive(ShipVariantAPI v) {
-        for (String slotId : v.getStationModules().keySet()) {
-            ShipVariantAPI childV = v.getModuleVariant(slotId);
-            if (childV != null) {
-                if (childV.hasHullMod(HULLMOD_ID)) {
-                    removeHullModFromVariant(childV);
+        ExtensionsKt.forEachModuleVariant(v, new ModuleVariantAction() {
+            @Override
+            public void accept(@NotNull ShipVariantAPI child) {
+                if (child.hasHullMod(HULLMOD_ID)) {
+                    removeHullModFromVariant(child);
                 }
-                removeHullmodRecursive(childV);
             }
-        }
+        });
     }
 
     // Walks the variant tree via statsForOpCosts to remove the hullmod from child FMAPIs.
+    // The child-FM resolution (statsForOpCosts + findMemberForStats, swallowing the throw for
+    // not-yet-resolved variants) lives in the shared FleetMemberUtils.findModuleMember.
     private static void removeFromChildFmsByStats(ShipVariantAPI v) {
-        for (String slotId : v.getStationModules().keySet()) {
-            ShipVariantAPI childV = v.getModuleVariant(slotId);
-            if (childV != null) {
-                FleetMemberAPI childFM = null;
-                try {
-                    MutableShipStatsAPI childStats = childV.getStatsForOpCosts();
-                    if (childStats != null) {
-                        childFM = FleetMemberUtils.findMemberForStats(childStats);
-                    }
-                } catch (Exception e) {
-                    // statsForOpCosts can throw if the variant hasn't been resolved yet
-                }
+        ExtensionsKt.forEachModuleVariant(v, new ModuleVariantAction() {
+            @Override
+            public void accept(@NotNull ShipVariantAPI childV) {
+                FleetMemberAPI childFM = FleetMemberUtils.findModuleMember(childV);
                 if (childFM != null && childFM.getVariant().hasHullMod(HULLMOD_ID)) {
-//                    childFM.getVariant().removePermaMod(HULLMOD_ID);
                     removeHullModFromVariant(childFM.getVariant());
                     removeFromFleetMember(childFM);
                 }
-                removeFromChildFmsByStats(childV);
             }
+        });
+    }
+
+    // Whether the hullmod should be present on the ship: true when either this member's own
+    // ShipModifications OR any module anywhere on the ship has any Upgrade/Exotic installed.
+    // Exotic and Upgrade subclasses of Modification are both covered by shouldApplyHullmod().
+    private static boolean consolidateHullmod(ShipModifications mods, List<ShipModifications> wholeShipMods) {
+        if (mods != null && mods.shouldApplyHullmod()) return true;
+        for (ShipModifications m : wholeShipMods) {
+            if (m.shouldApplyHullmod()) return true;
         }
+        return false;
     }
 
     @Override
@@ -322,8 +317,8 @@ public class ExoticaTechHM extends BaseHullMod {
         if (!isRoot) {
             if (mods == null) {
                 List<ShipModifications> wholeShipMods = ShipModLoader.getWholeShipMods(member, member.getVariant());
-                if (wholeShipMods.isEmpty()) {
-                    member.getVariant().removePermaMod(HULLMOD_ID);
+                if (ShipModificationsKt.isActuallyEmpty(wholeShipMods)) {
+                    removeHullmodEverywhere(member);
                     diagnosticLog("advanceInCampaign | NULL mods, ship empty => removed HM | member=" + member.getId());
                 }
             }
@@ -334,8 +329,8 @@ public class ExoticaTechHM extends BaseHullMod {
         // ship's campaign effects run once here (root-anchored). This is what lets an exotic that was
         // installed on a CHILD module still tick its campaign-layer effects.
         List<ShipModifications> wholeShipMods = ShipModLoader.getWholeShipMods(member, member.getVariant());
-        if (wholeShipMods.isEmpty()) {
-            member.getVariant().removePermaMod(HULLMOD_ID);
+        if (ShipModificationsKt.isActuallyEmpty(wholeShipMods)) {
+            removeHullmodEverywhere(member);
             diagnosticLog("advanceInCampaign | ship empty => removed HM | member=" + member.getId());
             return;
         }
@@ -586,9 +581,9 @@ public class ExoticaTechHM extends BaseHullMod {
 
         ShipModifications mods = ShipModLoader.get(member, stats.getVariant());
 
-        //FIXME problem is that both of these calls end up using FleetMemberHierarchy which cannot connect child-to-child.
-        List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForStats(stats);
-        List<MutableShipStatsAPI> statsList = FleetMemberHierarchy.getAllModulesStatsFromSingleStats(stats);
+        // Whole-ship modifications via the variant-tree walk (getWholeShipMods), which resolves
+        // child modules to the root FM's tree — FleetMemberHierarchy cannot connect child-to-child.
+        List<ShipModifications> wholeShipsMods = ShipModLoader.getWholeShipMods(member, stats.getVariant());
 
         diagnosticLog("applyEffectsBeforeShipCreation | member=" + member.getId() +
             " variant=" + stats.getVariant().getHullVariantId() +
@@ -596,33 +591,20 @@ public class ExoticaTechHM extends BaseHullMod {
             " variant.hasHM=" + stats.getVariant().hasHullMod(HULLMOD_ID) +
             " variant.tags=" + stats.getVariant().getTags().size() +
             " variant.source=" + stats.getVariant().getSource() +
-            " wholeShipsMods.size=" + wholeShipsMods.size() +
-            " statsList.size=" + statsList.size());
+            " wholeShipsMods.size=" + wholeShipsMods.size());
 
-        // combined guard: bail only when this module AND all other modules have no exotic data
-        if (mods == null && wholeShipsMods.isEmpty()) {
-            //TODO when removing HULLMOD_ID, remove it from everywhere if it's empty
-            // because, if no modules have exoticas, none of them should have the hullmod.
-            // if any module has at least one exotic - all ship's modules should have the hullmod.
-
+        // combined guard: bail only when this module AND all other modules have no exotic data.
+        // isActuallyEmpty() (not isEmpty()) because child modules always carry placeholder
+        // ShipModifications, so the whole-ship list is structurally non-empty for module ships.
+        if (mods == null && ShipModificationsKt.isActuallyEmpty(wholeShipsMods)) {
             if (fuzzyVariantMatch(stats.getVariant(), member.getVariant())) {
                 diagnosticLog("applyEffectsBeforeShipCreation | NULL mods => removed HM | member=" + member.getId() + " variant=" + stats.getVariant().getHullVariantId());
-                // this is the root module's own stats variant with no Exotica data —
-                // safe to strip the hullmod since there are no exotics on this ship.
-                // we skip this for child module variants because:
-                //   a) member.getVariant() always points to the ROOT FM's variant here
-                //      (findMemberForStats returns root FM for children via moduleMap),
-                //      so calling member.getVariant().removePermaMod() would incorrectly
-                //      strip the hullmod from the root variant.
-                //   b) children legitimately have no Exotica tag of their own — null is
-                //      expected; exotics from the root should still share effects to
-                //      children via shouldSkipModification. removing the child's hullmod
-                //      would break that sharing and the refit highlight.
-                member.getVariant().removePermaMod(HULLMOD_ID);
+                // this is the root module's own stats variant with no Exotica data — the whole
+                // ship is empty, so strip the hullmod from everywhere (root + children + refit).
+                removeHullmodEverywhere(member);
             }
             diagnosticLog("applyEffectsBeforeShipCreation | NULL mods | member=" + member.getId()
                 + " variant=" + stats.getVariant().getHullVariantId()
-//                + " isRoot=" + stats.getVariant().getHullVariantId().equals(member.getVariant().getHullVariantId())
                 + " stats.getVariant matches member.getVariant ? " + fuzzyVariantMatch(stats.getVariant(), member.getVariant())
                 + " hasHM=" + stats.getVariant().hasHullMod(HULLMOD_ID)
                 + " tags=" + StringUtils.join(",", stats.getVariant().getTags()));
@@ -631,8 +613,7 @@ public class ExoticaTechHM extends BaseHullMod {
 
         diagnosticLog("applyEffectsBeforeShipCreation | LOOP START member=" + member.getId() +
             " variant=" + stats.getVariant().getHullVariantId() +
-            " wholeShipsMods.size=" + wholeShipsMods.size() +
-            " statsList.size=" + statsList.size());
+            " wholeShipsMods.size=" + wholeShipsMods.size());
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
 //            if (!mods.hasExotic(exotic)) continue;

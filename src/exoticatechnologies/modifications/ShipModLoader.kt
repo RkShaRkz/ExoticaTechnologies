@@ -5,12 +5,12 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
-import exoticatechnologies.campaign.listeners.CampaignEventListener
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.FleetMemberHierarchy
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
+import exoticatechnologies.util.forEachModuleVariant
 import org.apache.log4j.Logger
 
 class ShipModLoader {
@@ -149,24 +149,7 @@ class ShipModLoader {
     private fun resolveRootVariant(member: FleetMemberAPI, variant: ShipVariantAPI): ShipVariantAPI {
         if (variant.stationModules.isNotEmpty()) return variant
         val rootVariantId = FleetMemberHierarchy.findRootVariantId(variant.hullVariantId) ?: return variant
-        return findRootVariantByHullId(member, rootVariantId) ?: variant
-    }
-
-    private fun findRootVariantByHullId(member: FleetMemberAPI, targetVariantId: String): ShipVariantAPI? {
-        member.fleetData?.fleet?.let { fleet ->
-            for (fm in fleet.membersWithFightersCopy) {
-                val v = fm.checkRefitVariant() ?: continue
-                if (v.hullVariantId == targetVariantId) return v
-            }
-        }
-        for (fleet in CampaignEventListener.activeFleets) {
-            if (fleet == null) continue
-            for (fm in fleet.membersWithFightersCopy) {
-                val v = fm.checkRefitVariant() ?: continue
-                if (v.hullVariantId == targetVariantId) return v
-            }
-        }
-        return null
+        return FleetMemberUtils.findRootVariantByHullId(member, rootVariantId) ?: variant
     }
 
     // Recursive stationModules walk. Dedupes by hullVariantId so the same logical variant
@@ -181,9 +164,13 @@ class ShipModLoader {
     ) {
         if (!seenVariantIds.add(variant.hullVariantId)) return
         get(member, variant)?.let { result.add(it) }
-        for (slotId in variant.stationModules.keys) {
-            val childV = variant.getModuleVariant(slotId) ?: continue
-            collectWholeShipMods(member, childV, result, seenVariantIds)
+        // Shared pre-order walk over every station-module descendant (Extensions.kt).
+        // The lambda captures only locals (member, result, seenVariantIds) and is a no-op
+        // append per visited node — stateless, short-lived, nothing allocated per iteration.
+        variant.forEachModuleVariant { childV ->
+            if (seenVariantIds.add(childV.hullVariantId)) {
+                get(member, childV)?.let { result.add(it) }
+            }
         }
     }
 
@@ -255,31 +242,6 @@ class ShipModLoader {
         @Synchronized
         fun getWholeShipMods(member: FleetMemberAPI, variant: ShipVariantAPI): List<ShipModifications> {
             return inst.getWholeShipModsData(member, variant)
-        }
-
-        /**
-         * Whether the hullmod should be present on the ship: true when either this member's own
-         * ShipModifications OR any module anywhere on the ship has any Upgrade/Exotic installed.
-         * Exotic and Upgrade subclasses of Modification are both covered by shouldApplyHullmod().
-         */
-        @JvmStatic
-        @Synchronized
-        fun consolidateHullmod(mods: ShipModifications?, wholeShipMods: List<ShipModifications>): Boolean {
-            //TODO start using this commented out code
-//            val checkList = mutableListOf<ShipModifications?>()
-//            // add everything to checkList
-//            checkList.add(mods)
-//            checkList.addAll(wholeShipMods)
-//            checkList
-//                    .filterNotNull()
-//                    .distinct()
-//                    .any { moduleMods -> moduleMods.shouldApplyHullmod() }
-
-            if (mods != null && mods.shouldApplyHullmod()) return true
-            for (m in wholeShipMods) {
-                if (m.shouldApplyHullmod()) return true
-            }
-            return false
         }
     }
 

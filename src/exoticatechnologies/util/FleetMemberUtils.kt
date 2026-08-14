@@ -7,8 +7,8 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import exoticatechnologies.campaign.listeners.CampaignEventListener.Companion.activeFleets
+import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.FleetMemberUtils.findFleetForVariant
-import org.apache.log4j.Logger
 
 object FleetMemberUtils {
     @JvmField
@@ -185,65 +185,121 @@ object FleetMemberUtils {
         return fleetCommander
     }
 
-}
+    /**
+     * Resolves the [FleetMemberAPI] backing a child module [variant], or null when none is reachable.
+     * [ShipVariantAPI.statsForOpCosts] can throw for variants the engine hasn't resolved yet, so it is
+     * swallowed here; callers on the cold install/remove path never need to see it.
+     */
+    @JvmStatic
+    fun findModuleMember(variant: ShipVariantAPI): FleetMemberAPI? {
+        val stats = runCatching { variant.statsForOpCosts }.getOrNull() ?: return null
+        return findMemberForStats(stats)
+    }
 
-private val propagateLogger: Logger = Logger.getLogger("exoticatechnologies.util.FleetMemberUtils")
+    /**
+     * Returns the root variant of the variant tree that [variant] belongs to, resolving via stable
+     * hullVariantId keys only — identity comparisons break after fixVariant churn and refit cloning.
+     *
+     * A variant that owns station modules IS the root of its tree. Otherwise [variant] is a leaf
+     * (child module or single-module ship): we scan the member's own variant tree first, then the
+     * member's fleet, for a root whose station-module tree fuzzy-contains [variant]. Falls back to
+     * [variant] itself when no owner can be found (single-module ship or unreachable tree).
+     *
+     * @param member the [FleetMemberAPI] to anchor the fleet scan on
+     * @param variant the variant whose owning tree root we want
+     * @return the root [ShipVariantAPI] of the tree containing [variant]
+     */
+    @JvmStatic
+    fun findRootVariant(member: FleetMemberAPI, variant: ShipVariantAPI): ShipVariantAPI {
+        // A root owns its station modules; a leaf with modules would itself be a root.
+        if (variant.stationModules.isNotEmpty()) return variant
+        val targetId = variant.hullVariantId
+
+        // The member's own variant is the overwhelmingly common owner.
+        val memberVariant = member.variant
+        if (memberVariant.stationModules.isNotEmpty() && treeFuzzyContains(memberVariant, targetId)) {
+            return memberVariant
+        }
+
+        // Fallback: scan the member's fleet for the owning tree (child FMs have null fleetData, so
+        // also check the active campaign fleets like findRootVariantByHullId does).
+        member.fleetData?.fleet?.let { fleet ->
+            for (fm in fleet.membersWithFightersCopy) {
+                val v = fm.variant
+                if (v.stationModules.isNotEmpty() && treeFuzzyContains(v, targetId)) return v
+            }
+        }
+        for (fleet in activeFleets) {
+            if (fleet == null) continue
+            for (fm in fleet.membersWithFightersCopy) {
+                val v = fm.variant
+                if (v.stationModules.isNotEmpty() && treeFuzzyContains(v, targetId)) return v
+            }
+        }
+        return variant
+    }
+
+    // True when any station-module descendant of [root] fuzzy-matches [targetId] (same prefix before
+    // the last '_suffix' — refit/combat clones differ only there, e.g. 'left_0' vs 'left_Start').
+    private fun treeFuzzyContains(root: ShipVariantAPI, targetId: String): Boolean {
+        var found = false
+        root.forEachModuleVariant { childV ->
+            if (!found && childV.hullVariantId.fuzzyVariantIdEquals(targetId)) found = true
+        }
+        return found
+    }
+
+    private fun String.fuzzyVariantIdEquals(other: String): Boolean {
+        // Strip the last '_suffix' from both and compare the prefixes; ids without an underscore
+        // degrade to a plain exact comparison (substringBeforeLast falls back to the whole string).
+        return substringBeforeLast("_", this) == other.substringBeforeLast("_", other)
+    }
+
+    /**
+     * Finds the [ShipVariantAPI] whose REFIT variant's hullVariantId equals [targetVariantId],
+     * scanning the member's own fleet first, then falling back to the active campaign fleets.
+     * Used to resolve a known root variant id (e.g. from [FleetMemberHierarchy.findRootVariantId])
+     * back to a concrete variant instance.
+     *
+     * @param member the [FleetMemberAPI] to anchor the fleet scan on
+     * @param targetVariantId the exact hullVariantId to look up
+     * @return the matching REFIT variant, or null if no fleet member carries it
+     */
+    @JvmStatic
+    fun findRootVariantByHullId(member: FleetMemberAPI, targetVariantId: String): ShipVariantAPI? {
+        member.fleetData?.fleet?.let { fleet ->
+            for (fm in fleet.membersWithFightersCopy) {
+                val v = fm.checkRefitVariant() ?: continue
+                if (v.hullVariantId == targetVariantId) return v
+            }
+        }
+        for (fleet in activeFleets) {
+            if (fleet == null) continue
+            for (fm in fleet.membersWithFightersCopy) {
+                val v = fm.checkRefitVariant() ?: continue
+                if (v.hullVariantId == targetVariantId) return v
+            }
+        }
+        return null
+    }
+
+}
 
 /**
- * Walks the root variant's station module tree, resolving each child variant
- * to its [FleetMemberAPI] via [ShipVariantAPI.statsForOpCosts.fleetMember],
- * then adds [hullmodId] to the child FM's own variant.  This is necessary
- * because the refit screen reads each FM's variant independently — adding the
- * hullmod to the root variant tree alone is invisible to child FM instances.
+ * Walks the root variant's station module tree (via the shared [ShipVariantAPI.forEachModuleVariant]
+ * walker), adding [hullmodId] to each child variant AND to each child's backing [FleetMemberAPI]
+ * variant, resolved through [FleetMemberUtils.findModuleMember]. The refit screen reads each FM's
+ * variant independently — tagging the root variant tree alone is invisible to child FM instances, so
+ * the highlight must be mirrored onto both object graphs.
  *
- * Unlike the identity-based approach (which relied on `membersListCopy`),
- * this uses `statsForOpCosts` which lets us reach child FMAPIs that are
- * never added to the fleet's mutable member lists.
+ * @param hullmodId the hullmod id to add to every module of the ship
  */
 fun FleetMemberAPI.propagateFromVariantTree(hullmodId: String) {
-    propagateLogger.info("=== propagateFromVariantTree ===")
-    propagateLogger.info("rootFM: id=${this.id} hullId=${this.hullId} shipName=${this.shipName} variantId=${this.variant.hullVariantId}")
-    propagateFromVariantRecursive(this, this.variant, hullmodId)
-}
-
-private fun propagateFromVariantRecursive(rootMember: FleetMemberAPI, parentV: ShipVariantAPI, hullmodId: String) {
-    for ((slotId, _) in parentV.stationModules) {
-        val childV = parentV.getModuleVariant(slotId) ?: continue
-        propagateLogger.info("--- slot=$slotId ---")
-        propagateLogger.info("childV: hullVariantId=${childV.hullVariantId} hullId=${childV.hullSpec.hullId}")
-
-        // Approach A: add hullmod to the variant in the tree (same as installHullmodRecursive)
-        val hadOnV = childV.hasHullMod(hullmodId)
+    this.variant.forEachModuleVariant { childV ->
         childV.addPermaMod(hullmodId)
-        propagateLogger.info("[variantTree] had=$hadOnV now=${childV.hasHullMod(hullmodId)}")
-
-        // Approach B: resolve child FM via findMemberForStats (searches broader than .fleetMember)
-        val childStats = runCatching { childV.statsForOpCosts }.getOrNull()
-        val childFM = if (childStats != null) FleetMemberUtils.findMemberForStats(childStats) else null
-        if (childFM != null) {
-            val hadOnFm = childFM.variant.hasHullMod(hullmodId)
+        FleetMemberUtils.findModuleMember(childV)?.let { childFM ->
             childFM.variant.addPermaMod(hullmodId)
-            propagateLogger.info("[statsFm] id=${childFM.id} hullId=${childFM.hullId} variantId=${childFM.variant.hullVariantId} shipName=${childFM.shipName}")
-            propagateLogger.info("[statsFm] had=$hadOnFm now=${childFM.variant.hasHullMod(hullmodId)}")
-            if (childFM.variant.stationModules.isNotEmpty()) {
-                propagateLogger.info("[statsFm] has nested modules: ${childFM.variant.stationModules.keys}")
-            }
-        } else {
-            propagateLogger.info("[statsFm] NULL (no FM reachable via statsForOpCosts)")
         }
-
-        // Approach C: check if membersListCopy has this child FM (using ==)
-        if (childFM != null) {
-            val fleet = rootMember.fleetData?.fleet
-            if (fleet != null) {
-                val found = fleet.fleetData.membersListCopy.find { it == childFM }
-                propagateLogger.info("[membersListCopy] fm==match=${found != null} ${found?.let { "(id=${it.id})" } ?: ""}")
-                val byHull = fleet.fleetData.membersListCopy.filter { it.hullId == childFM.hullId }
-                propagateLogger.info("[membersListCopy] byHullId=${byHull.size} entries: ${byHull.joinToString { "${it.id}/${it.shipName}" }}")
-            }
-        }
-
-        propagateFromVariantRecursive(rootMember, childV, hullmodId)
     }
 }
 

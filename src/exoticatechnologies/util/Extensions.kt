@@ -51,6 +51,30 @@ private fun diagnosticLog(log: Logger, message: String) {
     log.info("[DIAG] $message")
 }
 
+fun ShipVariantAPI.fixModuleVariants() {
+    val log = Logger.getLogger("exoticatech.Extensions")
+    this.stationModules.forEach { (slotId, _) ->
+        val moduleVariant = this.getModuleVariant(slotId)
+        val moduleTagsBefore = moduleVariant.tags.toList()
+        val newModuleVariant = moduleVariant.getRefitVariant()
+        if (newModuleVariant != moduleVariant) {
+            diagnosticLog(log, "fixModuleVariants | slot=$slotId parentVariant=${this.hullVariantId} " +
+                    "moduleVariant=${moduleVariant.hullVariantId} " +
+                    "moduleTagsBefore=${moduleTagsBefore.size} " +
+                    "moduleTagsAfterClone=${newModuleVariant.tags.size} " +
+                    "CLONED")
+            this.setModuleVariant(slotId, newModuleVariant)
+        } else {
+            diagnosticLog(log, "fixModuleVariants | slot=$slotId parentVariant=${this.hullVariantId} " +
+                    "moduleVariant=${moduleVariant.hullVariantId} " +
+                    "moduleTagsBefore=${moduleTagsBefore.size} " +
+                    "NOT CLONED")
+        }
+
+        newModuleVariant.fixModuleVariants()
+    }
+}
+
 fun ShipVariantAPI.getRefitVariant(): ShipVariantAPI {
     var shipVariant = this
     val originalShipVariantTags = shipVariant.tags
@@ -81,6 +105,41 @@ private fun refreshShipVariantTags(variant: ShipVariantAPI, originalTags: Collec
     }
 }
 
+/**
+ * Single-abstract-method callback for [ShipVariantAPI.forEachModuleVariant].
+ *
+ * Declared as a `fun interface` rather than a plain `(ShipVariantAPI) -> Unit` so Java callers get
+ * a native void-returning SAM (no `Unit.INSTANCE` boilerplate) while Kotlin callers still get
+ * SAM-converted lambda syntax.
+ *
+ * Implementations MUST stay small, stateless, and short-lived: they may capture only local values
+ * (accumulators, string ids), never `this`, member fields, or globals. Java's invokedynamic
+ * hoists and caches stateless lambdas, so a capture-free implementation costs nothing after first
+ * creation. The same instance is applied to every descendant of the walked tree.
+ */
+fun interface ModuleVariantAction {
+    fun accept(variant: ShipVariantAPI)
+}
+
+/**
+ * Pre-order walk of every station-module descendant of [this] variant (children before
+ * grandchildren), invoking [action] once per descendant. The receiver itself is NOT visited.
+ *
+ * Cold-path traversal used by hullmod install/remove and whole-ship modification reads. It is
+ * deliberately **non-inline**: the body recurses into itself, so inlining across the call sites
+ * would only duplicate the loop body (plus the recursion forces the compiler to retain a separate
+ * non-inline copy anyway) without removing any measurable call overhead on these cold paths.
+ *
+ * @param action the [ModuleVariantAction] to invoke once per descendant
+ */
+fun ShipVariantAPI.forEachModuleVariant(action: ModuleVariantAction) {
+    for (slotId in stationModules.keys) {
+        val childV = getModuleVariant(slotId) ?: continue
+        action.accept(childV)
+        childV.forEachModuleVariant(action)
+    }
+}
+
 fun FleetMemberAPI.fixVariant() {
     val newVariant = this.variant.getRefitVariant()
     if (newVariant != this.variant) {
@@ -88,30 +147,6 @@ fun FleetMemberAPI.fixVariant() {
     }
 
     newVariant.fixModuleVariants()
-}
-
-fun ShipVariantAPI.fixModuleVariants() {
-    val log = Logger.getLogger("exoticatech.Extensions")
-    this.stationModules.forEach { (slotId, _) ->
-        val moduleVariant = this.getModuleVariant(slotId)
-        val moduleTagsBefore = moduleVariant.tags.toList()
-        val newModuleVariant = moduleVariant.getRefitVariant()
-        if (newModuleVariant != moduleVariant) {
-            diagnosticLog(log, "fixModuleVariants | slot=$slotId parentVariant=${this.hullVariantId} " +
-                "moduleVariant=${moduleVariant.hullVariantId} " +
-                "moduleTagsBefore=${moduleTagsBefore.size} " +
-                "moduleTagsAfterClone=${newModuleVariant.tags.size} " +
-                "CLONED")
-            this.setModuleVariant(slotId, newModuleVariant)
-        } else {
-            diagnosticLog(log, "fixModuleVariants | slot=$slotId parentVariant=${this.hullVariantId} " +
-                "moduleVariant=${moduleVariant.hullVariantId} " +
-                "moduleTagsBefore=${moduleTagsBefore.size} " +
-                "NOT CLONED")
-        }
-
-        newModuleVariant.fixModuleVariants()
-    }
 }
 
 fun UIPanelAPI.getChildrenCopy(): List<UIComponentAPI> {

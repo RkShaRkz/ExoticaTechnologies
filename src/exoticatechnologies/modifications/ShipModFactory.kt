@@ -78,15 +78,10 @@ object ShipModFactory {
         return fm.fleetData.fleet.faction?.id
     }
 
-    // TODO: Reverse case — exotic installed on child module only.
-    // Currently works for combat-layer effects because the child has its own
-    // ShipModifications with the exotic and the hullmod on its variant.
-    // However, addToFleetMember's shouldApplyHullmod() only checks root's mods,
-    // so hullmod is NOT propagated to root when the first exotic is on a child.
-    // Campaign-layer effects (advanceInCampaign) only fire on root FM, so they
-    // won't apply. Fix when needed: shouldApplyHullmod() should also scan
-    // children's mods, or hullmod propagation should be triggered by any module
-    // on the ship having exotics.
+    // Reverse case — exotic installed on child module only — is handled upstream by
+    // ExoticaTechHM.addToFleetMember, which decides the hullmod from the WHOLE ship's
+    // modifications (consolidateHullmod over ShipModLoader.getWholeShipMods), so the root
+    // and all module variants get the hullmod even when the first exotic lands on a child.
     private fun generateForChildModules(member: FleetMemberAPI) {
         val stationModules = member.variant?.stationModules ?: return
         for ((slotId, _) in stationModules) {
