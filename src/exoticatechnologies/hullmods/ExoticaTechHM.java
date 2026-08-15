@@ -439,8 +439,7 @@ public class ExoticaTechHM extends BaseHullMod {
                 }
             }
 
-            boolean skip = shouldSkipModification(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip);
-            if (skip) {
+            if (shouldSkipModification(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
                 continue;
             }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
@@ -471,8 +470,7 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisUpgradesMods = tempMods;
                 }
             }
-            boolean skip = shouldSkipModification(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip);
-            if (skip) {
+            if (shouldSkipModification(ship, upgrade, thisModuleOwnsIt, presentSomewhereOnShip)) {
                 continue;
             }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
@@ -549,8 +547,7 @@ public class ExoticaTechHM extends BaseHullMod {
                 }
             }
 
-            boolean skip = shouldSkipModification(stats, exotic, thisModuleOwnsIt, presentSomewhereOnShip);
-            if (skip) {
+            if (shouldSkipModification(stats, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
                 continue;
             }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
@@ -638,8 +635,7 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisExoticasMods = tempMods;
                 }
             }
-            boolean skip = shouldSkipModification(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip);
-            if (skip) {
+            if (shouldSkipModification(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
                 continue;
             }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
@@ -721,8 +717,7 @@ public class ExoticaTechHM extends BaseHullMod {
                     thisExoticasMods = tempMods;
                 }
             }
-            boolean skip = shouldSkipModification(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip);
-            if (skip) {
+            if (shouldSkipModification(ship, exotic, thisModuleOwnsIt, presentSomewhereOnShip)) {
                 continue;
             }
             // Now, determine which shipMods to use - if our mods contain data, lets call it with our mods;
