@@ -465,3 +465,18 @@ fun FleetMemberAPI.checkRefitVariant(): ShipVariantAPI {
     }
     return this.variant
 }
+
+/**
+ * Returns the refit display working tree (the variant the refit screen is currently showing and
+ * that gets re-bound to the fleet member on refit confirm), or null when the refit screen is
+ * closed or not displaying a [ShipVariantAPI].
+ *
+ * Unlike [FleetMemberAPI.checkRefitVariant], this does NOT depend on which member happens to be
+ * selected: it reads [RefitButtonAdder.variant] for whatever member the refit screen is editing.
+ * A full-ship strip (uninstall) must reach this tree even when the user is editing a CHILD module,
+ * because `rootFM.checkRefitVariant()` falls back to the root's own variant and would skip it.
+ *
+ * The `runCatching` guards the unchecked `HullVariantSpec -> ShipVariantAPI` cast documented on
+ * [checkRefitVariant]; on a cast failure the display tree is simply unreachable and gets skipped.
+ */
+fun getRefitDisplayVariant(): ShipVariantAPI? = runCatching { RefitButtonAdder.member?.checkRefitVariant() }.getOrNull()

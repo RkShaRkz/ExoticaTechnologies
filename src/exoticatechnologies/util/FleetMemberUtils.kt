@@ -42,8 +42,8 @@ object FleetMemberUtils {
         // (the module's own leaf FM), so getAllDataFromStatsAPI's variant-tree walk starts
         // from a leaf variant, never discovers sibling/root modules, and module-owned
         // exotics get skipped.
-        // Synthetic statsForOpCosts objects (propagateFromVariantTree, collectModuleMembers2,
-        // removeFromChildFmsByStats) have no entity and bypass this branch unchanged.
+        // Synthetic statsForOpCosts objects (propagateFromVariantTree, collectModuleMembers2)
+        // have no entity and bypass this branch unchanged.
         if (stats.entity is ShipAPI) {
             val ship = stats.entity as ShipAPI
             if (ship.parentStation != null) {
