@@ -11,30 +11,16 @@ import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
 import exoticatechnologies.util.forEachModuleVariant
-import org.apache.log4j.Logger
 
 class ShipModLoader {
-    private val log = Logger.getLogger(ShipModLoader::class.java)
-
     private var providers: List<Provider> = mutableListOf(
         VariantTagProvider.getInstance(),
         ZigguratDataProvider.inst,
         PersistentDataProvider.inst
     )
 
-    private val LOG_TAG = "ShipModLoader"
-
-    private fun diagnosticLog(message: String) {
-        log.info("[DIAG] $message")
-    }
-
     private fun getData(member: FleetMemberAPI, variant: ShipVariantAPI = member.variant): ShipModifications? {
-        val result = providers.firstNotNullOfOrNull { it.get(member, variant) }
-        diagnosticLog(
-            "getData | member=${member.id} variant=${variant.hullVariantId} " +
-            "variantTags=${variant.tags.size} result=${if (result == null) "null" else "mods(UPGRADES: ${result.getUpgradeMap()}, EXOTICS: ${result.getExoticSet()})"}"
-        )
-        return result
+        return providers.firstNotNullOfOrNull { it.get(member, variant) }
     }
 
     private fun saveData(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {
@@ -94,10 +80,7 @@ class ShipModLoader {
         // FleetMemberHierarchy cannot connect child-to-child, so it may collapse
         // all module variants to rootFM. Keep this loop as a fallback.
         val allShipModulesFromStats = FleetMemberHierarchy.getAllModules(stats)
-        diagnosticLog("getAllDataFromStatsAPI | allShipModulesFromStats.size: ${allShipModulesFromStats.size} | allShipModulesFromStats hullVariantIds: ${allShipModulesFromStats.map { it.variant.hullVariantId }}")
         for (someModule in allShipModulesFromStats) {
-            val variantId = someModule.variant.hullVariantId
-            diagnosticLog("getAllDataFromStatsAPI | FM loop | member=${someModule.id} variantId=$variantId")
             val moduleMods = get(someModule, someModule.variant)
             moduleMods?.let {
                 allModsList.add(it)
@@ -117,8 +100,6 @@ class ShipModLoader {
     private fun collectModuleMods(member: FleetMemberAPI, variant: ShipVariantAPI, result: MutableSet<ShipModifications>) {
         for (slotId in variant.stationModules.keys) {
             val childV = variant.getModuleVariant(slotId) ?: continue
-            val variantId = childV.hullVariantId
-            diagnosticLog("getAllDataFromStatsAPI | variant tree | slot=$slotId variantId=$variantId")
             val childMods = get(member, childV)
             childMods?.let {
                 result.add(it)

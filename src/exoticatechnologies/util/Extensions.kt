@@ -47,28 +47,12 @@ import kotlin.math.*
  */
 fun FleetMemberAPI.getMods(): ShipModifications = ShipModFactory.generateForFleetMember(this)
 
-private fun diagnosticLog(log: Logger, message: String) {
-    log.info("[DIAG] $message")
-}
-
 fun ShipVariantAPI.fixModuleVariants() {
-    val log = Logger.getLogger("exoticatech.Extensions")
     this.stationModules.forEach { (slotId, _) ->
         val moduleVariant = this.getModuleVariant(slotId)
-        val moduleTagsBefore = moduleVariant.tags.toList()
         val newModuleVariant = moduleVariant.getRefitVariant()
         if (newModuleVariant != moduleVariant) {
-            diagnosticLog(log, "fixModuleVariants | slot=$slotId parentVariant=${this.hullVariantId} " +
-                    "moduleVariant=${moduleVariant.hullVariantId} " +
-                    "moduleTagsBefore=${moduleTagsBefore.size} " +
-                    "moduleTagsAfterClone=${newModuleVariant.tags.size} " +
-                    "CLONED")
             this.setModuleVariant(slotId, newModuleVariant)
-        } else {
-            diagnosticLog(log, "fixModuleVariants | slot=$slotId parentVariant=${this.hullVariantId} " +
-                    "moduleVariant=${moduleVariant.hullVariantId} " +
-                    "moduleTagsBefore=${moduleTagsBefore.size} " +
-                    "NOT CLONED")
         }
 
         newModuleVariant.fixModuleVariants()
@@ -78,22 +62,14 @@ fun ShipVariantAPI.fixModuleVariants() {
 fun ShipVariantAPI.getRefitVariant(): ShipVariantAPI {
     var shipVariant = this
     val originalShipVariantTags = shipVariant.tags
-    val log = Logger.getLogger("exoticatech.Extensions")
     if (shipVariant.isStockVariant || shipVariant.source != VariantSource.REFIT) {
-        diagnosticLog(log, "getRefitVariant | CLONING | variant=${this.hullVariantId} originalTags=${originalShipVariantTags.size} source=${this.source}")
         shipVariant = shipVariant.clone()
         shipVariant.originalVariant = null
         shipVariant.source = VariantSource.REFIT
-        diagnosticLog(log, "getRefitVariant | CLONED | variant=${shipVariant.hullVariantId} clonedTags=${shipVariant.tags.size} source=${shipVariant.source}  clonedTags.containsAll(originalTags) ? ${shipVariant.tags.containsAll(originalShipVariantTags)}")
-        diagnosticLog(log, "getRefitVariant | tags1 |  shipVariant.tags == originalTags ? ${shipVariant.tags == originalShipVariantTags}")
-        diagnosticLog(log, "getRefitVariant | tags2 |  shipVariant.tags === originalTags ? ${shipVariant.tags === originalShipVariantTags}")
         // if ship variant tags are empty and original ones are not, refresh them
         if (shipVariant.tags.isNullOrEmpty() && originalShipVariantTags.isNotEmpty()) {
-            diagnosticLog(log, "getRefitVariant | REFRESHING TAGS | variant=${this.hullVariantId} clonedTags=${shipVariant.tags.size} restoring ${originalShipVariantTags.size} tags")
             refreshShipVariantTags(shipVariant, originalShipVariantTags)
         }
-    } else {
-        diagnosticLog(log, "getRefitVariant | NO CLONE | variant=${this.hullVariantId} source=${this.source} tags=${shipVariant.tags.size}")
     }
     return shipVariant
 }
