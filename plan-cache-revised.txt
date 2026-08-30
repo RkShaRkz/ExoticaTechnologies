@@ -1,0 +1,91 @@
+# plan-cache-revised.txt — VariantTagProvider cache "fix for good"
+
+## Objective
+- Fix the VariantTagProvider cache for good (branch fix-rework2):
+  (a) write-TTL eviction            [WORKING — verified; log-line polish only, Phase 1]
+  (b) module-child data resolution  [BROKEN in combat — the real remaining work]
+- Contract: get() returns null only when there is genuinely no data for that variant
+  (no hullmod / no exotica) — and then our code never runs for that ship anyway.
+  For any multi-module ship our code runs on, children must resolve their OWN
+  ShipModifications (their durable tag, possibly empty), NEVER null. Never fabricate an
+  in-place empty ShipModifications() when null is the correct answer.
+
+## Verified facts (restored logs: campaign / refit / combat-sim / unknown / combat-real)
+- Eviction WORKS. campaign.log: entry 1040c served via CACHE HIT while advanceInCampaign
+  polls continuously (campaign clock alive); 705007 EVICTED EXPIRED (genuine >2 game-day
+  TTL, not sentinel); 705008 TAG READ + cache re-sync; hits resume; no repeat (lastWrite
+  refreshed). No eviction LOGIC change required.
+- Eviction never fires during combat — CORRECT. combat-real.log: zero advanceInCampaign
+  during the battle (single line at 4701661 = post-combat resume); campaign clock frozen;
+  elapsedSince=0. The 2–3 day TTL is deliberately long enough to survive combat (unlike
+  the old per-frame invalidation). This is intended, not a bug.
+- SWEEP EVICTED = 0 in all logs = expected (single fresh member + frozen clock in combat).
+  The idle-member sweep path has never been exercised — validation only.
+- Effective TTL is ~3 days (toLong() floors 2.9→2; sentinel = 3). ACCEPTED: keep the Long
+  comparison for speed; TTL just needs to be "short". Do NOT switch to float.
+- Sentinel (clock unavailable/negative) forces immediate eviction. KEEP aggressive:
+  main-menu add/evict cycling is fine, cache stays bounded. No capacity backstop needed.
+- Recovery fails: 0 MODULE TAG RECOVERY across all logs. Combat children NULL
+  (real combat: left_0/right_1 = 22,594 NULL). Root cause: refit'd ships' campaign
+  children tagged ("_Start") but combat clones untagged ("_0"/"_1"); tagged originals
+  unreachable from the combat tree. Non-refit'd ships (e8dba8fb…, a7d1c694…): clones
+  tagged, ids match, exact CACHE HITs — system works for them.
+- Children read under BOTH patterns in combat: root member (1040c) AND module-FM members
+  (real combat d23c1d84…/964087a1…; sim 117ce/117d2).
+- Enemy (ora_wisdom) + fighter (broadsword_Fighter) NULLs = correct (no data, no code).
+
+## Constraints
+- NO FleetMemberHierarchy in new work. Never commit / never git config (git diff -w).
+- Incremental: one small change at a time, validate after each.
+- Cache: WeakHashMap<FleetMemberAPI, Map<variantId, ShipModifications>>; JSON variant
+  tags are the durable store; only writer addToFleetMember -> generateForFleetMember.
+- get() null semantics: NO in-place empty ShipModifications() fabrication.
+- VariantTagProvider.kt is CRLF; keep line endings as-is (no CRLF-normalization).
+
+## Phase 1 — EVICTION LOG POLISH (behavior unchanged)
+- Differentiate eviction log lines:
+    "VariantTagProvider.get | EVICTED EXPIRED | member=.. days=N | cache.size = M"
+    "VariantTagProvider.get | EVICTED CLOCK-UNAVAILABLE | member=.. | cache.size = M"
+    "VariantTagProvider | SWEEP EVICTED member=.. days=N\tcache.size: M"
+    "VariantTagProvider | SWEEP EVICTED CLOCK-UNAVAILABLE member=..\tcache.size: M"
+- elapsedSince() keeps the non-null Long return and the EVICT_FROM_CACHE_DAYS numeric sentinel
+  (semantics unchanged). Call sites keep the single Long comparison against the TTL and only
+  branch on the log label: elapsed == EVICT_FROM_CACHE_DAYS -> CLOCK-UNAVAILABLE, else
+  EXPIRED days=N. Sentinel = 2*CACHE_TTL_GAME_DAYS (=4): first genuine expiry floors to days=3,
+  never collides. (Residual collision at floored 4 requires surviving a full day past expiry
+  without any get()/sweep evicting and re-writing the entry — practically unreachable.)
+- Logs are added NOW and used as validation data from here on; Phase 4 only re-collects.
+
+## Phase 2 — DIAGNOSTIC (child resolution; no behavior change)
+- (a) End of fixVariant()/getRefitVariant(): dump child variant ids + child tag counts
+      before/after the refit clone (by slot id, not variant id — ids shift _Start→_0).
+      -> confirm WHERE child tags are lost (mod clone vs engine refit-display clone).
+- (b) VariantTagProvider recovery probe on NULL child query: member.id, query id,
+      member.variant.getStationModules(), resolved campaign FM variant + tree children +
+      tags, query variant getOriginalVariant() string.
+- Run: real combat with the refit'd tbj ship + one child-owned-exotic ship (e8dba8fb).
+
+## Phase 3 — CHILD-RESOLUTION FIX (decided by Phase 2)
+- Path A (root cause, preferred): make getRefitVariant()/fixVariant() preserve child
+  tags by slot. Then tbj combat clones carry tags like e8dba8fb -> exact cache hits,
+  no recovery machinery. Engine provably preserves tags on clone (e8dba8fb), so the
+  loss is in OUR clone path.
+- Path B (defensive, only if A is blocked): campaign-anchored recovery.
+  FleetMemberUtils.collectModuleVariants(member) (recursive stationModules walk,
+  descendants-first, root last, no fuzzy) + FleetMemberUtils.resolveCampaignMemberById
+  (player fleet, then active fleets — findMemberByVariantId pattern). VariantTagProvider
+  NULL path: exact via getOriginalVariant() then prefix-fuzzy over collected campaign
+  variants; read tags; return/cache per runningFromRefitOrFleetTab under the QUERY member
+  + query variantId. Covers root-member AND module-FM reads. Delete findMatchingTreeVariant.
+- Neither path ever fabricates empty ShipModifications in get().
+
+## Phase 4 — VALIDATION (fresh logs)
+- Eviction: (a) active member >2 game days -> EVICTED EXPIRED days>=2, re-sync, hits
+  resume; (b) IDLE member (not polled) aged >2 days -> SWEEP EVICTED fires (never
+  exercised before); (c) main-menu/save-load -> EVICTED CLOCK-UNAVAILABLE lines distinct,
+  cache.size stays bounded through the add/evict cycle.
+- Child resolution: refit'd tbj ship in refit, sim, AND real combat -> children resolve
+  their own mods (empty or real) under BOTH 1040c and module-FM keys, never NULL.
+  e8dba8fb/a7d1c694 keep exact CACHE HITs (no regression). Enemy/fighters still NULL.
+  Child-owned-exotic ship keeps its exotic in combat (Path B) or via preserved tags (A).
+- git diff -w clean; zero FleetMemberHierarchy references in new code.

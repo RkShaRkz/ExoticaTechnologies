@@ -1,0 +1,113 @@
+# plan-fix-hullmod-installation.txt — root hullmod must persist while ANY module has ANY Modification
+
+Drafted: Aug 3 2026. NOT yet implemented. Sibling of plan-cache-revised2.txt (no supersession).
+
+## Objective (user spec, verbatim intent)
+- Installing an Exotica on a CHILD module MUST add the hullmod (`ExoticaTechHM`, `HULLMOD_ID`) to the ROOT variant.
+- The root's hullmod MUST NOT be removed as long as ANY module of the ship has ANY `ShipModifications`
+  installed — not just `Exotic` subclasses but `Upgrade` subclasses too (i.e. any `Modification` subclass).
+- `addToFleetMember` must decide from the WHOLE ship's ShipMods, not just its own:
+  `consolidateHullmod(mods, wholeShipMods): Boolean`.
+- Non-root (child-module) FMAPI behavior stays exactly as-is.
+- When the ENTIRE ship is empty of modifications, the hullmod must be removed from everywhere
+  (resolves the TODO at ExoticaTechHM.java:546).
+
+## Root cause
+1. `addToFleetMember` (ExoticaTechHM.java:66-162) gates on `mods.shouldApplyHullmod()` (line 86) where
+   `mods = ShipModFactory.generateForFleetMember(member)` (line 69) — the MEMBER'S OWN mods only.
+   `generateForFleetMember` NEVER returns null (ShipModFactory.kt:25-40 generates bandwidth + persists),
+   so the else (REMOVE) branch at line 151 fires whenever the member's own upgrades/exotics are empty —
+   EVEN IF a child module owns the exotic. Refitting the root with exotics only on a child → root stripped.
+2. `advanceInCampaign` (ExoticaTechHM.java:275-300) reads own mods via `ShipModLoader.get` (line 276) and on
+   `mods == null` unconditionally `removePermaMod(HULLMOD_ID)` (line 284) + return. The root's own variant
+   carries no exotic tags (data lives on the child variant) → `mods == null` → root loses the hullmod.
+   THIS is the observed "left refit, flew around, came back → root had no hullmod" bug.
+3. Why child-install works TODAY: `addToFleetMember(childFM)` → child's own mods non-empty → APPLY branch →
+   `installHullmodRecursive(root)` (lines 100-101) + `propagateFromVariantTree` (line 106) → whole tree gets HM.
+   The fix must keep this path intact.
+4. Log evidence (temp4.log.txt): `NULL mods => removed HM` lines (86-87, 147-148, 212-213, 227-228) — members
+   `tbj_overslaught_left_0` / `tbj_overslaught_left_Start`, HM stripped when own mods null; FullMetalSalvo
+   `APPLYING` on all 3 modules (96-128) only because the ROOT still held the hullmod at that combat (strip
+   happens later in campaign).
+
+## FleetMemberHierarchy verdict (the "is it broken" question)
+- `getAllModules` / `getAllChildModules` / `findRootVariant` / `getFleetContext` / `isOwnerOf` are IDENTITY-based
+  (`WeakHashMap<ShipVariantAPI, ShipVariantAPI>` + `===` scans). These BREAK after `fixVariant` churn (REFIT
+  clones not yet registered) — documented in FleetMemberHierarchy.kt:19-40, 145-166, 253-273. DO NOT use them.
+- `findRootVariantId` (FleetMemberHierarchy.kt:181-193) uses `variantIdToParentId` = STABLE string keys
+  (child hullVariantId → parent hullVariantId). Safe across fixVariant. This is the ONE hierarchy method
+  usable, and only as an aid.
+- PREFERRED: compute whole-ship mods by WALKING THE VARIANT TREE (`variant.getStationModules()` +
+  `getModuleVariant(slot)`), the exact pattern already proven as the fallback in
+  `ShipModLoader.getAllDataFromStatsAPI` (ShipModLoader.kt:105-126) — added precisely because the FM
+  hierarchy collapses children to rootFM. Child data lives in child VARIANT TAGS (VariantTagProvider is the
+  only writing provider, `setOnlyIfFirst()` → i==0), so `ShipModLoader.get(rootMember, childV)` reads them.
+
+## Design
+### 1. `ShipModLoader.getWholeShipMods(member, variant): List<ShipModifications>`  (new @JvmStatic)
+- Include member's own `get(member, variant)` + recursive stationModules walk (extract/reuse `collectModuleMods`).
+- Union over `member.getVariant()` AND `checkRefitVariant(member)` trees (both carry tags; APPLY installs on both).
+- If the passed variant has no stationModules (leaf/child), resolve the root FIRST:
+    - `FleetMemberHierarchy.findRootVariantId(variant.hullVariantId) != null` → find root member via
+      `findMemberByVariantId` pattern → walk the ROOT's tree.
+    - else treat the passed variant as root.
+- No identity-based hierarchy calls. Allocation-free per-frame: this is a refit/campaign event, not a combat loop.
+
+### 2. `consolidateHullmod(mods, wholeShipMods): Boolean`  (user's API)
+    mods?.shouldApplyHullmod() == true || wholeShipMods.any { it.shouldApplyHullmod() }
+- `shouldApplyHullmod` (ShipModifications.kt:62-64) already covers `upgrades.hasUpgrades() ||
+  exotics.hasAnyExotic()` = ANY `Modification` subclass.
+
+### 3. `addToFleetMember` (ExoticaTechHM.java:66) — root-aware decision
+- Hoist root resolution UP (lines 90-97 already do `findRootVariantId` + `findMemberByVariantId`).
+- Compute `wholeShipMods = ShipModLoader.getWholeShipMods(rootMember, rootMember.getVariant())`.
+- Gate: `if (consolidateHullmod(mods, wholeShipMods))` → existing APPLY branch UNCHANGED.
+- else (WHOLE SHIP EMPTY) → strip the ENTIRE tree: `removeFromFleetMember(rootMember)` + strip the root's
+  `checkRefitVariant` tree (resolves TODO :546). Replaces the current member-only removal (151-161).
+- Child uninstall that empties the ship → rootMember stripped too. Child uninstall while ANOTHER module still
+  has mods → consolidate true → APPLY, no strip.
+
+### 4. `advanceInCampaign` (ExoticaTechHM.java:275) — no more blind strip
+- `mods == null` → `wholeShipMods = ShipModLoader.getWholeShipMods(member, member.getVariant())`
+    - empty → `removePermaMod` + return (unchanged behavior when ship truly clean).
+    - non-empty → KEEP hullmod; iterate wholeShipMods for upgrade/exotic `advanceInCampaign` effects
+      (solves ShipModFactory.kt:81-89 TODO — campaign effects now fire for child-owned exotics).
+- `mods != null` → existing loop UNCHANGED (skip whole-ship computation — zero added per-frame cost).
+
+## Change sites (exact)
+- ShipModLoader.kt — expose `getWholeShipMods` (@JvmStatic @Synchronized); extract `collectModuleMods` for
+  reuse; add root walk including root's own mods.
+- ExoticaTechHM.java:66 `addToFleetMember` — hoist root resolution; `consolidateHullmod` gate; else-branch
+  full-tree strip.
+- ExoticaTechHM.java:275 `advanceInCampaign` — whole-ship-aware null path + whole-ship campaign effects.
+- NO change: `applyEffectsBeforeShipCreation` (ExoticaTechHM.java:509) — already guarded by
+  `wholeShipsMods.isEmpty()` (:545); combat path intact.
+- NO change: `removeFromFleetMember` (ExoticaTechHM.java:213) — reused, idempotent (`hasHullMod` guards).
+- Out of scope (verified not in the refit flow): ETModPlugin.java:141/154/193/202 `removeHullModFromVariant`
+  = disband/removal cleanup.
+
+## Open questions (verify during implementation)
+1. Do child FMAPIs carry the hullmod in campaign (would `advanceInCampaign` fire on a leaf)? If yes, a
+   leaf-only tree walk could under-count wholeShipMods → `getWholeShipMods` must resolve root for leaves
+   (design has it; validate against logs).
+2. `removeFromFleetMember` also runs on real ship removal (CampaignEventListener.kt:257) — confirm no
+   double-strip regression (idempotent by construction).
+3. Cost when `mods == null`: a few `ShipModLoader.get` calls via the provider cache. If logs show per-frame
+   hits, memoize the "empty ship" decision per member.id|variantId (reuse plan-cache TTL pattern).
+
+## Validation (build on Windows — cannot compile locally on this box)
+1. Install FullMetalSalvo on RIGHT child only → root + all modules highlighted in refit (already works; must not regress).
+2. LEAVE refit → fly around ≥1 campaign day → return to planet refit → root STILL highlighted + right child highlighted.
+3. Same ship → real combat → FullMetalSalvo fires on all 3 modules (root HM present → moduleMap populated at
+   `applyEffectsBeforeShipCreation`, ExoticaTechHM.java:511-519).
+4. Uninstall ALL modifications ship-wide → advance ≥1 frame → hullmod gone from root AND all modules.
+5. Child-owned exotic campaign effect: install on child → `advanceInCampaign` iterates wholeShipMods → effect fires.
+6. grep logs: no new `NULL mods => removed HM` on a ship that still has modifications anywhere.
+7. `git diff -w` clean; zero identity-based FleetMemberHierarchy calls in new code.
+
+## Constraints
+- NO identity-based FleetMemberHierarchy methods in new code (`getAllModules`/`getAllChildModules`/
+  `findRootVariant`/`getFleetContext`/`isOwnerOf`). At most `findRootVariantId` (stable string map).
+- Do NOT wipe pre-fix logs (control baseline): biglog / temp.log / temp2 / temp3 / temp4 / campaign / refit / combat-*.
+- Incremental: implement in the order above, re-read each site before editing, build + validate on Windows after each.
+- VariantTagProvider.kt is CRLF — keep line endings (no CRLF normalization noise in `git diff -w`).
