@@ -1,19 +1,19 @@
-# plan-cache-revised3.txt — VariantTagProvider cache "fix for good" (v3, CULMINATION)
+# plan-variant_cache-revision3.txt — VariantTagProvider cache "fix for good" (v3, CULMINATION)
 
 Culminates the cache effort. Predecessors stay on disk (plan-tracking plan in flight);
 this is the single source of truth going forward.
 
 ## 1. Supersession
-  plan-cache.txt (v0)                 -> Superseded. Eviction PASS, recovery FAIL.
-  plan-cache-revised.txt (v1)         -> Superseded. Path A disproven, Path B promoted.
-  plan-cache-revised2.txt (v2)        -> Superseded. Phase 2a retired, Path B primary.
-  VariantTagProvider-cache-plan.txt   -> Superseded. Abstract ideal; item 6 stale (see 4).
+  plan-variant_cache-revision0.txt (v0)                 -> Superseded. Eviction PASS, recovery FAIL.
+  plan-variant_cache-revision1.txt (v1)         -> Superseded. Path A disproven, Path B promoted.
+  plan-variant_cache-revision2.txt (v2)        -> Superseded. Phase 2a retired, Path B primary.
+  plan-variant_cache.txt   -> Superseded. Abstract ideal; item 6 stale (see 4).
 
 ## 2. Objective
 A per-(ship,module) variant-tag cache served by the write path: writes reach ALL
 FleetMemberAPI instances holding the same ship/root, purging stale mirrors at the source
 instead of recovering them on read. Cache-scoped only; off-topic findings moved to
-plan-sfhs-investigation.txt.
+plan-sfhs_investigation.txt.
 Contract: get() returns null only when there is genuinely no data for that variant (no
 hullmod / no exotica). For any multi-module ship our code runs on, children resolve their
 OWN ShipModifications (their durable tag, possibly empty), NEVER null. Never fabricate an
@@ -30,7 +30,7 @@ in-place empty ShipModifications() when null is the correct answer.
 - Refit/fleet screens are PURE READERS (see 4, stale item 6).
 
 ## 4. Evolution audit trail (incl. corrections)
-- Stale item 6: VariantTagProvider-cache-plan.txt said "no context bypasses it." That doc
+- Stale item 6: plan-variant_cache.txt said "no context bypasses it." That doc
   was last modified 2026-08-02 12:23 — BEFORE the TTL commit (16:52 same day). NO code gap
   exists: the bypass is intentional and predates the TTL.
   Mechanism (VariantTagProvider.kt:120-127): on a miss while
@@ -80,7 +80,7 @@ in-place empty ShipModifications() when null is the correct answer.
 ## 7. Not-done list (explicitly out of scope)
 - Path B/C read-recovery (superseded by write-side).
 - JAR rebuild/deploy (Windows-side environment).
-- SFHS child firing direction — moved to plan-sfhs-investigation.txt.
+- SFHS child firing direction — moved to plan-sfhs_investigation.txt.
 
 ## 8. Guardrails
 - No object churn in advance()/applyEffect loops; cached parse objects reused.

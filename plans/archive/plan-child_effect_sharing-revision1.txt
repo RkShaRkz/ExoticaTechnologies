@@ -28,7 +28,7 @@ verbatim historical breadcrumb; this revision only records the relationships.
     Root hullmod (ExoticaTechHM) must persist while ANY module has ANY Modification; whole-ship
     decision replaces member-only gating; full-tree strip when the whole ship is empty.
 
-- plan-sfhs.txt (IN PROGRESS, not completed)
+- plan-sfhs_investigation.txt (IN PROGRESS, not completed)
   Separate investigation into ShipFishingHookSystem child-module firing direction. Open at the
   time of this writing; kept active in /plans/, not archived.
 
@@ -37,7 +37,7 @@ verbatim historical breadcrumb; this revision only records the relationships.
   into two concrete tracks) and a parent of variant_cache and hullmod_installation.
 - variant_cache and hullmod_installation are the two implementation tracks that realize this
   umbrella's objective; both are complete at HEAD.
-- plan-sfhs is a sibling investigation, not an implementation of this umbrella's objective; it
+- plan-sfhs_investigation is a sibling investigation, not an implementation of this umbrella's objective; it
   is listed for completeness of the plan bookkeeping.
 
 ## Completion pointer

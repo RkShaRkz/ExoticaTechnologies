@@ -98,6 +98,6 @@ Phase 4 - VALIDATION (after each phase; rebuild via IntelliJ, run sessions):
   - Check git diff -w clean; no FleetMemberHierarchy references in new code.
 
 Next move:
-1. Get user approval to exit plan mode and write this to plan-cache.txt.
+1. Get user approval to exit plan mode and write this to plan-variant_cache-revision0.txt.
 2. Implement Phase 1 diagnostic; user runs the scenarios; return logs.
 3. Analyze Phase 1 output, then Phase 2, etc.

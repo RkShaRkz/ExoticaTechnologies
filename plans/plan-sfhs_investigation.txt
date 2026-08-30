@@ -1,4 +1,4 @@
-# plan-sfhs-investigation.txt — ShipFishingHookSystem: child-module firing direction
+# plan-sfhs_investigation.txt — ShipFishingHookSystem: child-module firing direction
 
 ## 1. Objective (verbatim)
 "look into why children modules are also firing it directly in front when they should

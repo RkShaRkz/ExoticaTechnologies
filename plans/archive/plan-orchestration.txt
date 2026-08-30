@@ -1,15 +1,15 @@
-# plan-orchestration.txt — why plan-cache-revised2 and plan-fix-hullmod-installation run together
+# plan-orchestration.txt — why plan-variant_cache-revision2 and plan-hullmod_installation run together
 
 Umbrella doc, drafted Aug 3 2026. Coordinates the two implementation plans:
-- plan-fix-hullmod-installation.txt  (campaign/refit: root hullmod persistence)
-- plan-cache-revised2.txt            (combat: child data resolution, Phases 2b + 3)
+- plan-hullmod_installation.txt  (campaign/refit: root hullmod persistence)
+- plan-variant_cache-revision2.txt            (combat: child data resolution, Phases 2b + 3)
 
 ## The shared root cause chain (one system, two visible symptoms)
 Exoticatech ships are multi-object systems: a ROOT FleetMemberAPI + child module FMAPIs whose data
 lives in per-variant tags. Every layer (refit highlight, campaign advance, combat stats) depends on
 the hullmod being present on the ROOT AND on the whole-ship data being readable. Two distinct bugs bite:
 
-1. HULLMOD STRIPPING (plan-fix-hullmod-installation)
+1. HULLMOD STRIPPING (plan-hullmod_installation)
    - addToFleetMember decides from the member's OWN mods only (ExoticaTechHM.java:86), and
      generateForFleetMember never returns null (ShipModFactory.kt:25-40), so the REMOVE branch fires
      whenever the member's own upgrades/exotics are empty — even if a child module owns the exotic.
@@ -19,9 +19,9 @@ the hullmod being present on the ROOT AND on the whole-ship data being readable.
      -> applyEffectsBeforeShipCreation never fires on the root -> moduleMap never populated
      (ExoticaTechHM.java:511-519) -> child stats cannot resolve to root.
 
-2. COMBAT TAG LOSS (plan-cache-revised2)
+2. COMBAT TAG LOSS (plan-variant_cache-revision2)
    - Engine renames REFIT child variants `_Start` -> `_0`/`_1` and the combat clones drop their tags
-     (proven in plan-cache-revised2, "NEW EVIDENCE"). ShipModLoader.get() then returns null for those
+     (proven in plan-variant_cache-revision2, "NEW EVIDENCE"). ShipModLoader.get() then returns null for those
      children -> thousands of NULLs -> child-owned exotics/upgrades never apply in combat.
    - Fix lives in VariantTagProvider (campaign-anchored recovery) + FleetMemberUtils helpers. The
      hullmod fix does NOT cure this; Path B is still required.
@@ -30,18 +30,18 @@ the hullmod being present on the ROOT AND on the whole-ship data being readable.
 - Complementary, not competing: fix #1 anchors the hullmod + enables moduleMap + campaign/refit;
   fix #2 recovers child DATA in combat. Fixing only one leaves the other symptom fully visible.
 - They contaminate each other's diagnostics: the combat child NULLs (#2) include cascade noise from the
-  missing root hullmod (#1). Fixing #1 first gives plan-cache's Phase 2b probe a clean baseline that
+  missing root hullmod (#1). Fixing #1 first gives plan-variant_cache's Phase 2b probe a clean baseline that
   measures the TRUE remaining gap (engine tag loss only).
 - Independent code surfaces: hullmod work touches ExoticaTechHM.java + ShipModLoader.kt; cache work
   touches VariantTagProvider.kt + FleetMemberUtils.kt. No overlap -> low merge risk.
 
 ## Execution order (approved)
-1. plan-fix-hullmod-installation (this run):
+1. plan-hullmod_installation (this run):
    a. ShipModLoader.getWholeShipMods + consolidateHullmod
    b. ExoticaTechHM.addToFleetMember (hoisted root resolution + consolidate gate + full-tree strip)
    c. ExoticaTechHM.advanceInCampaign (whole-ship-aware null path, root-anchored effects)
-2. Validate on Windows (plan-fix-hullmod-installation.txt "Validation").
-3. Then plan-cache-revised2 Phase 2b probe (fresh logs) -> Phase 3 Path B implementation.
+2. Validate on Windows (plan-hullmod_installation.txt "Validation").
+3. Then plan-variant_cache-revision2 Phase 2b probe (fresh logs) -> Phase 3 Path B implementation.
 
 ## FleetMemberHierarchy verdict
 - getRootVariant / getAllModules / getFleetContext / isOwnerOf = identity WeakHashMap + `===` -> BROKEN

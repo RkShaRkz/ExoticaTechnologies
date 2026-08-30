@@ -1,6 +1,6 @@
-# plan-fix-hullmod-installation.txt — root hullmod must persist while ANY module has ANY Modification
+# plan-hullmod_installation.txt — root hullmod must persist while ANY module has ANY Modification
 
-Drafted: Aug 3 2026. NOT yet implemented. Sibling of plan-cache-revised2.txt (no supersession).
+Drafted: Aug 3 2026. NOT yet implemented. Sibling of plan-variant_cache-revision2.txt (no supersession).
 
 ## Objective (user spec, verbatim intent)
 - Installing an Exotica on a CHILD module MUST add the hullmod (`ExoticaTechHM`, `HULLMOD_ID`) to the ROOT variant.
@@ -93,7 +93,7 @@ Drafted: Aug 3 2026. NOT yet implemented. Sibling of plan-cache-revised2.txt (no
 2. `removeFromFleetMember` also runs on real ship removal (CampaignEventListener.kt:257) — confirm no
    double-strip regression (idempotent by construction).
 3. Cost when `mods == null`: a few `ShipModLoader.get` calls via the provider cache. If logs show per-frame
-   hits, memoize the "empty ship" decision per member.id|variantId (reuse plan-cache TTL pattern).
+   hits, memoize the "empty ship" decision per member.id|variantId (reuse plan-variant_cache TTL pattern).
 
 ## Validation (build on Windows — cannot compile locally on this box)
 1. Install FullMetalSalvo on RIGHT child only → root + all modules highlighted in refit (already works; must not regress).

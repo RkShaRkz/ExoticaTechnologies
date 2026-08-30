@@ -1,6 +1,6 @@
-# plan-cache-revised2.txt — VariantTagProvider cache "fix for good" (v2)
+# plan-variant_cache-revision2.txt — VariantTagProvider cache "fix for good" (v2)
 
-Supersedes plan-cache-revised.txt; kept separate so the historical evolution of the idea
+Supersedes plan-variant_cache-revision1.txt; kept separate so the historical evolution of the idea
 is preserved. v1 -> v2 delta:
   - Phase 2a retired: ALREADY ANSWERED by refit.log.txt evidence (mod clone preserves child
     tags 1->1). v1's Phase-3 Path A hypothesis (Extensions.kt drops child tags) is DISPROVEN.
