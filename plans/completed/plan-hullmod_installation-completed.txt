@@ -1,0 +1,54 @@
+# Completed Plan: plan-hullmod_installation-completed.txt
+
+## Intent
+Fix root hullmod persistence so the ExoticaTechHM hullmod is present on the ROOT variant of a
+multi-module ship as long as ANY module holds ANY Modification (Exotic or Upgrade subclass), and
+is stripped from everywhere only when the whole ship is empty. Previously the root could lose
+its hullmod when a child module owned the exotic — leaving refit, campaign, and combat without
+the hullmod even though the exotic persisted.
+
+## Scope
+Systems affected: ExoticaTechHM (addToFleetMember, advanceInCampaign, applyEffectsBefore/Creator
+ship creation paths) and ShipModLoader (whole-ship modification reads). Touches campaign/refit
+(root hullmod persistence, highlight) and combat (moduleMap population + child stat resolution).
+Child-module FMAPI behavior intentionally unchanged.
+
+## Evolution
+- Implemented revision: plan-hullmod_installation.txt (single revision).
+- Borrowed elements from: plan-orchestration.txt (sequencing + shared root-cause rationale).
+- General idea followed from: plan-child_effect_sharing.txt (parent umbrella).
+
+## Outcome
+At HEAD the ship's root-hullmod decision is whole-ship-aware:
+- ShipModLoader.getWholeShipMods (variant-tree walk, @JvmStatic) returns all modifications
+  ship-wide, deduped by hullVariantId.
+- consolidateHullmod decides from own mods OR any whole-ship mod whose shouldApplyHullmod() is
+  true (covers Exotic and Upgrade subclasses).
+- addToFleetMember gates on consolidateHullmod; when the whole ship is empty it strips the
+  hullmod from the ENTIRE tree (root + modules + refit tree), resolving the pre-existing TODO.
+- advanceInCampaign no longer blindly strips on mods==null: it recomputes whole-ship mods and
+  only removes the hullmod when the ship is truly clean, and iterates whole-ship mods so
+  campaign effects fire for child-owned exotics.
+- applyEffectsBeforeShipCreation uses the whole-ship walk, so combat stats/effects apply on the
+  root and every module.
+- All diagnostic probes stripped (commits 0167b12, cf0e915, f610ce1).
+
+## Deviations
+- The plan allowed optional use of FleetMemberHierarchy.findRootVariantId as an aid; the shipped
+  Whole-ship computation relies on the variant-tree walk and stable variantId-based member lookup
+  rather than identity-based hierarchy calls, which break across fixVariant churn. Consistent
+  with the plan's constraint of no identity-based hierarchy calls in new code.
+- Whole-ship reads are memoized/deduped by hullVariantId to avoid double-firing campaign
+  effects when stock/REFIT/combat clones share an id.
+
+## Clarifying Implementation Details
+- Whole-ship data is computed by walking the variant tree (stationModules recursion); children
+  resolve their own per-variant tags, never a fabricated empty ShipModifications.
+- The empty-ship strip resolves the ExoticaTechHM TODO about removing the hullmod from
+  everywhere once the entire ship is empty of modifications.
+
+## Reflection
+Making the root hullmod a function of whole-ship state, not the individual member's own mods,
+was the correct architectural fix. It anchors the hullmod so moduleMap population and child stat
+resolution work in combat, and it composes with the cache track's write-side model. This plan is
+complete and closed.

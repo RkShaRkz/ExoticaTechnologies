@@ -1,0 +1,49 @@
+# plan-child_effect_sharing-revision1.txt — lineage record
+
+Revision 1 of the child-effect-sharing umbrella plan. This revision does not change the
+original objective (see plan-child_effect_sharing.txt, the base). It records the sub-plan
+lineage that grew out of the base effort, so the umbrella's history is traceable in one place.
+
+## Objective (unchanged from base)
+Fix exotic effect sharing to child modules on multi-module ships so FullMetalSalvo's +1000
+cargo/armor and afterimage highlight apply to children correctly. Each module (root AND
+children) should have its own ShipModifications stored as an Exotica tag on THAT variant;
+
+## Sub-plans of this umbrella
+The effort split into coordinated sub-efforts, each with its own plan family. All content is
+verbatim historical breadcrumb; this revision only records the relationships.
+
+- plan-orchestration.txt
+  Umbrella coordinating the two implementation sub-efforts below, drafted when both were in
+  flight. Documents the shared root-cause chain (hullmod stripping + combat tag loss) and why
+  fixing them together yields a clean baseline.
+
+  - plan-variant_cache.txt (base) + revision0..revision3
+    The VariantTagProvider per-ship cache rework. Base is the abstract goal ("the cache must
+    never cause a ship to read different mods than its current durable tags contain"). The
+    revisions trace eviction PASS / recovery FAIL (v0), Path A disproven / Path B promoted (v1),
+    and culminate at revision3 which records the shipped write-side design.
+
+  - plan-hullmod_installation.txt
+    Root hullmod (ExoticaTechHM) must persist while ANY module has ANY Modification; whole-ship
+    decision replaces member-only gating; full-tree strip when the whole ship is empty.
+
+- plan-sfhs.txt (IN PROGRESS, not completed)
+  Separate investigation into ShipFishingHookSystem child-module firing direction. Open at the
+  time of this writing; kept active in /plans/, not archived.
+
+## Relationship notes
+- plan-orchestration is a child of this umbrella (it renders the child-effect-sharing intent
+  into two concrete tracks) and a parent of variant_cache and hullmod_installation.
+- variant_cache and hullmod_installation are the two implementation tracks that realize this
+  umbrella's objective; both are complete at HEAD.
+- plan-sfhs is a sibling investigation, not an implementation of this umbrella's objective; it
+  is listed for completeness of the plan bookkeeping.
+
+## Completion pointer
+Completion, evolution, outcomes, and deviations for each completed sub-plan are recorded in
+the corresponding plan-*-completed.txt files under /plans/completed/:
+- plan-child_effect_sharing-completed.txt
+- plan-orchestration-completed.txt
+- plan-variant_cache-completed.txt
+- plan-hullmod_installation-completed.txt
