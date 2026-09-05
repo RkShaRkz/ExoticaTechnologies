@@ -1,0 +1,102 @@
+# plan-fleet_member_hierarchy_removal.txt — Remove FleetMemberHierarchy dead machinery, keep the string-map subsystem
+
+## 1. Objective
+Slim `FleetMemberHierarchy` down to the only members that are actually used by the
+rest of the codebase, deleting the dead identity-based machinery and the broken
+`ShipModLoader` fallback loop that referenced it. The object is **kept in place**
+(reduced standalone object), its 5 used methods are kept **verbatim** (a move, not
+a rewrite), and call sites are left untouched.
+
+## 2. Model (validated against source)
+Only **5 members** have external callers (12 call sites). They form a fully
+self-contained string-map subsystem reading only `variantIdToParentId`:
+
+| Member | Calls |
+|---|---|
+| `findRootVariantId(String)` | ExoticaTechHM:73, :271; ShipModLoader:128, :132 |
+| `isChildStats(stats)` | ExoticaTechHM:382 |
+| `refreshFleetCache(v)` | ExoticaTechHM:108-109 |
+| `reinitialize()` | ETModPlugin:67, :95 |
+| `getAllModules(stats)` | ShipModLoader:82 (loop being deleted) |
+
+Everything else (~12 identity-based/dead members + the `variantToParent`
+WeakHashMap) has **zero external callers** and is deleted with the slim.
+
+`findRootVariantId` (:181-193) and `isChildStats` (:138-141) are self-contained:
+they read only `variantIdToParentId` and call no other FleetMemberHierarchy member.
+So the string-map subsystem relocates cleanly with nothing else attached.
+
+## 3. Change set
+
+### 3.1 Slim `src/exoticatechnologies/util/FleetMemberHierarchy.kt` in place
+KEEP (unchanged bodies):
+- `variantIdToParentId` map
+- `isChildStats`
+- `findRootVariantId`
+- `getCacheSize`
+- `refreshFleetCache`
+- `refreshAllCaches`
+- `reinitialize`
+- `refreshCache`
+- `mapVariantTree` (minus the `variantToParent[child] = parent` write, see 3.3)
+- `logger`, `logError`, `logInfo`
+
+DELETE:
+- `variantToParent` WeakHashMap + its doc comment
+- `isRootModule` x2, `isChildModule` x2, `getRootModule` x2, `getAllChildModules` x2
+- `getAllModulesStatsFromSingleStats`, `getAllModules` x2
+- `findRootVariant(identity)`, `getFleetContext`, `isVariantInFleet`, `isOwnerOf`
+- `collectModuleMembers`, `collectModuleMembers2`
+
+IMPORTS:
+- Drop `java.util.WeakHashMap`, `com.fs.starfarer.api.fleet.FleetMemberAPI` (now unused)
+- Keep `CampaignFleetAPI`, `MutableShipStatsAPI`, `ShipVariantAPI`, `Global`,
+  `CampaignEventListener`, `checkRefitVariant`, `Logger`, `Level`
+
+### 3.2 Delete `ShipModLoader.getAllDataFromStatsAPI` fallback loop (:82-88)
+Removes the last reference to a deleted member (`FleetMemberHierarchy.getAllModules`).
+The comment at :80-81 documents that this loop "may collapse all module variants to
+rootFM"; the correct `collectModuleMods` tree walk right below (with the identical
+`allModsList` set) already covers every module variant. Simple deletion of a
+redundant/broken fallback, plus its now-unused `FleetMemberHierarchy` reference.
+
+### 3.3 The one behavioral change (explicit)
+In relocated `mapVariantTree`, the identity write `variantToParent[child] = parent`
+is dropped because the map is being deleted. Nothing a call site reads changes:
+`findRootVariantId`/`isChildStats`/`getCacheSize` read only `variantIdToParentId`,
+which is still populated and refreshed identically.
+
+### 3.4 No other call-site changes
+`findRootVariantId` (ExoticaTechHM:73, :271; ShipModLoader:128, :132),
+`isChildStats` (ExoticaTechHM:382), `refreshFleetCache` (ExoticaTechHM:108-109),
+`reinitialize` (ETModPlugin:67, :95) all keep targeting the unchanged kept methods.
+No signatures change, no rewiring.
+
+## 4. Explicitly rejected
+- **No `fuzzyVariantMatch`** — `isChildStats` keeps its exact map-membership semantics.
+- **No unit tests** — Starsector-API-coupled glue; the pure-code TDD boundary does not apply.
+- **`FleetMemberUtils.moduleMap` is NEVER touched** — hard invariant. Numerous
+  load-bearing references depend on it (`findMemberFromShip`, `findMemberForStats`,
+  `findFleetForVariant`, ExoticaTechHM:505). Left entirely alone.
+- **No move into FleetMemberUtils** — user chose "reduced standalone object kept in place".
+
+## 5. Two-step framing
+Step 1 (this plan): slim the class + delete the broken ShipModLoader loop, in one
+atomic change set. Step 2 (future, separate plan): revisit anything else. Slower,
+revert-safe.
+
+## 6. Validation
+- `grep -rn "FleetMemberHierarchy" src/` returns only the kept object file itself
+  in the util package (no external `.getAllModules`/identity-member references).
+- `grep -rn "getAllModules(stats)" src/` -> empty.
+- `grep -rn "moduleMap" src/` -> unchanged from baseline.
+- Windows build + savegame smoke: child-installed exotic -> refit highlight on all
+  modules, root hullmod persists, combat full-salvo fires on all modules, full
+  uninstall strips everywhere.
+- If the ShipModLoader:82 deletion regresses anything, revert that single hunk
+  (user-declared revert path).
+
+## 7. Deliverables
+- Slimmed `FleetMemberHierarchy.kt` (string-map subsystem only).
+- `ShipModLoader.kt` without the redundant `getAllModules` fallback loop.
+- Plan closes when: grep clean, Windows build passes, savegame smoke test intact.
