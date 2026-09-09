@@ -77,22 +77,11 @@ class ShipModLoader {
     private fun getAllDataFromStatsAPI(stats: MutableShipStatsAPI): List<ShipModifications> {
         val allModsList = mutableSetOf<ShipModifications>()
 
-        // FleetMemberHierarchy cannot connect child-to-child, so it may collapse
-        // all module variants to rootFM. Keep this loop as a fallback.
-        val allShipModulesFromStats = FleetMemberHierarchy.getAllModules(stats)
-        for (someModule in allShipModulesFromStats) {
-            val moduleMods = get(someModule, someModule.variant)
-            moduleMods?.let {
-                allModsList.add(it)
-            }
-        }
-
-        // Walk the variant tree to catch all module variants — FM hierarchy
-        // collapses child modules to rootFM, so sibling modules are missed.
-        val rootFM = FleetMemberUtils.findMemberForStats(stats)
-        if (rootFM != null) {
-            collectModuleMods(rootFM, rootFM.variant, allModsList)
-        }
+        // Collect the root FM's own mods, THEN walk the variant tree for every module variant
+        // (sibling modules and child-module data live on the child variants themselves).
+        val rootFM = FleetMemberUtils.findMemberForStats(stats) ?: return allModsList.toList()
+        get(rootFM, rootFM.variant)?.let { allModsList.add(it) }
+        collectModuleMods(rootFM, rootFM.variant, allModsList)
 
         return allModsList.toList()
     }

@@ -29,7 +29,7 @@ So the string-map subsystem relocates cleanly with nothing else attached.
 ## 3. Change set
 
 ### 3.1 Slim `src/exoticatechnologies/util/FleetMemberHierarchy.kt` in place
-KEEP (unchanged bodies):
+KEEP:
 - `variantIdToParentId` map
 - `isChildStats`
 - `findRootVariantId`
@@ -39,7 +39,7 @@ KEEP (unchanged bodies):
 - `reinitialize`
 - `refreshCache`
 - `mapVariantTree` (minus the `variantToParent[child] = parent` write, see 3.3)
-- `logger`, `logError`, `logInfo`
+- `logger`, `logError`
 
 DELETE:
 - `variantToParent` WeakHashMap + its doc comment
@@ -47,24 +47,70 @@ DELETE:
 - `getAllModulesStatsFromSingleStats`, `getAllModules` x2
 - `findRootVariant(identity)`, `getFleetContext`, `isVariantInFleet`, `isOwnerOf`
 - `collectModuleMembers`, `collectModuleMembers2`
+- `logInfo` + its only call sites (the `--> refreshCache()/refreshAllCaches() <--` INFO
+  enter/exit traces) — pure noise suppression, see 3.5
+
+NOT "verbatim" (deviations from the original plan text, see 3.3/3.5):
+- `reinitialize()`'s body drops `variantToParent.clear()` (the map no longer exists) and its
+  doc comment is rewritten for the string-map-only cache.
+- `variantIdToParentId`'s doc comment is rewritten (it referenced `variantToParent`).
+- Every remaining doc comment is rewritten as first-time-reader documentation of what the
+  class does and why (string-key cache for "is this a module?" / "what's the root?"), not a
+  record of what was removed.
 
 IMPORTS:
 - Drop `java.util.WeakHashMap`, `com.fs.starfarer.api.fleet.FleetMemberAPI` (now unused)
 - Keep `CampaignFleetAPI`, `MutableShipStatsAPI`, `ShipVariantAPI`, `Global`,
   `CampaignEventListener`, `checkRefitVariant`, `Logger`, `Level`
 
-### 3.2 Delete `ShipModLoader.getAllDataFromStatsAPI` fallback loop (:82-88)
+### 3.2 Replace `ShipModLoader.getAllDataFromStatsAPI` fallback loop (:82-88)
 Removes the last reference to a deleted member (`FleetMemberHierarchy.getAllModules`).
-The comment at :80-81 documents that this loop "may collapse all module variants to
-rootFM"; the correct `collectModuleMods` tree walk right below (with the identical
-`allModsList` set) already covers every module variant. Simple deletion of a
-redundant/broken fallback, plus its now-unused `FleetMemberHierarchy` reference.
+
+**Regression discovered in testing (do NOT simply delete):** the `getAllModules(stats)`
+loop was NOT a redundant fallback — it was the only reader of the ROOT FM's own
+`ShipModifications`. Its replacement, `collectModuleMods(rootFM, rootFM.variant, ...)`,
+walks only `stationModules` children and never reads the root's own mods. Deleting the
+loop outright made `getAllForStats`-fed paths (`applyEffectsAfterShipCreation:619`,
+`applyEffectsToFighterSpawnedByShip:703`, `advanceInCombat:424` in ExoticaTechHM.java)
+miss root-owned exotics, so the after-creation highlight (`applyToShip`) never fired on
+any module while `applyEffectsBeforeShipCreation`'s `getWholeShipMods` (which DOES
+include the root) still applied the stats. A/B test isolated the regression to this
+exact hunk (FleetMemberHierarchy kept-members are semantically identical).
+
+**Fix (applied):** collect the root FM's own mods explicitly before the child walk:
+
+```kotlin
+val rootFM = FleetMemberUtils.findMemberForStats(stats) ?: return allModsList.toList()
+get(rootFM, rootFM.variant)?.let { allModsList.add(it) }
+collectModuleMods(rootFM, rootFM.variant, allModsList)
+```
+
+This preserves the original read semantics (root + children) and also fixes the
+single-module-ship case (`stationModules` empty previously returned `[]`). No identity
+machinery is re-introduced.
 
 ### 3.3 The one behavioral change (explicit)
 In relocated `mapVariantTree`, the identity write `variantToParent[child] = parent`
 is dropped because the map is being deleted. Nothing a call site reads changes:
 `findRootVariantId`/`isChildStats`/`getCacheSize` read only `variantIdToParentId`,
 which is still populated and refreshed identically.
+
+### 3.5 Logging hygiene (logspam.txt — verified root cause)
+The `logspam.txt` file shows a per-frame ERROR flood from FleetMemberHierarchy during combat
+against enemy modular ships (HIVER burrower/deathfly/aphid/queen, hullVariantIds `18ba18c_*`):
+
+- Source: `getFleetContext()`'s `logError("Fleet context missing for member: ...")`
+  (old FleetMemberHierarchy.kt:292). Enemy child-module members never resolve into
+  `CampaignEventListener.activeFleets`, so it logged every poll; the old doc comment already
+  called it a benign consequence of variant instance churn.
+- `getFleetContext` is in the DELETE set, and none of the 5 kept methods call it (verified:
+  the identity-based members that did — `isRootModule`/`isChildModule`/`getRootModule`/
+  `getAllModules` — have zero external callers; `getAllModules(stats)` survived only at
+  ShipModLoader:82, deleted in 3.2). The spam class is **removed**, not silenced.
+- The retained `reinitialize()` `logError` guard fires at most once per game load and only
+  when `Global.getSector()` is null; the INFO enter/exit traces in `refreshAllCaches`/
+  `refreshCache` are dropped entirely (user decision) so the slimmed object emits **zero**
+  log output in normal play.
 
 ### 3.4 No other call-site changes
 `findRootVariantId` (ExoticaTechHM:73, :271; ShipModLoader:128, :132),
@@ -86,17 +132,23 @@ atomic change set. Step 2 (future, separate plan): revisit anything else. Slower
 revert-safe.
 
 ## 6. Validation
-- `grep -rn "FleetMemberHierarchy" src/` returns only the kept object file itself
-  in the util package (no external `.getAllModules`/identity-member references).
+- `grep -rn "FleetMemberHierarchy" src/` returns only the kept calls (`findRootVariantId`,
+  `refreshFleetCache`, `isChildStats`, `reinitialize`) plus imports in ETModPlugin /
+  ShipModLoader (no external `.getAllModules`/identity-member references).
 - `grep -rn "getAllModules(stats)" src/` -> empty.
+- `grep -rn "Fleet context missing\|getFleetContext" src/` -> empty (spam class gone).
+- `grep -rn "variantToParent" src/` -> empty.
 - `grep -rn "moduleMap" src/` -> unchanged from baseline.
 - Windows build + savegame smoke: child-installed exotic -> refit highlight on all
   modules, root hullmod persists, combat full-salvo fires on all modules, full
   uninstall strips everywhere.
-- If the ShipModLoader:82 deletion regresses anything, revert that single hunk
-  (user-declared revert path).
+- Log smoke (logspam.txt scenario): combat vs the HIVER modular fleet emits **no**
+  FleetMemberHierarchy ERROR/INFO lines.
+- If anything else regresses, revert that single hunk (user-declared revert path). The
+  3.2 regression WAS found in-game and FIXED in place (root read restored) — see 3.2.
 
 ## 7. Deliverables
 - Slimmed `FleetMemberHierarchy.kt` (string-map subsystem only).
-- `ShipModLoader.kt` without the redundant `getAllModules` fallback loop.
+- `ShipModLoader.kt` with the `getAllModules` fallback loop replaced by an explicit
+  root-mod read + child tree walk (see 3.2).
 - Plan closes when: grep clean, Windows build passes, savegame smoke test intact.

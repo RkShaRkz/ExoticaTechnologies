@@ -104,7 +104,7 @@ public class ExoticaTechHM extends BaseHullMod {
             // Create REFIT clones of the fixed variants (clones inherit hullmods from originals).
             ExtensionsKt.fixVariant(member);
 
-            // Refresh hierarchy cache so getAllModules can find the new REFIT clone variants.
+            // Re-map the hierarchy cache so the new REFIT clone variants get their parent links.
             FleetMemberHierarchy.refreshFleetCache(rootMember.getVariant());
             FleetMemberHierarchy.refreshFleetCache(RefitButtonAdderKt.checkRefitVariant(rootMember));
 
