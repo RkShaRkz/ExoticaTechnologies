@@ -456,8 +456,10 @@ class RefitButtonAdder : EveryFrameScript {
  * [this.variant] for the child. After [exoticatechnologies.util.fixVariant] replaces
  * child variants *inside* the root variant tree with REFIT clones,
  * [FleetMemberAPI.variant] for child members still points to the original (stock)
- * variant. FleetMemberHierarchy identity-based lookups ([WeakHashMap]) may fail
- * for these children until the caches are refreshed with [reinitialize].
+ * variant. ModuleVariantHierarchy is keyed by stable hullVariantId strings — it does
+ * not break the way the removed identity-based cache did — but the new REFIT clones
+ * carry fresh hullVariantIds whose parent links are not registered until the caches
+ * are refreshed with `reinitialize` / `refreshFleetCache`.
  */
 fun FleetMemberAPI.checkRefitVariant(): ShipVariantAPI {
     if (RefitButtonAdder.member == this) {

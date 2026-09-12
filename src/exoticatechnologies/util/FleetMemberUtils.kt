@@ -42,7 +42,7 @@ object FleetMemberUtils {
         // (the module's own leaf FM), so getAllDataFromStatsAPI's variant-tree walk starts
         // from a leaf variant, never discovers sibling/root modules, and module-owned
         // exotics get skipped.
-        // Synthetic statsForOpCosts objects (propagateFromVariantTree, collectModuleMembers2)
+        // Synthetic statsForOpCosts objects (from propagateFromVariantTree)
         // have no entity and bypass this branch unchanged.
         if (stats.entity is ShipAPI) {
             val ship = stats.entity as ShipAPI
@@ -258,7 +258,7 @@ object FleetMemberUtils {
     /**
      * Finds the [ShipVariantAPI] whose REFIT variant's hullVariantId equals [targetVariantId],
      * scanning the member's own fleet first, then falling back to the active campaign fleets.
-     * Used to resolve a known root variant id (e.g. from [FleetMemberHierarchy.findRootVariantId])
+     * Used to resolve a known root variant id (e.g. from [ModuleVariantHierarchy.findRootVariantId])
      * back to a concrete variant instance.
      *
      * @param member the [FleetMemberAPI] to anchor the fleet scan on

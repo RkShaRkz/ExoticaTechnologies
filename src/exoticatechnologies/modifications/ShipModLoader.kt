@@ -6,8 +6,8 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
 import exoticatechnologies.refit.checkRefitVariant
-import exoticatechnologies.util.FleetMemberHierarchy
 import exoticatechnologies.util.FleetMemberUtils
+import exoticatechnologies.util.ModuleVariantHierarchy
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
 import exoticatechnologies.util.forEachModuleVariant
@@ -114,11 +114,11 @@ class ShipModLoader {
 
     // A variant that owns station modules IS the root of its tree. A leaf is either a
     // single-module ship (no parent -> itself) or a child module -> climb to the root via
-    // stable hullVariantId keys (FleetMemberHierarchy.findRootVariantId), NOT the identity
+    // stable hullVariantId keys (ModuleVariantHierarchy.findRootVariantId), NOT the identity
     // map, which breaks after fixVariant churn.
     private fun resolveRootVariant(member: FleetMemberAPI, variant: ShipVariantAPI): ShipVariantAPI {
         if (variant.stationModules.isNotEmpty()) return variant
-        val rootVariantId = FleetMemberHierarchy.findRootVariantId(variant.hullVariantId) ?: return variant
+        val rootVariantId = ModuleVariantHierarchy.findRootVariantId(variant.hullVariantId) ?: return variant
         return FleetMemberUtils.findRootVariantByHullId(member, rootVariantId) ?: variant
     }
 

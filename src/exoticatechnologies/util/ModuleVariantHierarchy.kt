@@ -35,14 +35,19 @@ import exoticatechnologies.refit.checkRefitVariant
  * every game load / new game (called from ETModPlugin). [refreshFleetCache] re-maps a single
  * variant tree after refit operations have replaced variants. Nothing else writes the map.
  */
-object FleetMemberHierarchy {
+object ModuleVariantHierarchy {
 
-    private val logger: Logger = Logger.getLogger(FleetMemberHierarchy::class.java)
+    private val logger: Logger = Logger.getLogger(ModuleVariantHierarchy::class.java)
 
     /**
      * Child module variant hullVariantId → its parent variant's hullVariantId. One entry per
      * child module (the root appears only as a key target, never as a key itself). Populated
      * by [mapVariantTree].
+     *
+     * Keyed by the stable hullVariantId string (not variant object identity) so this map is
+     * safe to query from [MutableShipStatsAPI]-based contexts, where the concrete
+     * [ShipVariantAPI] instance may differ from the one that populated the map (e.g. a REFIT
+     * clone created while the refit screen is open).
      */
     private val variantIdToParentId = HashMap<String, String>()
 
@@ -68,6 +73,13 @@ object FleetMemberHierarchy {
      * Callers use this to anchor a whole-ship decision to the root member when they only hold a
      * child's variant — e.g. ExoticaTechHM root-hullmod resolution and ShipModLoader whole-ship
      * reads. The walk climbs parent links until no parent exists; a cycle guard stops runaway loops.
+     *
+     * ## Safe across fixVariant churn
+     *
+     * Walks the string-keyed [variantIdToParentId] (never object identity): hullVariantId strings
+     * are stable across variant instance re-creation (stock → REFIT clones), so this works even
+     * after [exoticatechnologies.util.fixVariant]/[exoticatechnologies.util.fixModuleVariants]
+     * replace variant objects in the root's station module tree.
      */
     @JvmStatic fun findRootVariantId(childVariantId: String): String? {
         var current = childVariantId
@@ -106,6 +118,14 @@ object FleetMemberHierarchy {
      *
      * Called at game start and on every game load (ETModPlugin). Requires a live sector; if
      * none exists yet the cache is left empty (it is rebuilt on the next load).
+     *
+     * ## Why clearing is needed
+     *
+     * String keys survive variant instance churn, so entries do not go stale the way object
+     * identity does — but a rebuilt/retrieved refit tree can leave parent links pointing at
+     * variants that no longer belong to any tracked fleet. Clearing first guarantees the map
+     * reflects exactly the currently tracked fleets, and re-maps freshly after any
+     * [exoticatechnologies.util.fixVariant]-style operation that replaced variants.
      */
     @JvmStatic fun reinitialize() {
         variantIdToParentId.clear()

@@ -69,8 +69,8 @@ public class ExoticaTechHM extends BaseHullMod {
         // Root resolution is hoisted ABOVE the apply/remove decision: when this member is the root
         // of a module ship, the hullmod must be decided from the WHOLE ship's modifications, not this
         // member's own (its own variant carries no tags when the exotic lives on a child module).
-        // FleetMemberHierarchy uses stable hullVariantId strings; returns null for root/single-module.
-        String rootVariantId = FleetMemberHierarchy.findRootVariantId(variant.getHullVariantId());
+        // ModuleVariantHierarchy uses stable hullVariantId strings; returns null for root/single-module.
+        String rootVariantId = ModuleVariantHierarchy.findRootVariantId(variant.getHullVariantId());
         FleetMemberAPI rootMember = member;
         if (rootVariantId != null) {
             FleetMemberAPI foundRoot = findMemberByVariantId(member, rootVariantId);
@@ -105,8 +105,8 @@ public class ExoticaTechHM extends BaseHullMod {
             ExtensionsKt.fixVariant(member);
 
             // Re-map the hierarchy cache so the new REFIT clone variants get their parent links.
-            FleetMemberHierarchy.refreshFleetCache(rootMember.getVariant());
-            FleetMemberHierarchy.refreshFleetCache(RefitButtonAdderKt.checkRefitVariant(rootMember));
+            ModuleVariantHierarchy.refreshFleetCache(rootMember.getVariant());
+            ModuleVariantHierarchy.refreshFleetCache(RefitButtonAdderKt.checkRefitVariant(rootMember));
 
             // Ensure the refit display variant has the hullmod for highlight to appear.
             ShipVariantAPI refitVariant = RefitButtonAdderKt.checkRefitVariant(member);
@@ -268,7 +268,7 @@ public class ExoticaTechHM extends BaseHullMod {
         // A child module member must NOT run whole-ship campaign effects — the ROOT runs them once.
         // It must also keep its own hullmod while the ship still has modifications anywhere.
         boolean isRoot = member.getVariant().getStationModules().isEmpty()
-            ? FleetMemberHierarchy.findRootVariantId(member.getVariant().getHullVariantId()) == null
+            ? ModuleVariantHierarchy.findRootVariantId(member.getVariant().getHullVariantId()) == null
             : true;
         if (!isRoot) {
             if (mods == null) {
@@ -379,7 +379,7 @@ public class ExoticaTechHM extends BaseHullMod {
         boolean modAppliesToModules = mod.shouldAffectModule(stats);
         boolean modSharesEffectsWithAllModules = mod.shouldShareEffectToOtherModules(null, null);
         boolean modShouldAffectModulesToShareEffectsToOtherModules = mod.shouldAffectModulesToShareEffectsToOtherModules();
-        boolean isModuleStats = FleetMemberHierarchy.isChildStats(stats);
+        boolean isModuleStats = ModuleVariantHierarchy.isChildStats(stats);
 
         boolean skip = false;
 
@@ -512,7 +512,7 @@ public class ExoticaTechHM extends BaseHullMod {
         ShipModifications mods = ShipModLoader.get(member, stats.getVariant());
 
         // Whole-ship modifications via the variant-tree walk (getWholeShipMods), which resolves
-        // child modules to the root FM's tree — FleetMemberHierarchy cannot connect child-to-child.
+        // child modules to the root FM's tree — ModuleVariantHierarchy cannot connect child-to-child.
         List<ShipModifications> wholeShipsMods = ShipModLoader.getWholeShipMods(member, stats.getVariant());
 
         // combined guard: strip whenever NO module anywhere on the ship has any exotic data.
