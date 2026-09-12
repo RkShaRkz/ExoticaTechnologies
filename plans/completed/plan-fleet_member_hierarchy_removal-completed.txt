@@ -1,0 +1,95 @@
+# Completed Plan: plan-fleet_member_hierarchy_removal-completed.txt
+
+## Intent
+Slim the `FleetMemberHierarchy` helper down to the only members the rest of the
+codebase actually uses (the module variant-tree string-map subsystem), delete the
+dead identity-based machinery it carried, and remove the broken `ShipModLoader`
+fallback loop that referenced a deleted member. Secondary goal: kill the per-frame
+ERROR log spam (`getFleetContext`'s "Fleet context missing for member") that the
+identity machinery emitted against enemy modular fleets in combat.
+
+## Scope
+Systems affected: `FleetMemberHierarchy.kt` (source of the slim), `ShipModLoader.kt`
+(the fallback loop + root/child mod reads), plus the call/comment surface of
+`ExoticaTechHM.java`, `ETModPlugin.java`, `FleetMemberUtils.kt`, and
+`RefitButtonAdder.kt`. `FleetMemberUtils.moduleMap` was a hard invariant and was
+NEVER touched.
+
+## Evolution
+- Implemented revision: plan-fleet_member_hierarchy_removal-revision1.txt (rename +
+  comment repair, later decision).
+- General idea followed from: plan-fleet_member_hierarchy_removal.txt (base).
+
+The effort landed in two commits. Part 1 (744c930) did the slim itself plus the
+ShipModLoader fix and the log-spam removal. Part 2 (939e044) renamed the slimmed
+object to `ModuleVariantHierarchy` and repaired every comment the slim had touched,
+per `.opencode-brain/RULES.md` §2 (update stale comments in place, never delete;
+restore rationale that was dropped but still true; leave deleted the comments whose
+subject was removed). The rename and the comment-repair revision were decided AFTER
+the base plan was written, so revision1 records them as a separate file rather than
+editing the original plan doc.
+
+## Outcome
+Both parts are at HEAD on branch fix-rework2:
+- `FleetMemberHierarchy` is slimmed to the kept string-map subsystem: the
+  `variantIdToParentId` map and five used members (`findRootVariantId`,
+  `isChildStats`, `refreshFleetCache`, `refreshAllCaches`, `reinitialize`). All
+  identity-based/dead members (`variantToParent`, `getFleetContext`,
+  `isVariantInFleet`, `isOwnerOf`, `collectModuleMembers(2)`, `getAllModules`,
+  `findRootVariant`, `isRootModule`, `isChildModule`, `getRootModule`,
+  `getAllChildModules`, `getAllModulesStatsFromSingleStats`, `getCacheSize`) are
+  gone, and zero external references to them remain in src.
+- The object is renamed file-and-symbol to `ModuleVariantHierarchy` — the name now
+  describes what it holds: a module variant-tree map keyed by stable hullVariantId
+  strings.
+- The `ShipModLoader.getAllDataFromStatsAPI` fallback loop is replaced by an
+  explicit root-FM mod read + child-tree walk (see Deviations — this was forced).
+- The log-spam class (`getFleetContext`) is removed, not silenced: the slimmed
+  object emits zero log output in normal play.
+- Verification closes the plan: `grep -rn "FleetMemberHierarchy" src/` empty; only
+  historical log files (logspam.txt) retain the old name. Windows build passes;
+  savegame smoke (child-installed exotic → refit highlight on all modules, root
+  hullmod persists, combat full-salvo on all modules, full uninstall strips
+  everywhere) passes.
+
+## Deviations
+- **ShipModLoader regression (744c930, plan §3.2):** the base plan asserted the
+  `getAllModules(stats)` loop was a redundant fallback and could be deleted. In-game
+  testing proved otherwise — it was the ONLY reader of the root FM's own
+  `ShipModifications`, and deleting it made the after-creation highlight never fire
+  on any module while pre-creation stats still applied. The A/B-testing regression
+  was fixed in place by reading the root FM's own mods before the child walk; this
+  also fixed the single-module-ship `[]` case. Documented as the reason the plan is
+  closed as "fixed in the field", not "deleted the loop outright".
+- **Rename (939e044, revision1):** a rename decision postdated and was never part of
+  the base plan — the user-requested follow-up that renamed the still-useful object
+  so its name no longer overstates what it does. filed as revision1, not an in-place
+  plan edit (per the revision-file directive).
+- **Comment repair (revision1):** the slim had stripped KDoc rationale that the
+  retained members still rely on. Revision1 restored the "string keys survive
+  fixVariant churn / MutableShipStatsAPI contexts" rationale to `variantIdToParentId`,
+  `findRootVariantId`, and `reinitialize`, and rewrote the stale `RefitButtonAdder`
+  and `FleetMemberUtils` comments that still referenced removed machinery.
+- **No AGENTS.md change:** the comment-preservation law lives only in
+  `.opencode-brain/RULES.md` §2 (user decision).
+
+## Clarifying Implementation Details
+- The retained `reinitialize()` guards `Global.getSector() == null` → empty cache,
+  so it fires at most once per game load; the INFO enter/exit traces in
+  `refreshAllCaches`/`refreshCache` were dropped so nothing logs in normal play.
+- `findRootVariantId` walks the string-keyed `variantIdToParentId` only (never
+  object identity), so it stays correct across stock → REFIT → combat variant
+  instance re-creation.
+- `FleetMemberUtils` helpers (`findMemberForStats`, `findMemberFromShip`,
+  `findFleetForVariant`, `moduleMap`) were never modified — hard invariant.
+
+## Reflection
+The plan was well-scoped: reducing the object to its live call surface plus killing
+the spam class did exactly what it set out to, and the one place the paper plan was
+wrong (the ShipModLoader loop) was caught by the in-game smoke test and corrected on
+the spot, which is why the plan's revert path ("revert that single hunk") was never
+needed. The post-hoc rename + comment repair (revision1) closed the only follow-up
+the slim left open: hunting and fixing every comment that still assumed the removed
+machinery. A separate, formal code review of the 744c930 ShipModLoader regression
+hunk is scheduled outside this plan; it does not gate closure, whose criteria
+(grep clean, Windows build passes, savegame smoke intact) are all met.
