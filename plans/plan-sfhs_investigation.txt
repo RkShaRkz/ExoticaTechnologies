@@ -1,0 +1,50 @@
+# plan-sfhs_investigation.txt — ShipFishingHookSystem: child-module firing direction
+
+## 1. Objective (verbatim)
+"look into why children modules are also firing it directly in front when they should
+perform a 360-degree sweep and fire in the best direction"
+
+## 2. Hypothesis + branch findings
+Hypothesis: may have been fixed on the branch we branched out from, before the fix-rework
+branch, with fix-rework2 branching off from there.
+
+Verified (git):
+- ShipFishingHookSystem.kt does NOT exist on develop. The whole file lineage
+  (a812130 initial -> 55eb9e6) lives on the fix-rework lineage, sourced from branch
+  ship-repulsor-system.
+- The 360-degree sweep commit 55eb9e6 ("Added sweeping left-to-right or right-to-left on
+  random...") IS an ancestor of BOTH fix-rework and fix-rework2. The sweep machinery is
+  already in current ancestry. Hypothesis REFUTED for "missing sweep" — the sweep exists.
+
+## 3. Root-cause candidate (the actual gap)
+activationAngle is a DEAD ASSIGNMENT:
+  declared line 119 (private var activationAngle = ship.facing)
+  written  line 202 (activationAngle = evaluationResult.angle)
+  read     NOWHERE (grep confirms only those two lines).
+ChildModuleAimingEvaluator sweeps 360 degrees (sweepingStep) and returns the best angle,
+which is stored and then DISCARDED. onActivate()/showVisualFlair() pulls toward
+getFacingToTarget() — the ship's CURRENT AI target (typically ahead), not the best sweep
+direction. Hence "children fire directly in front."
+
+## 4. Investigation steps
+1. Confirm intended consumption: should activationAngle drive the showVisualFlair() arc
+   direction + pull direction for child (non-root) modules? (Root is forced straight ahead
+   per the showVisualFlair comment.)
+2. Verify current-target direction diverges from sweep result observably — i.e. the gap is
+   real, not cosmetic.
+3. Decide fix shape: wire activationAngle into the child branch of showVisualFlair()/pull;
+   or replace getFacingToTarget() with activationAngle for children.
+4. Pure-code boundary: extract the sweep scoring into a decoupled, unit-testable function
+   (TDD boundary) so angle selection is provable; wire it in.
+
+## 5. Verification approach
+- Unit tests for the extracted angle-selection logic (pure, no engine deps).
+- Baseline: post-strip Windows build; reproduce child firing straight ahead with a clear
+  off-angle target nearby; after fix: fires toward the sweep-picked angle.
+- Re-run with JAR rebuilt (Windows-side).
+
+## 6. Deliverables
+- Confirmed root cause (activationAngle never consumed) or corrected diagnosis.
+- Extracted pure evaluator + tests.
+- Fixed firing direction at activation.
+- Plan closes when smoke test shows children firing at the sweep-picked angle.

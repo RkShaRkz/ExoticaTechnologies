@@ -1,0 +1,138 @@
+# plan-effect_sharing_eligibility.txt
+
+## Intent
+A sharing exotic (one whose `shouldShareEffectToOtherModules()` returns `true`, e.g.
+`FullMetalSalvo` on a multi-module ship) currently applies its shared effects to every other
+module unconditionally. It never asks whether the **target** module could actually hold that
+modification. This is a design decision: should shared effects only reach modules that would
+be *eligible* to install the mod — meaning they pass both its mutual-exclusion **tags** and
+its install **prerequisite conditions**?
+
+Status: **decision deferred (leave as-is / "bonus" for now).** This plan records the
+investigation, the proposed gate, and its consequences. **No implementation today.**
+
+Motivating example: on the dorn-dhe class (`ork_superdread_main`, ship `d74209`) a
+`SpooledFeeders` is installed on child modules `WS0028` and `WS0029`, while the root holds
+`FullMetalSalvo`. Both carry the same conflict tag `weaponFeeders`, so they are mutually
+exclusive *per module*. And yet `FullMetalSalvo.shouldShareEffectToOtherModules()=true` means
+its shared effects (SalvoActivator subsystem, weapon RoF mults, afterimage) currently land on
+`WS0028`/`WS0029` too — the very modules that installed a competing `weaponFeeders` mod.
+**SpooledFeeders vs FullMetalSalvo is one small instance of a general rule:** sharing should
+not grant a mod to modules that fail the requirements it would need to be installed on.
+
+## Verified background (source of truth)
+
+### The install gate already exists and is UI-proven
+A `Modification` is installable iff `canApply(member, variant, mods)` (`Modification.kt:254-259`):
+
+```
+condCheck && tagsCheck && varCheck
+  condCheck = checkConditions(member, mods)   // prerequisite conditions
+  tagsCheck = checkTags(member, mods, tags)   // mutual-exclusion tags
+  varCheck  = canApplyToVariant(variant)
+```
+
+This is exactly the predicate the shop UI uses before enabling the install button:
+`ExoticMethodsUIPlugin.kt:55` gates on `!exotic.canApply(member, mods)`.
+
+- **Conditions** (`checkConditions`, `Modification.kt:89-110`): each `Condition.compare(...)`
+  against the module's variant. Conditions can be conjunct (all must pass) or disjunct with a
+  `minConditionsNeeded` floor. E.g. `SpooledFeeders` is `minConditionsNeeded:1` over
+  `equippedBallistics >= 3` OR `equippedEnergy >= 3` (`data/config/exotics.json:7-14`). Other
+  prerequisite examples: `PhasefieldEngine` requires `hasPhase`, `TierIIIDriveSystem` requires
+  `cargoSpace >= 400`, `HackedMissileForge` requires `missileSlots >= 1`, `PhasedFighterTether`
+  / `HyperspecLPC` require `launchBays >= 1` / `> 1`.
+- **Tags** (`checkTags`, `Modification.kt:81-87`): returns false when any mod already on the
+  module shares a tag with the incoming mod, via `mods.getModsThatConflict(tags)`
+  (`ShipModifications.kt:313-322` → `ETExotics.getConflicts` / `ETUpgrades.getConflicts`, tag
+  intersection). This is the per-module mutual exclusivity mechanism.
+
+### The sharing path never consults the target module's eligibility
+`ExoticaTechHM.shouldSkipModification(...)` decides whether a modification's callbacks run on a
+given ship/module. Two overloads:
+- `ShipAPI` variant — `ExoticaTechHM.java:324`
+- `MutableShipStatsAPI` variant — `ExoticaTechHM.java:373`
+
+Both decide via ownership + the sharing flags only:
+- `!presentSomewhereOnShip` → skip
+- `thisModuleOwnsIt` → always apply
+- else (owner is another module, sharing applies) → apply per `shouldShareEffectToOtherModules`
+  and `shouldAffectModulesToShareEffectsToOtherModules()`
+
+**Neither overload checks whether the target module passes `canApply` for the sharing mod.**
+That is the gap this plan addresses.
+
+All 8 callsites already hold the target module's `FleetMemberAPI member` and its own
+`ShipModifications` in scope (their `mods` variable resolves via `ShipModLoader.get(member,
+variant)`), so the inputs needed to evaluate the target module's eligibility are available
+with no new plumbing.
+
+### Sharing mods currently in the blast radius
+Mods whose `shouldShareEffectToOtherModules() = true` (grep of `Modification` subclasses):
+- `FullMetalSalvo` (tag `weaponFeeders`)
+- `AlphaSubcore`, `DaemonCore` (shared tag `aiCore`)
+- `TierIIIDriveSystem` (condition `cargoSpace >= 400`)
+- `ReactiveDamperField` (condition `globalMemory == $tahlan_triggered`)
+- `HackedMissileForge` (condition `missileSlots >= 1`)
+- `Kingslayer` (upgrade, no conditions)
+- `TierIIIDriveSystem` share scope note: a `TierIIIb Drive System` on the root currently grants
+  its speed/burn/turn bonuses to every module even though few child modules have 400+ cargo.
+
+`SpooledFeeders` itself does not share (`shouldShareEffectToOtherModules` not overridden →
+false), so it is only ever the *receiving* side.
+
+## The decision (user directive)
+When this is eventually implemented, shared effects onto a **non-owning** module must be gated
+by the target module's true installability: **both tags AND prerequisite conditions, with no
+per-mod opt-out.** The rule is symmetric for modules and for the root (when the owner is a
+child and the root does not itself qualify).
+
+## Proposed gate (for future implementation)
+Hold the rule against `shouldSkipModification`'s shared-to-*other* branch only; ownership is
+never re-checked:
+- `thisModuleOwnsIt = true` → **never re-checked.** The owner already passed conditions + tags
+  at install time; do not gate the owner's own effects. (Owner's install-time per-module
+  exclusivity is separately enforced by `checkTags` on the install path and is unchanged.)
+- Shared-from-elsewhere branch (any non-owning module **and** the root) → evaluate
+  `mod.canApply(moduleMember, moduleVariant, thisModuleMods)` for the **target** module; skip
+  sharing when it returns false.
+
+Concretely, in `shouldSkipModification(...)`:
+1. Thread the target module's `members` (`FleetMemberAPI`) and its own `ShipModifications`
+   (`mods`) into **both** overloads (the 8 callsites already have them in scope).
+2. In the `else` (non-owner, sharing) branch, add a gate: if the shared mod fails
+   `mod.canApply(moduleMember, moduleVariant, moduleMods)`, skip the shared application.
+3. Route through the same `canApply` that the install UI uses, so "installable" and
+   "shareable-to" mean the same thing.
+
+### Deterministic consequences (no opt-out)
+- `FullMetalSalvo` (root) → `SpooledFeeders` children: **blocked** (tag conflict `weaponFeeders`).
+- `AlphaSubcore`/`DaemonCore` sharing where the target holds the other `aiCore` mod: **blocked**.
+- `TierIIIDriveSystem` / `ReactiveDamperField` / `HackedMissileForge` lose whole-ship sharing
+  onto modules that fail their prerequisite conditions. This is accepted: a module's profile
+  (cargo, launch bays, missile slots, phase, etc.) now matters for whether a shared effect
+  reaches it. **This behavior change is intended** and documented rather than opt-out-able.
+- Mods with no tags and no conditions (e.g. `Kingslayer`) continue to share to all modules
+  (`canApply` passes trivially).
+
+## Validation (future, Windows build — user-held)
+1. Combat run of `d74209`: child `WS0028`/`WS0029` (own `SpooledFeeders`) must **not** receive
+   `FullMetalSalvo`'s SalvoActivator / RoF mults / afterimage. Root still receives them. Other
+   bare children still receive them.
+2. Refit install blockade unchanged: `SpooledFeeders` remains non-installable on a module that
+   already has `FullMetalSalvo` (and vice-versa), and conditions remain enforced per module.
+3. Edge: `AlphaSubcore` installed on a child, sharing to a root that itself owns `DaemonCore`
+   → root must **not** receive `AlphaSubcore`'s shared effect.
+4. No regression to owner effects (the `thisModuleOwnsIt` branch is untouched).
+
+## Out of scope
+- Any change to the install/remove pipelines or to `canApply` itself — the gate reuses it.
+- Retroactively "fixing" already-saved ships; the gate is evaluated at combat/refit-time.
+- The closed `plan-cache_model_migration` work (see `plans/completed/`).
+
+## Decision status
+- **Decided now:** tags AND conditions both gate shared effects onto non-owning modules; no
+  opt-out; owners never re-checked.
+- **Deferred (leave as-is / "bonus"):** implementation. Current behavior (sharing ignores
+  eligibility) remains shipped until this plan is picked up. This plan is the normative record
+  of the intended behavior so the design doesn't drift.

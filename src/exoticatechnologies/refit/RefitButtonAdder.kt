@@ -436,9 +436,49 @@ class RefitButtonAdder : EveryFrameScript {
     }
 }
 
+/**
+ * Returns the variant that should be used for hierarchy lookups for [this] member.
+ *
+ * When the refit screen is open and [this] is the currently-selected member,
+ * returns [RefitButtonAdder.variant] (the hull spec from the ship display),
+ * **not** [this.variant] (which might be stale while the refit screen is active).
+ *
+ * ## Cast risk: HullVariantSpec → ShipVariantAPI
+ *
+ * [RefitButtonAdder.variant] is typed as `HullVariantSpec?` (obtained via reflection
+ * from the ship display). The `as ShipVariantAPI` cast succeeds if `HullVariantSpec`
+ * implements `ShipVariantAPI` in the current game version. If not, this function
+ * throws [ClassCastException] at runtime for the selected member in the refit screen.
+ *
+ * ## Child-member gap after fixVariant
+ *
+ * For child modules (when [RefitButtonAdder.member] is the root), this returns
+ * [this.variant] for the child. After [exoticatechnologies.util.fixVariant] replaces
+ * child variants *inside* the root variant tree with REFIT clones,
+ * [FleetMemberAPI.variant] for child members still points to the original (stock)
+ * variant. ModuleVariantHierarchy is keyed by stable hullVariantId strings — it does
+ * not break the way the removed identity-based cache did — but the new REFIT clones
+ * carry fresh hullVariantIds whose parent links are not registered until the caches
+ * are refreshed with `reinitialize` / `refreshFleetCache`.
+ */
 fun FleetMemberAPI.checkRefitVariant(): ShipVariantAPI {
     if (RefitButtonAdder.member == this) {
         return RefitButtonAdder.variant as ShipVariantAPI
     }
     return this.variant
 }
+
+/**
+ * Returns the refit display working tree (the variant the refit screen is currently showing and
+ * that gets re-bound to the fleet member on refit confirm), or null when the refit screen is
+ * closed or not displaying a [ShipVariantAPI].
+ *
+ * Unlike [FleetMemberAPI.checkRefitVariant], this does NOT depend on which member happens to be
+ * selected: it reads [RefitButtonAdder.variant] for whatever member the refit screen is editing.
+ * A full-ship strip (uninstall) must reach this tree even when the user is editing a CHILD module,
+ * because `rootFM.checkRefitVariant()` falls back to the root's own variant and would skip it.
+ *
+ * The `runCatching` guards the unchecked `HullVariantSpec -> ShipVariantAPI` cast documented on
+ * [checkRefitVariant]; on a cast failure the display tree is simply unreachable and gets skipped.
+ */
+fun getRefitDisplayVariant(): ShipVariantAPI? = runCatching { RefitButtonAdder.member?.checkRefitVariant() }.getOrNull()

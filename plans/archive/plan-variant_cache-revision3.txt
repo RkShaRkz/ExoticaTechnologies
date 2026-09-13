@@ -1,0 +1,101 @@
+# plan-variant_cache-revision3.txt — VariantTagProvider cache "fix for good" (v3, CULMINATION)
+
+Culminates the cache effort. Predecessors stay on disk (plan-tracking plan in flight);
+this is the single source of truth going forward.
+
+## 1. Supersession
+  plan-variant_cache-revision0.txt (v0)                 -> Superseded. Eviction PASS, recovery FAIL.
+  plan-variant_cache-revision1.txt (v1)         -> Superseded. Path A disproven, Path B promoted.
+  plan-variant_cache-revision2.txt (v2)        -> Superseded. Phase 2a retired, Path B primary.
+  plan-variant_cache.txt   -> Superseded. Abstract ideal; item 6 stale (see 4).
+
+## 2. Objective
+A per-(ship,module) variant-tag cache served by the write path: writes reach ALL
+FleetMemberAPI instances holding the same ship/root, purging stale mirrors at the source
+instead of recovering them on read. Cache-scoped only; off-topic findings moved to
+plan-sfhs_investigation.txt.
+Contract: get() returns null only when there is genuinely no data for that variant (no
+hullmod / no exotica). For any multi-module ship our code runs on, children resolve their
+OWN ShipModifications (their durable tag, possibly empty), NEVER null. Never fabricate an
+in-place empty ShipModifications() when null is the correct answer.
+
+## 3. Shipped design (at HEAD)
+- Eviction: 2-game-day write-TTL (sentinel 2xTTL = EVICT_FROM_CACHE_DAYS, 1000-read sweep);
+  commit 73d3d7b (2026-08-02 16:52). Counter-based nuking retired.
+- Stale-mirror gap: invalidateVariantAcrossAll purges exact + prefix keys across ALL
+  member instances; commit 0d6d5fb.
+- Write-through: writeThrough / findVariantInTree / fuzzyVariantIdEquals mirror the tag
+  onto (a) the member tree, (b) the resolved root tree, (c) the refit display tree;
+  added in ee6e2c9 (2026-08-14).
+- Refit/fleet screens are PURE READERS (see 4, stale item 6).
+
+## 4. Evolution audit trail (incl. corrections)
+- Stale item 6: plan-variant_cache.txt said "no context bypasses it." That doc
+  was last modified 2026-08-02 12:23 — BEFORE the TTL commit (16:52 same day). NO code gap
+  exists: the bypass is intentional and predates the TTL.
+  Mechanism (VariantTagProvider.kt:120-127): on a miss while
+  runningFromRefitOrFleetScreen(), the parse is returned WITHOUT caching and WITHOUT the
+  lastWrite bump; hits still served. TTL is measured from last WRITE; a screen polled every
+  frame that bumped on miss would keep resetting the clock and the eviction backstop would
+  never fire (comment :29-33 "polled every frame would never age out").
+  Bypass ancestry: 2023 original 40c04f5 (currentCoreTab == REFIT || FLEET) -> extracted to
+  runningFromRefitOrFleetScreen() at 44a31c0.
+- Write-side detour: write-through landed NOT in the cache rework (absent in 0d6d5fb and
+  44a31c0) but inside the "[MAYBE REVERT] Iterate on the hullmod removal" commit ee6e2c9;
+  kept through f71728d, 1ba9613, f610ce1.
+- Path A (single-hull-mapping read fix) DISPROVEN: refit.log 565617/565619 prove the mod
+  clone preserves child tags 1:1; the engine renames _Start->_0/_1 dropping tags. (v1)
+- Path B (campaign-anchored read recovery) NEVER implemented: 0 refs in src; Option D
+  findMatchingTreeVariant deleted. Justification D4: writes are rare and purge is cheap vs.
+  hot-path recovery machinery for a failure class writes prevent.
+
+## 5. Verified facts
+- Pre-fix (v0): read recovery FAIL — 22,594 NULL (real combat), 662 (sim).
+- Post-fix: children resolve tagged variants via the write-side mirror; no missing child
+  tags on refit (565617/565619).
+- Eviction never fires during combat — CORRECT: campaign clock frozen in combat; the
+  2-3 day TTL is deliberately long enough to survive combat (unlike the old per-frame
+  invalidation). Intended, not a bug.
+- Timeline: 73d3d7b TTL eviction 2026-08-02; 0d6d5fb invalidate-all 2026-08-02;
+  ee6e2c9 write-through 2026-08-14; f71728d consolidation rework; f610ce1 diagnostic
+  strip (HEAD).
+- Logs on disk: campaign.log.txt, combat-real.log.txt (44MB), combat-sim.log.txt (16MB),
+  refit.log.txt, mainmenu.log.txt (0B).
+
+## 6. Decisions
+- D1: write-TTL eviction (2 game days) over counter-based nuking. Counters mispredict
+  access patterns; TTL bounds staleness absolutely.
+- D2: effective shelf life ~3 game days (float 2.9 floors to 2). Eviction fires on a
+  1000-read sweep; a cold branch can hold entries past nominal TTL. ACCEPTED: keep the Long
+  comparison for speed; TTL just needs to be "short". Do NOT switch to float.
+- D3: invalidate across ALL members on write (exact + prefix) rather than lazy invalidation
+  on read. Single owner of truth at write time.
+- D4: Path B / read-side recovery abandoned — writes prevent the failure class.
+- D5: refit/fleet = pure readers (bypass) — keeps the TTL backstop honest.
+- D6: write-through applied to member tree + resolved root tree + refit display tree — all
+  three are distinct FleetMemberAPI instances serving reads.
+- D7: cache keyed by member identity; memory bounded by TTL eviction; no unbounded growth
+  across combat/campaign transitions. No capacity backstop needed.
+
+## 7. Not-done list (explicitly out of scope)
+- Path B/C read-recovery (superseded by write-side).
+- JAR rebuild/deploy (Windows-side environment).
+- SFHS child firing direction — moved to plan-sfhs_investigation.txt.
+
+## 8. Guardrails
+- No object churn in advance()/applyEffect loops; cached parse objects reused.
+- Cache writes only at authoritative mutation points (hullmod add/remove/transfer).
+- StarsectorAPIInteractor facades all engine access; null-safe at the platform boundary.
+- TTL sentinel is a magic marker that cannot collide with real variant IDs.
+- No FleetMemberHierarchy references in new code.
+
+## 9. Validation status
+- Diagnostic strip (diagnosticLog methods + callsites) COMPLETE at HEAD (f610ce1) — in-scope
+  as the cache effort's final cleanup.
+- Shipped design validated via refit.log (565617/565619): no missing child tags on refit.
+- Eviction: campaign.log entry 1040c served via CACHE HIT while advanceInCampaign polls
+  continuously; 705007 EVICTED EXPIRED (genuine >2 game-day TTL, not sentinel); hits resume
+  after re-sync. SWEEP EVICTED = 0 in all logs = the idle-member sweep path has never been
+  exercised — validation only.
+- Remaining: user-side Windows build + in-game smoke test of write-through on hullmod
+  consolidation (post-strip build).
