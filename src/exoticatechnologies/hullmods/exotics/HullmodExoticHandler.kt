@@ -770,7 +770,7 @@ object HullmodExoticHandler {
                 }
 
                 // Carry on
-                val shouldShareEffectToOtherModules = hullmodExotic.shouldShareEffectToOtherModules(null, null)
+                val installsOnWholeShip = hullmodExotic.installsOnWholeShip()
 
                 // This 'variantList' is complicating things alot
                 // because the Optional must be present if we don't already have an entry in HullmodExoticHandler's map
@@ -789,9 +789,9 @@ object HullmodExoticHandler {
                     Optional.empty()
                 } else {
                     // Entry does not exist, lets just create one, even though we're probably not a multimodule ship
-                    // If we need to share, grab all child modules and add the member to it - otherwise, start from empty list
+                    // If we should install on the whole ship, grab all child modules and add the member to it - otherwise, start from empty list
                     val variantsList = if (isFromRefitScreen) {
-                        getInitialVariantsListForMember(member, shouldShareEffectToOtherModules)
+                        getInitialVariantsListForMember(member, installsOnWholeShip)
                                 // Change to mutable so we can add our variant
                                 .toMutableList()
                                 // Obviously, add the 'member' variant to the list as well
@@ -799,7 +799,7 @@ object HullmodExoticHandler {
                                 // And add the 'member' refit variant to the list as well
                                 .apply { add(member.checkRefitVariant()) }
                     } else {
-                        getInitialVariantsListForMember(member, shouldShareEffectToOtherModules)
+                        getInitialVariantsListForMember(member, installsOnWholeShip)
                                 // Change to mutable so we can add our variant
                                 .toMutableList()
                                 // Obviously, add the 'member' variant to the list as well
@@ -1068,14 +1068,14 @@ object HullmodExoticHandler {
 
     /**
      * Method that returns an "initial" list of variants for a given [member].
-     * Depending on [shouldShareEffectToOtherModules], it returns either an empty list or [getChildModuleVariantList]
+     * Depending on [installsOnWholeShip], it returns either an empty list or [getChildModuleVariantList]
      *
      * @param member the [FleetMemberAPI] to return an initial list of variants for
-     * @param shouldShareEffectToOtherModules whether the [HullmodExotic] should share effects to other modules or not
+     * @param installsOnWholeShip whether the [HullmodExotic] should install its hullmod on the whole ship or not
      * @return the initial list of variants
      */
-    private fun getInitialVariantsListForMember(member: FleetMemberAPI, shouldShareEffectToOtherModules: Boolean): List<ShipVariantAPI> {
-        return if(shouldShareEffectToOtherModules) { getChildModuleVariantList(member) } else { listOf() }
+    private fun getInitialVariantsListForMember(member: FleetMemberAPI, installsOnWholeShip: Boolean): List<ShipVariantAPI> {
+        return if(installsOnWholeShip) { getChildModuleVariantList(member) } else { listOf() }
     }
 
 

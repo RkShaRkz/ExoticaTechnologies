@@ -50,16 +50,29 @@ open class HullmodExotic(
 
     override fun showWarningIfApplyingFromRefitScreen() = true
 
+    /**
+     * Whether this [HullmodExotic] installs its hullmod on the whole ship (every module) or only on the
+     * module it was installed on.
+     *
+     * This controls *install extent* and is separate from [shouldShareEffectToOtherModules], which governs
+     * whether an exotic owned by one module applies its effects (e.g. [applyExoticToStats]) to other modules.
+     * A [HullmodExotic] can therefore install its hullmod on a single module while still sharing its effects
+     * ship-wide.
+     *
+     * @return true if the hullmod should be installed on all modules of the ship, false if only on the owning module
+     */
+    open fun installsOnWholeShip(): Boolean = false
+
     override fun onInstall(member: FleetMemberAPI) {
-        val shouldShareEffectToOtherModules = shouldShareEffectToOtherModules(null, null)
+        val installsOnWholeShip = installsOnWholeShip()
         val isChildModule = member.shipName.isNullOrEmpty()
-        logIfOverMinLogLevel("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules}, isChildModule = ${isChildModule}", Level.INFO)
+        logIfOverMinLogLevel("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tinstallsOnWholeShip = ${installsOnWholeShip}, isChildModule = ${isChildModule}", Level.INFO)
         //FIXME: for the time being, only "root" modules are able to share effects to all other (child) modules
         // Ideally, any module should be able to share effects to all other modules
         // Relevant issue: https://github.com/RkShaRkz/ExoticaTechnologies/issues/39
-        if (shouldShareEffectToOtherModules) {
-            // If we should share to other modules, lets just focus on being able to share from the root module
-            // to other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
+        if (installsOnWholeShip) {
+            // If we should install on the whole ship, lets just focus on being able to install from the root module
+            // to all other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
             // on how to allow replicating from *any* module to *all* other modules.
             // SPOILER: the lookup to find the root module from which we'll discover the other modules is going to be
             // much more difficult/trickier/slower
@@ -105,9 +118,9 @@ open class HullmodExotic(
     }
 
     override fun onDestroy(member: FleetMemberAPI) {
-        if (shouldShareEffectToOtherModules(null, null)) {
-            // If we should share to other modules, lets just focus on being able to share from the root module
-            // to other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
+        if (installsOnWholeShip()) {
+            // If we should install on the whole ship, lets just focus on being able to install from the root module
+            // to all other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
             // on how to allow replicating from *any* module to *all* other modules.
             // SPOILER: the lookup to find the root module from which we'll discover the other modules is going to be
             // much more difficult/trickier/slower
