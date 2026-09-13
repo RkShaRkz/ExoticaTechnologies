@@ -7,6 +7,7 @@ import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.refit.checkRefitVariant
+import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.StarsectorAPIInteractor
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.getChildModuleVariantList
@@ -642,6 +643,8 @@ object HullmodExoticHandler {
              * throws a [OnShouldCallback] for each of them before proceeding to install the hullmod exotic on all of them
              * (meeting the "should install" criteria) after which a [OnInstallToChildModuleCallback] is called for each of them.
              *
+             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.findRootVariantMember].
+             *
              * @param fleetMember the [FleetMemberAPI] of the root module, from which all child modules will be obtained
              * @param fleetMemberVariant the [ShipVariantAPI] of the root module, so that we can generate a list of all variants on which we should install
              * @param hullmodExotic the [HullmodExotic] to install on these child modules' variants
@@ -650,6 +653,7 @@ object HullmodExoticHandler {
              *
              * @see shouldInstallHullmodExoticToVariant
              * @see installHullmodExoticToVariant
+             * @see FleetMemberUtils.findRootVariantMember
              */
             @JvmStatic
             fun CheckAndInstallOnAllChildModulesVariants(
@@ -737,6 +741,8 @@ object HullmodExoticHandler {
              * (or rather, the whole [fleetMember] itself for single-module ships), calls a [OnShouldCallback] with the result
              * before proceeding to install after which a [OnInstallToMemberCallback] is called with the installation result
              *
+             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.findRootVariantMember].
+             *
              * @param member the [FleetMemberAPI] of the root module
              * @param memberVariant the [ShipVariantAPI] of the root module, so that we can generate a list of all variants on which we should install
              * @param hullmodExotic the [HullmodExotic] to install on this fleet member's variant
@@ -745,6 +751,7 @@ object HullmodExoticHandler {
              *
              * @see shouldInstallHullmodExoticToVariant
              * @see installHullmodExoticToVariant
+             * @see FleetMemberUtils.findRootVariantMember
              */
             @JvmStatic
             fun CheckAndInstallOnMemberModule(
@@ -842,6 +849,8 @@ object HullmodExoticHandler {
              * throws a [OnShouldCallback] for each of them before proceeding to remove the hullmod exotic from all of them
              * (meeting the "should remove" criteria) after which a [OnRemoveFromChildModuleCallback] is called for each of them.
              *
+             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.findRootVariantMember].
+             *
              * @param fleetMember the [FleetMemberAPI] of the root module, from which all child modules will be obtained
              * @param hullmodExotic the [HullmodExotic] to remove from these child modules' variants
              * @param onShouldCallback the callback to invoke for each of the child modules' variants with their "should remove" result
@@ -849,6 +858,7 @@ object HullmodExoticHandler {
              *
              * @see shouldRemoveHullmodExoticFromVariant
              * @see removeHullmodExoticFromVariant
+             * @see FleetMemberUtils.findRootVariantMember
              */
             @JvmStatic
             fun CheckAndRemoveFromAllChildModulesVariants(
@@ -935,6 +945,8 @@ object HullmodExoticHandler {
              * (or rather, the whole [fleetMember] itself for single-module ships), calls a [OnShouldCallback] with the result
              * before proceeding to remove after which a [OnRemoveFromMemberCallback] is called with the removal result
              *
+             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.findRootVariantMember].
+             *
              * @param fleetMember the [FleetMemberAPI] of the root module
              * @param fleetMemberVariant the [ShipVariantAPI] of the root module, so that we can generate a list of all variants from which we should remove
              * @param hullmodExotic the [HullmodExotic] to remove from this fleet member's variant
@@ -943,6 +955,7 @@ object HullmodExoticHandler {
              *
              * @see shouldRemoveHullmodExoticFromVariant
              * @see removeHullmodExoticFromVariant
+             * @see FleetMemberUtils.findRootVariantMember
              */
             @JvmStatic
             fun CheckAndRemoveFromMemberModule(

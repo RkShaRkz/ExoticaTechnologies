@@ -283,6 +283,20 @@ object FleetMemberUtils {
         return null
     }
 
+    /**
+     * Resolves the root [FleetMemberAPI] of the module tree containing [member], used by whole-ship
+     * (`installsOnWholeShip()`) install/remove flows so that bookkeeping always anchors on the ship's
+     * root member regardless of which member entered the flow.
+     * Returns [member] itself for single-module ships or when the root member cannot be reached,
+     * preserving today's behavior in those cases.
+     */
+    @JvmStatic
+    fun findRootVariantMember(member: FleetMemberAPI): FleetMemberAPI {
+        val rootVariant = findRootVariant(member, member.variant)
+        if (rootVariant == member.variant) return member
+        return findModuleMember(rootVariant) ?: member
+    }
+
 }
 
 /**
