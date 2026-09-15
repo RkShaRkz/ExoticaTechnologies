@@ -682,7 +682,13 @@ object HullmodExoticHandler {
 
                 val childModuleVariants = getChildModuleVariantList(fleetMember)
                 val allVariantsList = if (isFromRefitScreen) {
-                    // For refit screen, we'll include the member's refit variant
+                    // For refit screen, we'll include the member's refit variant as well, since the
+                    // refit reads it in addition to the campaign tree. The display working tree is
+                    // intentionally NOT added here: the flows only iterate the campaign
+                    // childModuleVariants, and this expected-list is what the should-install guard
+                    // matches against and instantly BAILS on a variant it does not expect. Keeping
+                    // it minimal and stable preserves the guard as the recursion break for the
+                    // updateStats -> applyEffectsBeforeShipCreation -> onInstall re-entry.
                     childModuleVariants
                             .toMutableList()
                             .apply { add(fleetMemberVariant) }

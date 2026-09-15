@@ -7,12 +7,16 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import exoticatechnologies.campaign.listeners.CampaignEventListener.Companion.activeFleets
+import exoticatechnologies.refit.RefitButtonAdder
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.FleetMemberUtils.findFleetForVariant
+import org.apache.log4j.Level
+import org.apache.log4j.Logger
 
 object FleetMemberUtils {
     @JvmField
     val moduleMap: MutableMap<String, FleetMemberAPI> = HashMap()
+    private val logger: Logger = Logger.getLogger(FleetMemberUtils::class.java)
 
     @JvmStatic
     fun findMemberFromShip(ship: ShipAPI): FleetMemberAPI? {
@@ -289,12 +293,106 @@ object FleetMemberUtils {
      * root member regardless of which member entered the flow.
      * Returns [member] itself for single-module ships or when the root member cannot be reached,
      * preserving today's behavior in those cases.
+     *
+     * ## Stable markers, not variant identity
+     *
+     * ShipVariantAPI instances get recreated by Starsector across the stock -> REFIT -> combat clone
+     * churn, so `===` on variants is NOT a dependable identity (see [checkRefitVariant]'s KDoc).
+     * We therefore disambiguate with stable markers:
+     *
+     * - **Refit screen**: the refit edits exactly one ship at a time, so the last root
+     *   [FleetMemberAPI] it displayed — [RefitButtonAdder.rootMember], cached from the display — is
+     *   an unambiguous anchor for the ship being refitted, even when a transient station-module
+     *   member entered the flow. FleetMember ids are stable across the clone churn.
+     * - **Campaign/simulation**: variants do not churn there, so the candidate whose station-module
+     *   tree instance-contains the triggering member's concrete variant is unambiguously the owner —
+     *   ship B's tree never holds ship A's variant object — and the tie between identical hulls is
+     *   broken deterministically.
+     *
+     * ## Refit screen fallback
+     *
+     * If the refit-root marker is not populated yet (refit cache empty on the very first frame),
+     * we fall back to the first fuzzy-owner candidate, preserving today's behavior for the
+     * single-ship case.
      */
     @JvmStatic
     fun findRootVariantMember(member: FleetMemberAPI): FleetMemberAPI {
+        // A root owns its station modules; nothing to resolve.
+        if (member.variant.stationModules.isNotEmpty()) return member
+
+        val targetId = member.variant.hullVariantId
+        val candidates = matchingRootMembers(member, targetId)
+
+        log(
+                "findRootVariantMember(): member=${member} (id=${member.id}, isChild=${member.shipName.isNullOrEmpty()})" +
+                        ", targetId=${targetId}, refitScreen=${runningFromRefitScreen()}" +
+                        ", refitRoot=${RefitButtonAdder.rootMember} (id=${RefitButtonAdder.rootMember?.id})" +
+                        ", candidates=${candidates.map { it.id }}",
+                logger, Level.WARN
+        )
+
+        // 1. Refit screen: the ship being refitted, anchored on the cached root FleetMember id (a
+        //    stable marker, since the refit edits exactly one ship at a time). Resolves even when
+        //    the entering member is a transient station-module member whose variant no candidate
+        //    tree holds (the case that made instance-identity fail in the refit screen).
+        if (runningFromRefitScreen()) {
+            RefitButtonAdder.rootMember?.let {
+                log("findRootVariantMember(): resolved 1-refit-root -> ${it.id}", logger, Level.WARN)
+                return it
+            }
+        }
+
+        // 2. The true owner in a stable (non-refit) graph: its tree holds the member's concrete
+        //    variant instance. This is the only step that disambiguates two identical hulls there.
+        candidates.firstOrNull { treeInstanceContains(it.variant, member.variant) }?.let {
+            log("findRootVariantMember(): resolved 2-owner -> ${it.id}", logger, Level.WARN)
+            return it
+        }
+
+        // 3. Status-quo: first fuzzy match (single ship -> exactly one candidate), else the old
+        //    resolution.
+        candidates.firstOrNull()?.let {
+            log("findRootVariantMember(): resolved 3-first-match -> ${it.id}", logger, Level.WARN)
+            return it
+        }
         val rootVariant = findRootVariant(member, member.variant)
         if (rootVariant == member.variant) return member
-        return findModuleMember(rootVariant) ?: member
+        val fallback = findModuleMember(rootVariant) ?: member
+        log("findRootVariantMember(): resolved 4-fallback -> ${fallback.id}", logger, Level.WARN)
+        return fallback
+    }
+
+    /**
+     * All root FMs whose station-module tree fuzzy-contains [childId], across the member's own fleet
+     * and then the active campaign fleets. Unlike [findRootVariant] this does NOT stop at the first
+     * match: for identical hulls several roots can fuzzy-match the same child id, and the tie must be
+     * broken higher up (ownership/refit), never by scan order.
+     */
+    private fun matchingRootMembers(member: FleetMemberAPI, childId: String): List<FleetMemberAPI> {
+        val result = LinkedHashSet<FleetMemberAPI>()
+        member.fleetData?.fleet?.let { fleet ->
+            for (fm in fleet.membersWithFightersCopy) {
+                val v = fm.variant
+                if (v.stationModules.isNotEmpty() && treeFuzzyContains(v, childId)) result.add(fm)
+            }
+        }
+        for (fleet in activeFleets) {
+            if (fleet == null) continue
+            for (fm in fleet.membersWithFightersCopy) {
+                val v = fm.variant
+                if (v.stationModules.isNotEmpty() && treeFuzzyContains(v, childId)) result.add(fm)
+            }
+        }
+        return result.toList()
+    }
+
+    /** True when any station-module descendant of [root] is exactly [child] (instance equality). */
+    private fun treeInstanceContains(root: ShipVariantAPI, child: ShipVariantAPI): Boolean {
+        var found = false
+        root.forEachModuleVariant { node ->
+            if (!found && node === child) found = true
+        }
+        return found
     }
 
 }

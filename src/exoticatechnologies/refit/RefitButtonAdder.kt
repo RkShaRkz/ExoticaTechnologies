@@ -34,6 +34,20 @@ class RefitButtonAdder : EveryFrameScript {
         var member: FleetMemberAPI? = null
         var variant: HullVariantSpec? = null
         var requiresVariantUpdate = false
+        /**
+         * The last root [FleetMemberAPI] the refit screen displayed.
+         *
+         * The refit screen edits exactly one ship at a time, so this is an unwavering, unambiguous
+         * marker for "which ship is being refitted" that survives the transient child [member]s the
+         * screen creates while a station module is selected. It is a stable *root identity marker*,
+         * not a variant-instance comparison: FleetMember ids are stable across the
+         * stock -> REFIT -> combat clone churn that makes [FleetMemberAPI.variant] instance
+         * equality unreliable (see [FleetMemberUtils.findRootVariantMember]).
+         *
+         * Set whenever [member] is a ship root (has a ship name), cleared when the refit screen
+         * closes. `null` outside the refit screen.
+         */
+        var rootMember: FleetMemberAPI? = null
     }
 
     private val fieldClass = Class.forName("java.lang.reflect.Field", false, Class::class.java.classLoader)
@@ -68,6 +82,7 @@ class RefitButtonAdder : EveryFrameScript {
             closeButtonPanel = null
             member = null
             variant = null
+            rootMember = null
             return
         }
 
@@ -98,6 +113,14 @@ class RefitButtonAdder : EveryFrameScript {
                     if (child3 is UIPanelAPI) {
                         refitPanel = child3
                         member = getMember()
+                        // A ship root always carries a ship name; transient station-module members
+                        // the refit creates while a module tab is selected do not. Cache the last
+                        // displayed root so whole-ship flows can anchor on the actual ship being
+                        // refitted (see findRootVariantMember). Unambiguous: the refit displays one
+                        // ship at a time.
+                        if (member?.shipName?.isNotEmpty() == true) {
+                            rootMember = member
+                        }
                         if (member == null) //shipName check catches modules
                         {
                             removeExoticaButton()

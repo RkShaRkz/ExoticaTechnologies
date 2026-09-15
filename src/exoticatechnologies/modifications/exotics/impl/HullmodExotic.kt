@@ -15,9 +15,14 @@ import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.refit.checkRefitVariant
+import exoticatechnologies.refit.getRefitDisplayVariant
 import exoticatechnologies.util.FleetMemberUtils
+import exoticatechnologies.util.ModuleVariantHierarchy
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.datastructures.Optional
+import exoticatechnologies.util.fixVariant
+import exoticatechnologies.util.forEachModuleVariant
+import exoticatechnologies.util.propagateFromVariantTree
 import exoticatechnologies.util.runningFromRefitScreen
 import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
@@ -110,11 +115,101 @@ open class HullmodExotic(
                     }
                 }
         )
+
+        // Whole-ship installs: propagate this exotic's own hullmod to EVERY object graph the refit
+        // screen reads (the campaign tree, the refit tree, the refit display tree and each child
+        // FleetMemberAPI's own .variant). The flows above only tag the campaign tree's children, so
+        // without this pass the refit screen never shows the OP cost on modules. Mirrors the
+        // write-through ExoticaTechHM.addToFleetMember already performs for the "exoticatech"
+        // marker hullmod.
+        if (installsOnWholeShip) {
+            propagateHullmodThroughoutShip(rootMember)
+        }
     }
 
     private fun installHullmodOnVariant(variant: ShipVariantAPI?) {
         variant?.let {
             variant.addPermaMod(hullmodId)
+        }
+    }
+
+    /**
+     * Writes THIS exotic's own [hullmodId] through every variant graph the refit screen reads,
+     * mirroring the apply-branch of [ExoticaTechHM.addToFleetMember] (which only does this for the
+     * "exoticatech" marker hullmod):
+     *
+     * - the root member's campaign tree (`rootMember.variant`), children included,
+     * - [FleetMemberAPI.checkRefitVariant]'s tree,
+     * - the refit display working tree ([getRefitDisplayVariant]) — the tree the refit actually
+     *   renders and re-binds to the fleet member on refit confirm. This is what an install entered
+     *   from a *child module* tab misses, leaving the OP cost stale on every module tab otherwise,
+     * - every child [FleetMemberAPI]'s own `.variant` (the refit reads each FM independently).
+     *
+     * Closes with the same [fixVariant] / [ModuleVariantHierarchy.refreshFleetCache] steps
+     * ExoticaTechHM performs, so the REFIT clones inherit the hullmod and the hierarchy caches
+     * re-register the new clone variant ids. Deliberately does NOT call
+     * [FleetMemberAPI.updateStats]: this runs inside [onInstall], which the engine re-enters from
+     * updateStats -> [ExoticaTechHM.applyEffectsBeforeShipCreation] -> each exotic's
+     * applyExoticToStats; a stats refresh here would recurse unboundedly (StackOverflowError, seen
+     * in rev-4). Stats are refreshed once by the initiating caller instead
+     * (ExoticaTechHM.addToFleetMember / the refit click), outside onInstall.
+     *
+     * Idempotent: each graph is a pre-order walk and [ShipVariantAPI.addPermaMod] is a no-op for an
+     * already-present hullmod, so re-entries from [applyExoticToStats]/[applyToShip] are safe.
+     */
+    private fun propagateHullmodThroughoutShip(rootMember: FleetMemberAPI) {
+        installHullmodRecursive(rootMember.variant)
+        installHullmodRecursive(rootMember.checkRefitVariant())
+        getRefitDisplayVariant()?.let(::installHullmodRecursive)
+
+        // Every child FleetMemberAPI's own .variant, plus (idempotently) the tree's children.
+        rootMember.propagateFromVariantTree(hullmodId)
+
+        rootMember.fixVariant()
+        ModuleVariantHierarchy.refreshFleetCache(rootMember.variant)
+        ModuleVariantHierarchy.refreshFleetCache(rootMember.checkRefitVariant())
+        getRefitDisplayVariant()?.let { ModuleVariantHierarchy.refreshFleetCache(it) }
+    }
+
+    /**
+     * Mirror of [propagateHullmodThroughoutShip] for removals: strips THIS exotic's own [hullmodId]
+     * from every object graph the install wrote it to (campaign tree, refit tree, display tree).
+     * Child [FleetMemberAPI]s' OWN campaign `.variant`s are the same objects the root tree walk
+     * already strips, so no per-FM reverse lookup is needed here — [FleetMemberUtils.findModuleMember]
+     * is instance-unstable across fixVariant/refit cloning and can even match the identical twin
+     * ship (issue #39). The refit-side clones are rebuilt clean by [fixVariant] at the end. Like
+     * [propagateHullmodThroughoutShip], it does NOT call [FleetMemberAPI.updateStats], to avoid
+     * re-entering [onInstall] from applyEffects when other whole-ship exotics remain installed.
+     */
+    private fun stripHullmodThroughoutShip(rootMember: FleetMemberAPI) {
+        stripHullmodRecursive(rootMember.variant)
+        val refitTree = rootMember.checkRefitVariant()
+        if (refitTree !== rootMember.variant) {
+            stripHullmodRecursive(refitTree)
+        }
+        getRefitDisplayVariant()?.let { displayTree ->
+            if (displayTree !== rootMember.variant && displayTree !== refitTree) {
+                stripHullmodRecursive(displayTree)
+            }
+        }
+
+        rootMember.fixVariant()
+        ModuleVariantHierarchy.refreshFleetCache(rootMember.variant)
+        ModuleVariantHierarchy.refreshFleetCache(refitTree)
+        getRefitDisplayVariant()?.let { ModuleVariantHierarchy.refreshFleetCache(it) }
+    }
+
+    private fun installHullmodRecursive(variant: ShipVariantAPI) {
+        installHullmodOnVariant(variant)
+        variant.forEachModuleVariant { child ->
+            installHullmodOnVariant(child)
+        }
+    }
+
+    private fun stripHullmodRecursive(variant: ShipVariantAPI) {
+        removeHullmodFromVariant(variant)
+        variant.forEachModuleVariant { child ->
+            removeHullmodFromVariant(child)
         }
     }
 
@@ -198,6 +293,14 @@ open class HullmodExotic(
                 exoticHullmodId = getHullmodId(),
                 fleetMember = rootMember
         )
+
+        // Whole-ship removals: strip this exotic's own hullmod from every object graph the install
+        // wrote it to, mirroring propagateHullmodThroughoutShip. The flows above only reach the
+        // campaign tree / the root's refit variant; the refit display tree and the child FMs'
+        // .variant graphs would otherwise keep a stale hullmod (and its OP cost) on the refit screen.
+        if (installsOnWholeShip()) {
+            stripHullmodThroughoutShip(rootMember)
+        }
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
         logIfOverMinLogLevel("<-- onDestroy()\tStill has hullmod: ${check}", Level.INFO)
