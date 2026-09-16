@@ -173,23 +173,32 @@ open class HullmodExotic(
 
     /**
      * Mirror of [propagateHullmodThroughoutShip] for removals: strips THIS exotic's own [hullmodId]
-     * from every object graph the install wrote it to (campaign tree, refit tree, display tree).
+     * from every object graph the install wrote it to (campaign tree, refit tree, display tree),
+     * and — crucially — undoes the exotic hullmod's stat effects via [unapplyExoticHullmodFromVariant]
+     * on every variant it strips. The remove flows only unapply the variants recorded in the install
+     * bookkeeping (the modules the exotic was installed ON), so modules that merely received the
+     * propagated hullmod (e.g. the sibling modules of a whole-ship install) would otherwise keep
+     * their reduced OP. Order matches [unapplyExoticHullmodAndRemoveExoticaAndHullmod]:
+     * removeHullmodFromVariant() first, then unapply on the stats the [HullmodExoticHandler] uses.
+     *
      * Child [FleetMemberAPI]s' OWN campaign `.variant`s are the same objects the root tree walk
      * already strips, so no per-FM reverse lookup is needed here — [FleetMemberUtils.findModuleMember]
      * is instance-unstable across fixVariant/refit cloning and can even match the identical twin
      * ship (issue #39). The refit-side clones are rebuilt clean by [fixVariant] at the end. Like
      * [propagateHullmodThroughoutShip], it does NOT call [FleetMemberAPI.updateStats], to avoid
      * re-entering [onInstall] from applyEffects when other whole-ship exotics remain installed.
+     * Unapply is idempotent (the flows may already have unapplied a recorded variant), since
+     * [ExoticHullmod.removeEffectsBeforeShipCreation] unmodifies id-keyed stat modifiers.
      */
     private fun stripHullmodThroughoutShip(rootMember: FleetMemberAPI) {
-        stripHullmodRecursive(rootMember.variant)
+        stripHullmodAndUnapplyRecursive(rootMember.variant, rootMember)
         val refitTree = rootMember.checkRefitVariant()
         if (refitTree !== rootMember.variant) {
-            stripHullmodRecursive(refitTree)
+            stripHullmodAndUnapplyRecursive(refitTree, rootMember)
         }
         getRefitDisplayVariant()?.let { displayTree ->
             if (displayTree !== rootMember.variant && displayTree !== refitTree) {
-                stripHullmodRecursive(displayTree)
+                stripHullmodAndUnapplyRecursive(displayTree, rootMember)
             }
         }
 
@@ -206,11 +215,17 @@ open class HullmodExotic(
         }
     }
 
-    private fun stripHullmodRecursive(variant: ShipVariantAPI) {
-        removeHullmodFromVariant(variant)
+    private fun stripHullmodAndUnapplyRecursive(variant: ShipVariantAPI, rootMember: FleetMemberAPI) {
+        stripHullmodAndUnapply(variant, rootMember)
         variant.forEachModuleVariant { child ->
-            removeHullmodFromVariant(child)
+            stripHullmodAndUnapply(child, rootMember)
         }
+    }
+
+    private fun stripHullmodAndUnapply(variant: ShipVariantAPI, rootMember: FleetMemberAPI) {
+        removeHullmodFromVariant(variant)
+        val stats = HullmodExoticHandler.getNonNullStatsToUse(rootMember, variant)
+        unapplyExoticHullmodFromVariant(variant, stats)
     }
 
     override fun onDestroy(member: FleetMemberAPI) {
