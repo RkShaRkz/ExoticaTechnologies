@@ -154,14 +154,21 @@ public class ExoticaTechHM extends BaseHullMod {
     }
 
     // Finds a FleetMemberAPI whose variant's hullVariantId matches the target, scanning
-    // the member's own fleet first, then falling back to active campaign fleets.
+    // the member's own fleet first, then falling back to active campaign fleets. When multiple
+    // copies of the same hull are present (identical hullVariantIds tie on id alone), prefers the
+    // root whose station-module tree actually owns the triggering member before falling back to
+    // scan order - otherwise a second twin's whole-ship install can resolve to the first twin's
+    // root and write the hullmod onto the wrong ship's objects.
     private static @Nullable FleetMemberAPI findMemberByVariantId(FleetMemberAPI member, String targetVariantId) {
+        FleetMemberAPI firstMatch = null;
+
         // Try member's own fleet first (works in refit, campaign, and simulation)
         if (member.getFleetData() != null && member.getFleetData().getFleet() != null) {
             CampaignFleetAPI fleet = member.getFleetData().getFleet();
             for (FleetMemberAPI fm : fleet.getMembersWithFightersCopy()) {
                 if (fm.getVariant() != null && targetVariantId.equals(fm.getVariant().getHullVariantId())) {
-                    return fm;
+                    if (firstMatch == null) firstMatch = fm;
+                    if (variantTreeOwns(fm.getVariant(), member)) return fm;
                 }
             }
         }
@@ -170,11 +177,33 @@ public class ExoticaTechHM extends BaseHullMod {
             if (fleet == null) continue;
             for (FleetMemberAPI fm : fleet.getMembersWithFightersCopy()) {
                 if (fm.getVariant() != null && targetVariantId.equals(fm.getVariant().getHullVariantId())) {
-                    return fm;
+                    if (firstMatch == null) firstMatch = fm;
+                    if (variantTreeOwns(fm.getVariant(), member)) return fm;
                 }
             }
         }
-        return null;
+        return firstMatch;
+    }
+
+    // True when [root]'s station-module tree (or root itself) holds the triggering member's variant:
+    // exact object identity first, then hullVariantId equality. Identical hulls differ only by
+    // variant instance (each fleet member owns its clones after refit), so this disambiguates
+    // multiple copies of the same ship during whole-ship resolution.
+    private static boolean variantTreeOwns(ShipVariantAPI root, FleetMemberAPI member) {
+        final ShipVariantAPI memberVariant = member.getVariant();
+        if (memberVariant == null) return false;
+        if (root == memberVariant) return true;
+        final String memberVariantId = memberVariant.getHullVariantId();
+        final boolean[] owns = new boolean[]{false};
+        ExtensionsKt.forEachModuleVariant(root, new ModuleVariantAction() {
+            @Override
+            public void accept(@NotNull ShipVariantAPI child) {
+                if (!owns[0] && (child == memberVariant || (memberVariantId != null && memberVariantId.equals(child.getHullVariantId())))) {
+                    owns[0] = true;
+                }
+            }
+        });
+        return owns[0];
     }
 
     public static void addToFleetMember(FleetMemberAPI member) {

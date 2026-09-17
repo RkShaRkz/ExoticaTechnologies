@@ -361,14 +361,23 @@ object HullmodExoticHandler {
                     if (hullmodOptional.isPresent()) {
                         val exoticHullmodInstance = hullmodOptional.get()
 
-                        // Since single-moduled ship always return 'null' for variant.statsForOpCosts, and we don't care
-                        // whether the ship is multimodule or singlemodule here, lets grab a non-null variant of them.
-                        val statsToUse = getNonNullStatsToUse(parentFleetMember, variant)
+                        // Scrub BOTH stats objects the OP-cost listener can live on - the variant's
+                        // own statsForOpCosts and the parent member's stats. A single pick leaves the
+                        // listener alive on the other object when identical hulls share hullVariantIds
+                        // (multiple copies of the same ship). removeListenerOfClass is a no-op on the
+                        // stats that never had it, so this is idempotent.
                         exoticHullmodInstance.removeEffectsBeforeShipCreation(
                                 hullSize = variant.hullSpec.hullSize,
-                                stats = statsToUse,
+                                stats = parentFleetMember.stats,
                                 id = exoticHullmodInstance.hullModId
                         )
+                        variant.statsForOpCosts?.let { statsForOpCosts ->
+                            exoticHullmodInstance.removeEffectsBeforeShipCreation(
+                                    hullSize = variant.hullSpec.hullSize,
+                                    stats = statsForOpCosts,
+                                    id = exoticHullmodInstance.hullModId
+                            )
+                        }
 
                         // Now that we've uninstalled it, lets unset it from the list of installed variants and
                         // update the lookup map
@@ -453,10 +462,15 @@ object HullmodExoticHandler {
                     if (areHullmodIDsEqual(key.hullmodExotic.getHullmodId(), exoticHullmod.hullModId)) {
                         for (variant in exoticHandlerData.listOfVariantsWeInstalledOn) {
                             val variantHullSize = variant.hullSpec.hullSize
-                            // Since single-moduled ship always return 'null' for variant.statsForOpCosts, and we don't care
-                            // whether the ship is multimodule or singlemodule here, lets grab a non-null variant of them.
-                            val statsToUse = getNonNullStatsToUse(fleetMember, variant)
-                            exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, statsToUse, exoticHullmod.hullModId)
+                            // Scrub BOTH stats objects the OP-cost listener can live on (see
+                            // removeHullmodExoticFromVariant) - the variant's own statsForOpCosts and
+                            // the fleet member's stats. A single pick leaves the listener alive on the
+                            // other object when identical hulls share hullVariantIds (multiple copies
+                            // of the same ship). removeListenerOfClass is a no-op when absent.
+                            exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, fleetMember.stats, exoticHullmod.hullModId)
+                            variant.statsForOpCosts?.let { statsForOpCosts ->
+                                exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, statsForOpCosts, exoticHullmod.hullModId)
+                            }
                             // Lets not keep track of keys to remove here, but outside of this loop, this spot made sense while
                             // we used a Set to keep track of the keys, so multiple adds of the same key wouldn't cause problems.
                             // Now - we might end up wanting to remove more keys than the map has

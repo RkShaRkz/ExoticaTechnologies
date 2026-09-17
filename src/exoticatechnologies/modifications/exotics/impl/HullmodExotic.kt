@@ -14,6 +14,7 @@ import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
+import exoticatechnologies.refit.RefitButtonAdder
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.refit.getRefitDisplayVariant
 import exoticatechnologies.util.FleetMemberUtils
@@ -224,8 +225,7 @@ open class HullmodExotic(
 
     private fun stripHullmodAndUnapply(variant: ShipVariantAPI, rootMember: FleetMemberAPI) {
         removeHullmodFromVariant(variant)
-        val stats = HullmodExoticHandler.getNonNullStatsToUse(rootMember, variant)
-        unapplyExoticHullmodFromVariant(variant, stats)
+        unapplyExoticHullmodFromVariantOnAllStats(rootMember, variant)
     }
 
     override fun onDestroy(member: FleetMemberAPI) {
@@ -315,6 +315,21 @@ open class HullmodExotic(
         // .variant graphs would otherwise keep a stale hullmod (and its OP cost) on the refit screen.
         if (installsOnWholeShip()) {
             stripHullmodThroughoutShip(rootMember)
+
+            // The refit keeps exactly one live member entry for whatever it is currently rendering.
+            // That member's stats object can carry an OP-cost listener that survives the strip above
+            // (identical hulls share hullVariantId-based resolution, so the object the OP panel reads
+            // is not necessarily any graph the strip walked). Scrub it directly. Pure object ref,
+            // null-safe, no FleetData dependence, and removeEffects is idempotent on a stats that
+            // never had the listener.
+            if (runningFromRefitScreen()) {
+                RefitButtonAdder.member?.let { displayedMember ->
+                    unapplyExoticHullmodFromVariant(
+                            displayedMember.checkRefitVariant(),
+                            displayedMember.stats
+                    )
+                }
+            }
         }
 
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
@@ -359,9 +374,11 @@ open class HullmodExotic(
         ExoticaTechHM.addToFleetMember(member, moduleVariant)
         removeHullmodFromVariant(moduleVariant)
 
-        // grab stats to use
-        val stats = HullmodExoticHandler.getNonNullStatsToUse(member, moduleVariant)
-        unapplyExoticHullmodFromVariant(moduleVariant, stats)
+        // grab stats to use - scrub BOTH the variant's own statsForOpCosts and the member's stats,
+        // since a single-pick ({variant.statsForOpCosts ?: member.stats}) can leave the OP-cost
+        // listener alive on whichever object the refit actually reads (identical hulls share
+        // hullVariantId-based resolution). removeEffects is idempotent on both.
+        unapplyExoticHullmodFromVariantOnAllStats(member, moduleVariant)
     }
 
     private fun removeHullmodFromVariant(variant: ShipVariantAPI?) {
@@ -390,6 +407,28 @@ open class HullmodExotic(
     private fun unapplyExoticHullmodFromVariant(variant: ShipVariantAPI, stats: MutableShipStatsAPI) {
         val variantHullSize = variant.hullSpec.hullSize
         exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, stats, exoticHullmod.hullModId)
+    }
+
+    /**
+     * Undoes [ExoticHullmod] stat effects from BOTH stats objects that can carry them for [variant]:
+     * the variant's own [ShipVariantAPI.getStatsForOpCosts] and the anchor member's [FleetMemberAPI.getStats].
+     *
+     * Removals used to scrub a single pick (`variant.statsForOpCosts ?: member.stats`, see
+     * [HullmodExoticHandler.getNonNullStatsToUse]), which silently misses the listener when it lives
+     * on the *other* object. That happens with identical hulls: multiple copies of the same ship
+     * share the same hullVariantId, so the object the refit OP panel reads is not necessarily the one
+     * the install bookkeeping recorded. Scrubbing both is safe - [ExoticHullmod.removeEffectsBeforeShipCreation]
+     * unmodifies id-keyed stat modifiers and `removeListenerOfClass` is a no-op on stats that never
+     * had the listener.
+     *
+     * @param member the anchor ("root") [FleetMemberAPI] used to resolve a non-null stats fallback
+     * @param variant the [ShipVariantAPI] whose effects we want to undo
+     */
+    private fun unapplyExoticHullmodFromVariantOnAllStats(member: FleetMemberAPI, variant: ShipVariantAPI) {
+        unapplyExoticHullmodFromVariant(variant, member.stats)
+        variant.statsForOpCosts?.let { statsForOpCosts ->
+            unapplyExoticHullmodFromVariant(variant, statsForOpCosts)
+        }
     }
 
     override fun applyExoticToStats(
