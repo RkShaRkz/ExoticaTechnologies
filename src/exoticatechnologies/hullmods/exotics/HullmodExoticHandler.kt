@@ -274,7 +274,7 @@ object HullmodExoticHandler {
             val hullmodId = hullmodExotic.getHullmodId()
             val alreadyHasHullmod = variant.hasHullMod(hullmodId)
             if (alreadyHasHullmod.not()) {
-                logIfOverMinLogLevel("shouldRemoveHullmodExoticFromVariant()\tVariant ${variant} doesn't have with the ${hullmodId} ID. Nothing to do here. Bailing out !!!", Level.WARN)
+                logIfOverMinLogLevel("shouldRemoveHullmodExoticFromVariant()\tVariant ${variant} doesn't have hullmod with the ${hullmodId} ID. Nothing to do here. Bailing out !!!", Level.WARN)
                 return false
             }
         } else {
