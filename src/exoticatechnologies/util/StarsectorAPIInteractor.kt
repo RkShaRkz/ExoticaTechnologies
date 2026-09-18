@@ -7,6 +7,8 @@ import com.fs.starfarer.api.campaign.OptionPanelAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.util.MutableValue
 import exoticatechnologies.util.datastructures.Optional
+import org.apache.log4j.Level
+import org.apache.log4j.Logger
 import org.jetbrains.annotations.TestOnly
 import org.jetbrains.annotations.VisibleForTesting
 
@@ -20,18 +22,21 @@ object StarsectorAPIInteractor {
 
     private var IS_IN_TEST_MODE = false
     private var TEST_MODE_VALUE = false
+    private val logger: Logger = Logger.getLogger(StarsectorAPIInteractor::class.java)
+
+    private fun diagnosticLog(logMsg: String) {
+        log(logMsg, logger, Level.WARN)
+    }
 
     /**
      * Check whether we're running from "Exotica Technologies" screen
      */
     fun runningFromExoticaTechnologiesScreen(): Boolean {
-        // This one will just naively rely on the fact that we have options showing in the background
-        val optional = getSectorHasOptionsOptional()
-        // If optional is empty, bail out
-        if (optional.isEmpty()) return false
-        // Proceed otherwise
-        val hasOptions = optional.isPresent() && optional.get()
-        return hasOptions
+        return if (IS_IN_TEST_MODE) {
+            TEST_MODE_VALUE
+        } else {
+            actualStarsectorAPIrunningFromExoticaTechnologiesScreen()
+        }
     }
 
     /**
@@ -65,11 +70,28 @@ object StarsectorAPIInteractor {
         // Refit screen is going to be on the REFIT core UI tab and won't have options
         val optional = getSectorHasOptionsOptional()
         // If empty, bail out
-        if (optional.isEmpty()) return false
+        if (optional.isEmpty()) {
+            diagnosticLog("actualStarsectorAPIrunningFromRefitScreen(): interaction dialog options empty => false")
+            return false
+        }
         // Otherwise proceed
         val hasOptions = optional.isPresent() && optional.get()
         val runningFromRefitScreen = Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT
+        diagnosticLog(
+                "actualStarsectorAPIrunningFromRefitScreen(): coreTab==REFIT=${runningFromRefitScreen}, " +
+                        "hasOptions=${hasOptions} => ${runningFromRefitScreen && hasOptions.not()}"
+        )
         return runningFromRefitScreen && hasOptions.not()
+    }
+
+    private fun actualStarsectorAPIrunningFromExoticaTechnologiesScreen(): Boolean {
+        // This one will just naively rely on the fact that we have options showing in the background
+        val optional = getSectorHasOptionsOptional()
+        // If optional is empty, bail out
+        if (optional.isEmpty()) return false
+        // Proceed otherwise
+        val hasOptions = optional.isPresent() && optional.get()
+        return hasOptions
     }
 
     /**

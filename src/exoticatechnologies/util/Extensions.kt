@@ -12,6 +12,8 @@ import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
+import exoticatechnologies.refit.checkRefitVariant
+import exoticatechnologies.refit.getRefitDisplayVariant
 import exoticatechnologies.util.reflect.ReflectionUtils
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -1010,6 +1012,61 @@ fun getAllModulesVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantAP
     retVal.add(fleetMemberAPI.variant)
 
     return retVal.toList()
+}
+
+/**
+ * Returns the identity-deduped set of every variant in [fleetMemberAPI]'s reachable variant graphs.
+ *
+ * The whole-ship install flows walk this instead of [getChildModuleVariantList] so that every graph
+ * the game can read stats/costs from is covered symmetrically on install and remove (@see
+ * plan-hullmod_exotic_installs_on_whole_ship-revision9):
+ *
+ * 1. the campaign tree: [FleetMemberAPI.variant] and every station-module descendant
+ * 2. the refit tree: [checkRefitVariant] and descendants, only when it is a distinct instance
+ * 3. the display tree: [getRefitDisplayVariant] and descendants, only when non-null and distinct
+ * 4. every campaign descendant module's real FleetMember variant ([FleetMemberUtils.findModuleMember])
+ *
+ * Trees 2 and 3 read [exoticatechnologies.refit.RefitButtonAdder] state and are therefore only
+ * populated on the refit screen; on the planetside "exoticatech" screen they resolve to identity
+ * skips and the returned set stays the campaign tree. Nulling in test mode is inherent: with no
+ * refit state the refit/display trees are absent and no Starsector API is reached.
+ *
+ * @param fleetMemberAPI the [FleetMemberAPI] of the root module
+ * @return the whole variant graph, member's own root variant included
+ */
+fun getWholeVariantGraph(fleetMemberAPI: FleetMemberAPI): MutableSet<ShipVariantAPI> {
+    val variants = LinkedHashSet<ShipVariantAPI>()
+
+    fun addVariantTree(root: ShipVariantAPI) {
+        variants.add(root)
+        root.forEachModuleVariant { variants.add(it) }
+    }
+
+    // 1. Campaign tree: the member's own variant and every descendant module variant.
+    addVariantTree(fleetMemberAPI.variant)
+
+    // 2. Refit tree: the refit-screen contract variant when refit is active on this member.
+    val refitVariant = fleetMemberAPI.checkRefitVariant()
+    if (refitVariant !== fleetMemberAPI.variant) {
+        addVariantTree(refitVariant)
+    }
+
+    // 3. Display tree: the working tree the refit screen actually renders.
+    getRefitDisplayVariant()?.let { displayRoot ->
+        if (displayRoot !== fleetMemberAPI.variant) {
+            addVariantTree(displayRoot)
+        }
+    }
+
+    // 4. Each campaign descendant module's real FleetMember variant (child FMs keep the stock
+    //    variant while the campaign tree holds the REFIT clones).
+    fleetMemberAPI.variant.forEachModuleVariant { childVariant ->
+        FleetMemberUtils.findModuleMember(childVariant)?.let { childFleetMember ->
+            variants.add(childFleetMember.variant)
+        }
+    }
+
+    return variants
 }
 
 /**

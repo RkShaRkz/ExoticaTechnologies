@@ -14,16 +14,10 @@ import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
-import exoticatechnologies.refit.RefitButtonAdder
 import exoticatechnologies.refit.checkRefitVariant
-import exoticatechnologies.refit.getRefitDisplayVariant
 import exoticatechnologies.util.FleetMemberUtils
-import exoticatechnologies.util.ModuleVariantHierarchy
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.datastructures.Optional
-import exoticatechnologies.util.fixVariant
-import exoticatechnologies.util.forEachModuleVariant
-import exoticatechnologies.util.propagateFromVariantTree
 import exoticatechnologies.util.runningFromRefitScreen
 import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
@@ -117,115 +111,16 @@ open class HullmodExotic(
                 }
         )
 
-        // Whole-ship installs: propagate this exotic's own hullmod to EVERY object graph the refit
-        // screen reads (the campaign tree, the refit tree, the refit display tree and each child
-        // FleetMemberAPI's own .variant). The flows above only tag the campaign tree's children, so
-        // without this pass the refit screen never shows the OP cost on modules. Mirrors the
-        // write-through ExoticaTechHM.addToFleetMember already performs for the "exoticatech"
-        // marker hullmod.
-        if (installsOnWholeShip) {
-            propagateHullmodThroughoutShip(rootMember)
-        }
+        // Whole-ship installs: the grep flows now feed the FULL variant graph (campaign tree, refit
+        // and display trees, child FMs' .variants) into the expected set and install on every graph
+        // via the callbacks above - see plan-hullmod_exotic_installs_on_whole_ship-revision9. No
+        // separate propagate pass is needed anymore.
     }
 
     private fun installHullmodOnVariant(variant: ShipVariantAPI?) {
         variant?.let {
             variant.addPermaMod(hullmodId)
         }
-    }
-
-    /**
-     * Writes THIS exotic's own [hullmodId] through every variant graph the refit screen reads,
-     * mirroring the apply-branch of [ExoticaTechHM.addToFleetMember] (which only does this for the
-     * "exoticatech" marker hullmod):
-     *
-     * - the root member's campaign tree (`rootMember.variant`), children included,
-     * - [FleetMemberAPI.checkRefitVariant]'s tree,
-     * - the refit display working tree ([getRefitDisplayVariant]) — the tree the refit actually
-     *   renders and re-binds to the fleet member on refit confirm. This is what an install entered
-     *   from a *child module* tab misses, leaving the OP cost stale on every module tab otherwise,
-     * - every child [FleetMemberAPI]'s own `.variant` (the refit reads each FM independently).
-     *
-     * Closes with the same [fixVariant] / [ModuleVariantHierarchy.refreshFleetCache] steps
-     * ExoticaTechHM performs, so the REFIT clones inherit the hullmod and the hierarchy caches
-     * re-register the new clone variant ids. Deliberately does NOT call
-     * [FleetMemberAPI.updateStats]: this runs inside [onInstall], which the engine re-enters from
-     * updateStats -> [ExoticaTechHM.applyEffectsBeforeShipCreation] -> each exotic's
-     * applyExoticToStats; a stats refresh here would recurse unboundedly (StackOverflowError, seen
-     * in rev-4). Stats are refreshed once by the initiating caller instead
-     * (ExoticaTechHM.addToFleetMember / the refit click), outside onInstall.
-     *
-     * Idempotent: each graph is a pre-order walk and [ShipVariantAPI.addPermaMod] is a no-op for an
-     * already-present hullmod, so re-entries from [applyExoticToStats]/[applyToShip] are safe.
-     */
-    private fun propagateHullmodThroughoutShip(rootMember: FleetMemberAPI) {
-        installHullmodRecursive(rootMember.variant)
-        installHullmodRecursive(rootMember.checkRefitVariant())
-        getRefitDisplayVariant()?.let(::installHullmodRecursive)
-
-        // Every child FleetMemberAPI's own .variant, plus (idempotently) the tree's children.
-        rootMember.propagateFromVariantTree(hullmodId)
-
-        rootMember.fixVariant()
-        ModuleVariantHierarchy.refreshFleetCache(rootMember.variant)
-        ModuleVariantHierarchy.refreshFleetCache(rootMember.checkRefitVariant())
-        getRefitDisplayVariant()?.let { ModuleVariantHierarchy.refreshFleetCache(it) }
-    }
-
-    /**
-     * Mirror of [propagateHullmodThroughoutShip] for removals: strips THIS exotic's own [hullmodId]
-     * from every object graph the install wrote it to (campaign tree, refit tree, display tree),
-     * and — crucially — undoes the exotic hullmod's stat effects via [unapplyExoticHullmodFromVariant]
-     * on every variant it strips. The remove flows only unapply the variants recorded in the install
-     * bookkeeping (the modules the exotic was installed ON), so modules that merely received the
-     * propagated hullmod (e.g. the sibling modules of a whole-ship install) would otherwise keep
-     * their reduced OP. Order matches [unapplyExoticHullmodAndRemoveExoticaAndHullmod]:
-     * removeHullmodFromVariant() first, then unapply on the stats the [HullmodExoticHandler] uses.
-     *
-     * Child [FleetMemberAPI]s' OWN campaign `.variant`s are the same objects the root tree walk
-     * already strips, so no per-FM reverse lookup is needed here — [FleetMemberUtils.findModuleMember]
-     * is instance-unstable across fixVariant/refit cloning and can even match the identical twin
-     * ship (issue #39). The refit-side clones are rebuilt clean by [fixVariant] at the end. Like
-     * [propagateHullmodThroughoutShip], it does NOT call [FleetMemberAPI.updateStats], to avoid
-     * re-entering [onInstall] from applyEffects when other whole-ship exotics remain installed.
-     * Unapply is idempotent (the flows may already have unapplied a recorded variant), since
-     * [ExoticHullmod.removeEffectsBeforeShipCreation] unmodifies id-keyed stat modifiers.
-     */
-    private fun stripHullmodThroughoutShip(rootMember: FleetMemberAPI) {
-        stripHullmodAndUnapplyRecursive(rootMember.variant, rootMember)
-        val refitTree = rootMember.checkRefitVariant()
-        if (refitTree !== rootMember.variant) {
-            stripHullmodAndUnapplyRecursive(refitTree, rootMember)
-        }
-        getRefitDisplayVariant()?.let { displayTree ->
-            if (displayTree !== rootMember.variant && displayTree !== refitTree) {
-                stripHullmodAndUnapplyRecursive(displayTree, rootMember)
-            }
-        }
-
-        rootMember.fixVariant()
-        ModuleVariantHierarchy.refreshFleetCache(rootMember.variant)
-        ModuleVariantHierarchy.refreshFleetCache(refitTree)
-        getRefitDisplayVariant()?.let { ModuleVariantHierarchy.refreshFleetCache(it) }
-    }
-
-    private fun installHullmodRecursive(variant: ShipVariantAPI) {
-        installHullmodOnVariant(variant)
-        variant.forEachModuleVariant { child ->
-            installHullmodOnVariant(child)
-        }
-    }
-
-    private fun stripHullmodAndUnapplyRecursive(variant: ShipVariantAPI, rootMember: FleetMemberAPI) {
-        stripHullmodAndUnapply(variant, rootMember)
-        variant.forEachModuleVariant { child ->
-            stripHullmodAndUnapply(child, rootMember)
-        }
-    }
-
-    private fun stripHullmodAndUnapply(variant: ShipVariantAPI, rootMember: FleetMemberAPI) {
-        removeHullmodFromVariant(variant)
-        unapplyExoticHullmodFromVariantOnAllStats(rootMember, variant)
     }
 
     override fun onDestroy(member: FleetMemberAPI) {
@@ -309,29 +204,9 @@ open class HullmodExotic(
                 fleetMember = rootMember
         )
 
-        // Whole-ship removals: strip this exotic's own hullmod from every object graph the install
-        // wrote it to, mirroring propagateHullmodThroughoutShip. The flows above only reach the
-        // campaign tree / the root's refit variant; the refit display tree and the child FMs'
-        // .variant graphs would otherwise keep a stale hullmod (and its OP cost) on the refit screen.
-        if (installsOnWholeShip()) {
-            stripHullmodThroughoutShip(rootMember)
-
-            // The refit keeps exactly one live member entry for whatever it is currently rendering.
-            // That member's stats object can carry an OP-cost listener that survives the strip above
-            // (identical hulls share hullVariantId-based resolution, so the object the OP panel reads
-            // is not necessarily any graph the strip walked). Scrub it directly. Pure object ref,
-            // null-safe, no FleetData dependence, and removeEffects is idempotent on a stats that
-            // never had the listener.
-            if (runningFromRefitScreen()) {
-                RefitButtonAdder.member?.let { displayedMember ->
-                    unapplyExoticHullmodFromVariant(
-                            displayedMember.checkRefitVariant(),
-                            displayedMember.stats
-                    )
-                }
-            }
-        }
-
+        // Whole-ship removals: the remove flows now reach every graph the install wrote to through the
+        // install bookkeeping (see plan-hullmod_exotic_installs_on_whole_ship-revision9), so no
+        // separate strip/unapply pass is needed anymore.
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
         logIfOverMinLogLevel("<-- onDestroy()\tStill has hullmod: ${check}", Level.INFO)
     }
@@ -343,7 +218,9 @@ open class HullmodExotic(
      * - invoking [ShipModLoader.set] with [member], [moduleVariant] and [ShipModifications]
      * - Toggling [ExoticaTechHM] by calling [ExoticaTechHM.addToFleetMember]
      * - removing the [ExoticHullmod] by calling [removeHullmodFromVariant]
-     * - finally, unapplies the ExoticHullmod by calling [unapplyExoticHullmodFromVariant]
+     *
+     * The stat-unapply happens BEFORE this runs, inside [HullmodExoticHandler.removeHullmodExoticFromVariant]'s
+     * dual-scrub (parent member's stats + the variant's statsForOpCosts).
      *
      * **NOTE**: The [optionalMemberMods] is a somewhat "special" parameter that either contains [ShipModifications]
      * of the [moduleVariant] or in case it's empty, the 'mods' will be fetched manually via [get] before commencing
@@ -374,11 +251,9 @@ open class HullmodExotic(
         ExoticaTechHM.addToFleetMember(member, moduleVariant)
         removeHullmodFromVariant(moduleVariant)
 
-        // grab stats to use - scrub BOTH the variant's own statsForOpCosts and the member's stats,
-        // since a single-pick ({variant.statsForOpCosts ?: member.stats}) can leave the OP-cost
-        // listener alive on whichever object the refit actually reads (identical hulls share
-        // hullVariantId-based resolution). removeEffects is idempotent on both.
-        unapplyExoticHullmodFromVariantOnAllStats(member, moduleVariant)
+        // The handler's removeHullmodExoticFromVariant already dual-scrubs the stats objects
+        // (parent member's stats + the variant's statsForOpCosts) BEFORE this callback runs, so no
+        // unapply is needed here - see plan-hullmod_exotic_installs_on_whole_ship-revision9.
     }
 
     private fun removeHullmodFromVariant(variant: ShipVariantAPI?) {
@@ -394,40 +269,6 @@ open class HullmodExotic(
             variant.removePermaMod(hullmodId)
             variant.removeMod(hullmodId)
             variant.removePermaMod(hullmodId)
-        }
-    }
-
-    /**
-     * Utility method for calling [ExoticHullmod.removeEffectsBeforeShipCreation] on the 'internal' [exoticHullmod] with
-     * necessary parameters
-     *
-     * @param variant a [ShipVariantAPI] from which to unapply the [ExoticHullmod]
-     * @param stats the [MutableShipStatsAPI] from which to unapply the [ExoticHullmod]
-     */
-    private fun unapplyExoticHullmodFromVariant(variant: ShipVariantAPI, stats: MutableShipStatsAPI) {
-        val variantHullSize = variant.hullSpec.hullSize
-        exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, stats, exoticHullmod.hullModId)
-    }
-
-    /**
-     * Undoes [ExoticHullmod] stat effects from BOTH stats objects that can carry them for [variant]:
-     * the variant's own [ShipVariantAPI.getStatsForOpCosts] and the anchor member's [FleetMemberAPI.getStats].
-     *
-     * Removals used to scrub a single pick (`variant.statsForOpCosts ?: member.stats`, see
-     * [HullmodExoticHandler.getNonNullStatsToUse]), which silently misses the listener when it lives
-     * on the *other* object. That happens with identical hulls: multiple copies of the same ship
-     * share the same hullVariantId, so the object the refit OP panel reads is not necessarily the one
-     * the install bookkeeping recorded. Scrubbing both is safe - [ExoticHullmod.removeEffectsBeforeShipCreation]
-     * unmodifies id-keyed stat modifiers and `removeListenerOfClass` is a no-op on stats that never
-     * had the listener.
-     *
-     * @param member the anchor ("root") [FleetMemberAPI] used to resolve a non-null stats fallback
-     * @param variant the [ShipVariantAPI] whose effects we want to undo
-     */
-    private fun unapplyExoticHullmodFromVariantOnAllStats(member: FleetMemberAPI, variant: ShipVariantAPI) {
-        unapplyExoticHullmodFromVariant(variant, member.stats)
-        variant.statsForOpCosts?.let { statsForOpCosts ->
-            unapplyExoticHullmodFromVariant(variant, statsForOpCosts)
         }
     }
 

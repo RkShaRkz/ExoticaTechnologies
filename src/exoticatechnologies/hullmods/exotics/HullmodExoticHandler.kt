@@ -10,8 +10,7 @@ import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.StarsectorAPIInteractor
 import exoticatechnologies.util.datastructures.Optional
-import exoticatechnologies.util.getChildModuleVariantList
-import exoticatechnologies.util.runningFromExoticaTechnologiesScreen
+import exoticatechnologies.util.getWholeVariantGraph
 import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -312,7 +311,9 @@ object HullmodExoticHandler {
             } else {
                 // LENIENT work mode - similar to strict, except we won't be doing a literal contains() but rather a slightly
                 // more lax check - via the hullSpec.hullID
-                val isInstalledOn = currentInstallData.listOfVariantsWeInstalledOn.contains(variant)
+                val isInstalledOn = currentInstallData.listOfVariantsWeInstalledOn
+                        .map { installedVariant -> installedVariant.hullSpec.hullId }
+                        .contains(variant.hullSpec.hullId)
                 val isInVariantsList = currentInstallData.listOfAllModuleVariants
                         .map { moduleVariant -> moduleVariant.hullSpec.hullId }
                         .contains(variant.hullSpec.hullId)
@@ -353,8 +354,17 @@ object HullmodExoticHandler {
                 val installData = currentInstallData.get()
                 val installedOnVariants = installData.listOfVariantsWeInstalledOn
 
-                // If we're in the list, remove and unset from the list
-                if (installedOnVariants.contains(variant)) {
+                // STRICT work mode resolves by instance identity; LENIENT resolves by hullId so a
+                // regenerated/churned clone (refit working tree, reloaded fleet) still scrubs and
+                // removes the variant we actually installed on.
+                val variantToRemove = if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
+                    installedOnVariants.firstOrNull { it == variant }
+                } else {
+                    installedOnVariants.firstOrNull { it.hullSpec.hullId == variant.hullSpec.hullId }
+                }
+
+                // If we found a match, remove and unset from the list
+                if (variantToRemove != null) {
                     // Grab the ExoticHullmod by it's key and uninstall from this variant
                     val hullmodId = hullmodExotic.getHullmodId()
                     val hullmodOptional = ExoticHullmodLookup.getFromMap(hullmodId = hullmodId)
@@ -367,13 +377,13 @@ object HullmodExoticHandler {
                         // (multiple copies of the same ship). removeListenerOfClass is a no-op on the
                         // stats that never had it, so this is idempotent.
                         exoticHullmodInstance.removeEffectsBeforeShipCreation(
-                                hullSize = variant.hullSpec.hullSize,
+                                hullSize = variantToRemove.hullSpec.hullSize,
                                 stats = parentFleetMember.stats,
                                 id = exoticHullmodInstance.hullModId
                         )
-                        variant.statsForOpCosts?.let { statsForOpCosts ->
+                        variantToRemove.statsForOpCosts?.let { statsForOpCosts ->
                             exoticHullmodInstance.removeEffectsBeforeShipCreation(
-                                    hullSize = variant.hullSpec.hullSize,
+                                    hullSize = variantToRemove.hullSpec.hullSize,
                                     stats = statsForOpCosts,
                                     id = exoticHullmodInstance.hullModId
                             )
@@ -386,7 +396,7 @@ object HullmodExoticHandler {
                             // STRICT work mode - reduce the 'installed on' list by removing the variant we will remove from
                             if (SHOULD_REMOVE_FROM_INSTALLED_LIST_IN_STRICT_MODE) {
                                 val newInstalledOnList = installedOnVariants.toMutableList()
-                                newInstalledOnList.remove(variant)
+                                newInstalledOnList.remove(variantToRemove)
 
                                 // And return the reduced list
                                 newInstalledOnList
@@ -592,6 +602,14 @@ object HullmodExoticHandler {
         return StarsectorAPIInteractor.runningFromRefitScreen()
     }
 
+    private fun runningFromExoticaScreen(): Boolean {
+        return StarsectorAPIInteractor.runningFromExoticaTechnologiesScreen()
+    }
+
+    private fun isOutsideExoticaOrRefit(): Boolean {
+        return runningFromRefitScreen().not() && runningFromExoticaScreen().not()
+    }
+
     /**
      * Because, for some reason, single-module ships' [ShipVariantAPI.getStatsForOpCosts] returns [null], but works fine
      * for multimoduled ships, it is somewhat safe to assume that if there is only one variant (no child variants)
@@ -680,7 +698,7 @@ object HullmodExoticHandler {
                 // First things first, figure out whether we're running from Refit or Exotica screen
                 val isFromRefitScreen = runningFromRefitScreen()
                 val workModeOptional = getWorkModeOptional()
-                val workMode = if (ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT) {
+                val workMode = if (ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT && isOutsideExoticaOrRefit()) {
                     OUTSIDE_EXOTICA_OR_REFIT_FALLBACK_WORKMODE
                 } else {
                     if (workModeOptional.isEmpty()) {
@@ -692,29 +710,29 @@ object HullmodExoticHandler {
                     workModeOptional.get()
                 }
 
+                diagnosticLog("CheckAndInstallOnAllChildModulesVariants(): workMode=${workMode}, isFromRefitScreen=${isFromRefitScreen}")
+
                 // Carry on
 
-                val childModuleVariants = getChildModuleVariantList(fleetMember)
-                val allVariantsList = if (isFromRefitScreen) {
-                    // For refit screen, we'll include the member's refit variant as well, since the
-                    // refit reads it in addition to the campaign tree. The display working tree is
-                    // intentionally NOT added here: the flows only iterate the campaign
-                    // childModuleVariants, and this expected-list is what the should-install guard
-                    // matches against and instantly BAILS on a variant it does not expect. Keeping
-                    // it minimal and stable preserves the guard as the recursion break for the
-                    // updateStats -> applyEffectsBeforeShipCreation -> onInstall re-entry.
-                    childModuleVariants
-                            .toMutableList()
-                            .apply { add(fleetMemberVariant) }
-                            .apply { add(fleetMember.checkRefitVariant()) }
-                            .toList()
-                } else {
-                    // Otherwise, we wont
-                    childModuleVariants
-                            .toMutableList()
-                            .apply { add(fleetMemberVariant) }
-                            .toList()
+                // Feed the FULL variant graph of the ship into the expected set: the campaign tree,
+                // the refit and display trees (while on the refit screen), and each child module's
+                // real FleetMember variant. The remove side iterates listOfVariantsWeInstalledOn,
+                // so the expected set is what guarantees install and uninstall cover the same
+                // graphs. The member's own root and refit variants are taken OUT of the iterate
+                // list here - they belong to CheckAndInstallOnMemberModule - but stay in the
+                // expected set. The recursion guard still holds: updateStats ->
+                // applyEffectsBeforeShipCreation -> onInstall re-entry is broken by the
+                // alreadyIn / hasNotInstalledAlready checks regardless of how broad the expected
+                // list is.
+                val wholeVariantGraph = getWholeVariantGraph(fleetMember)
+                val childModuleVariants = LinkedHashSet(wholeVariantGraph).apply {
+                    remove(fleetMemberVariant)
+                    if (isFromRefitScreen) {
+                        val refitVariant = fleetMember.checkRefitVariant()
+                        if (refitVariant !== fleetMemberVariant) remove(refitVariant)
+                    }
                 }
+                val allVariantsList = wholeVariantGraph.toList()
 
                 logIfOverMinLogLevel("onInstall()\tchildModuleVariants: ${childModuleVariants}", Level.INFO)
                 if (childModuleVariants.isEmpty().not()) {
@@ -784,7 +802,7 @@ object HullmodExoticHandler {
                 // First things first, figure out whether we're running from Refit or Exotica screen
                 val isFromRefitScreen = runningFromRefitScreen()
                 val workModeOptional = getWorkModeOptional()
-                val workMode = if (ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT) {
+                val workMode = if (ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT && isOutsideExoticaOrRefit()) {
                     OUTSIDE_EXOTICA_OR_REFIT_FALLBACK_WORKMODE
                 } else {
                     if (workModeOptional.isEmpty()) {
@@ -795,6 +813,8 @@ object HullmodExoticHandler {
 
                     workModeOptional.get()
                 }
+
+                diagnosticLog("CheckAndInstallOnMemberModule(): workMode=${workMode}, isFromRefitScreen=${isFromRefitScreen}")
 
                 // Carry on
                 val installsOnWholeShip = hullmodExotic.installsOnWholeShip()
@@ -889,7 +909,7 @@ object HullmodExoticHandler {
             ) {
                 // First things first, figure out whether we're running from Refit or Exotica screen
                 val workModeOptional = getWorkModeOptional()
-                val workMode = if (ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT) {
+                val workMode = if (ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT && isOutsideExoticaOrRefit()) {
                     OUTSIDE_EXOTICA_OR_REFIT_FALLBACK_WORKMODE
                 } else {
                     if (workModeOptional.isEmpty()) {
@@ -900,6 +920,8 @@ object HullmodExoticHandler {
 
                     workModeOptional.get()
                 }
+
+                diagnosticLog("CheckAndRemoveFromAllChildModulesVariants(): workMode=${workMode}")
 
                 //Lets go through all 'installed modules' and uninstall from them, instead of these module slots
                 // that were the root cause of the whole problem... damn you 3-5am copypasted code ...
@@ -987,7 +1009,7 @@ object HullmodExoticHandler {
             ) {
                 // First things first, figure out whether we're running from Refit or Exotica screen
                 val workModeOptional = getWorkModeOptional()
-                val workMode = if (ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT) {
+                val workMode = if (ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT && isOutsideExoticaOrRefit()) {
                     OUTSIDE_EXOTICA_OR_REFIT_FALLBACK_WORKMODE
                 } else {
                     if (workModeOptional.isEmpty()) {
@@ -998,6 +1020,8 @@ object HullmodExoticHandler {
 
                     workModeOptional.get()
                 }
+
+                diagnosticLog("CheckAndRemoveFromMemberModule(): workMode=${workMode}")
 
                 // Carry on
                 val mods = getCorrectMods(fleetMember, fleetMemberVariant)
@@ -1083,7 +1107,7 @@ object HullmodExoticHandler {
     private fun getWorkModeOptional(): Optional<HullmodExoticHandlerWorkMode> {
         return if (runningFromRefitScreen()) {
             Optional.of(HullmodExoticHandlerWorkMode.LENIENT)
-        } else if (runningFromExoticaTechnologiesScreen()) {
+        } else if (runningFromExoticaScreen()) {
             Optional.of(HullmodExoticHandlerWorkMode.STRICT)
         } else {
             Optional.empty()
@@ -1099,16 +1123,20 @@ object HullmodExoticHandler {
         )
     }
 
+    private fun diagnosticLog(logMsg: String) {
+        logIfOverMinLogLevel(logMsg, Level.WARN)
+    }
+
     /**
      * Method that returns an "initial" list of variants for a given [member].
-     * Depending on [installsOnWholeShip], it returns either an empty list or [getChildModuleVariantList]
+     * Depending on [installsOnWholeShip], it returns either an empty list or [getWholeVariantGraph]
      *
      * @param member the [FleetMemberAPI] to return an initial list of variants for
      * @param installsOnWholeShip whether the [HullmodExotic] should install its hullmod on the whole ship or not
      * @return the initial list of variants
      */
     private fun getInitialVariantsListForMember(member: FleetMemberAPI, installsOnWholeShip: Boolean): List<ShipVariantAPI> {
-        return if(installsOnWholeShip) { getChildModuleVariantList(member) } else { listOf() }
+        return if(installsOnWholeShip) { getWholeVariantGraph(member).toList() } else { listOf() }
     }
 
 
@@ -1200,6 +1228,35 @@ object HullmodExoticHandler {
     @TestOnly
     internal fun testsOnly_removeHullmodExoticFromVariant(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI): Boolean {
         return removeHullmodExoticFromVariant(hullmodExotic, parentFleetMember, variant, HullmodExoticHandlerWorkMode.STRICT)
+    }
+
+    /**
+     * Internally calls into [getWorkModeOptional] - please, do not use this in production code
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_getWorkModeOptional(): Optional<HullmodExoticHandlerWorkMode> {
+        return getWorkModeOptional()
+    }
+
+    /**
+     * Internally calls into [shouldRemoveHullmodExoticFromVariant] with an explicit [workMode] -
+     * please, do not use this in production code
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_shouldRemoveHullmodExoticFromVariantForWorkMode(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
+        return shouldRemoveHullmodExoticFromVariant(hullmodExotic, parentFleetMember, variant, workMode)
+    }
+
+    /**
+     * Internally calls into [removeHullmodExoticFromVariant] with an explicit [workMode] -
+     * please, do not use this in production code
+     */
+    @VisibleForTesting
+    @TestOnly
+    internal fun testsOnly_removeHullmodExoticFromVariantForWorkMode(hullmodExotic: HullmodExotic, parentFleetMember: FleetMemberAPI, variant: ShipVariantAPI, workMode: HullmodExoticHandlerWorkMode): Boolean {
+        return removeHullmodExoticFromVariant(hullmodExotic, parentFleetMember, variant, workMode)
     }
 }
 

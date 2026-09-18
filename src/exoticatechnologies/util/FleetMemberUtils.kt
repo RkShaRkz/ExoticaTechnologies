@@ -18,6 +18,10 @@ object FleetMemberUtils {
     val moduleMap: MutableMap<String, FleetMemberAPI> = HashMap()
     private val logger: Logger = Logger.getLogger(FleetMemberUtils::class.java)
 
+    private fun diagnosticLog(logMsg: String) {
+        log(logMsg, logger, Level.WARN)
+    }
+
     @JvmStatic
     fun findMemberFromShip(ship: ShipAPI): FleetMemberAPI? {
         val id = ship.variant.hullVariantId
@@ -323,12 +327,14 @@ object FleetMemberUtils {
         val targetId = member.variant.hullVariantId
         val candidates = matchingRootMembers(member, targetId)
 
-        log(
-                "findRootVariantMember(): member=${member} (id=${member.id}, isChild=${member.shipName.isNullOrEmpty()})" +
+        diagnosticLog(
+                "findRootVariantMember(): member=${member} " +
+                        "(id=${member.id}, shipName=${member.shipName}, hullVariantId=${member.variant.hullVariantId})" +
                         ", targetId=${targetId}, refitScreen=${runningFromRefitScreen()}" +
-                        ", refitRoot=${RefitButtonAdder.rootMember} (id=${RefitButtonAdder.rootMember?.id})" +
-                        ", candidates=${candidates.map { it.id }}",
-                logger, Level.WARN
+                        ", refitRoot=${RefitButtonAdder.rootMember} " +
+                        "(id=${RefitButtonAdder.rootMember?.id}, shipName=${RefitButtonAdder.rootMember?.shipName}, " +
+                        "hullVariantId=${RefitButtonAdder.rootMember?.variant?.hullVariantId})" +
+                        ", candidates=${candidates.map { it.id }}, candidateShipNames=${candidates.map { it.shipName }}"
         )
 
         // 1. Refit screen: the ship being refitted, anchored on the cached root FleetMember id (a
@@ -337,7 +343,6 @@ object FleetMemberUtils {
         //    tree holds (the case that made instance-identity fail in the refit screen).
         if (runningFromRefitScreen()) {
             RefitButtonAdder.rootMember?.let {
-                log("findRootVariantMember(): resolved 1-refit-root -> ${it.id}", logger, Level.WARN)
                 return it
             }
         }
@@ -345,20 +350,17 @@ object FleetMemberUtils {
         // 2. The true owner in a stable (non-refit) graph: its tree holds the member's concrete
         //    variant instance. This is the only step that disambiguates two identical hulls there.
         candidates.firstOrNull { treeInstanceContains(it.variant, member.variant) }?.let {
-            log("findRootVariantMember(): resolved 2-owner -> ${it.id}", logger, Level.WARN)
             return it
         }
 
         // 3. Status-quo: first fuzzy match (single ship -> exactly one candidate), else the old
         //    resolution.
         candidates.firstOrNull()?.let {
-            log("findRootVariantMember(): resolved 3-first-match -> ${it.id}", logger, Level.WARN)
             return it
         }
         val rootVariant = findRootVariant(member, member.variant)
         if (rootVariant == member.variant) return member
         val fallback = findModuleMember(rootVariant) ?: member
-        log("findRootVariantMember(): resolved 4-fallback -> ${fallback.id}", logger, Level.WARN)
         return fallback
     }
 
