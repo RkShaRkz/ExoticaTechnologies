@@ -710,8 +710,6 @@ object HullmodExoticHandler {
                     workModeOptional.get()
                 }
 
-                diagnosticLog("CheckAndInstallOnAllChildModulesVariants(): workMode=${workMode}, isFromRefitScreen=${isFromRefitScreen}")
-
                 // Carry on
 
                 // Feed the FULL variant graph of the ship into the expected set: the campaign tree,
@@ -813,8 +811,6 @@ object HullmodExoticHandler {
 
                     workModeOptional.get()
                 }
-
-                diagnosticLog("CheckAndInstallOnMemberModule(): workMode=${workMode}, isFromRefitScreen=${isFromRefitScreen}")
 
                 // Carry on
                 val installsOnWholeShip = hullmodExotic.installsOnWholeShip()
@@ -921,8 +917,6 @@ object HullmodExoticHandler {
                     workModeOptional.get()
                 }
 
-                diagnosticLog("CheckAndRemoveFromAllChildModulesVariants(): workMode=${workMode}")
-
                 //Lets go through all 'installed modules' and uninstall from them, instead of these module slots
                 // that were the root cause of the whole problem... damn you 3-5am copypasted code ...
                 val hullmodExoticKey = HullmodExoticKey(
@@ -1020,8 +1014,6 @@ object HullmodExoticHandler {
 
                     workModeOptional.get()
                 }
-
-                diagnosticLog("CheckAndRemoveFromMemberModule(): workMode=${workMode}")
 
                 // Carry on
                 val mods = getCorrectMods(fleetMember, fleetMemberVariant)
@@ -1121,10 +1113,6 @@ object HullmodExoticHandler {
                 logLevel = logLevel,
                 minLogLevel = MIN_LOG_LEVEL
         )
-    }
-
-    private fun diagnosticLog(logMsg: String) {
-        logIfOverMinLogLevel(logMsg, Level.WARN)
     }
 
     /**

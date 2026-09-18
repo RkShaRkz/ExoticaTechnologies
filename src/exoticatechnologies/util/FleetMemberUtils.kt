@@ -18,10 +18,6 @@ object FleetMemberUtils {
     val moduleMap: MutableMap<String, FleetMemberAPI> = HashMap()
     private val logger: Logger = Logger.getLogger(FleetMemberUtils::class.java)
 
-    private fun diagnosticLog(logMsg: String) {
-        log(logMsg, logger, Level.WARN)
-    }
-
     @JvmStatic
     fun findMemberFromShip(ship: ShipAPI): FleetMemberAPI? {
         val id = ship.variant.hullVariantId
@@ -327,41 +323,38 @@ object FleetMemberUtils {
         val targetId = member.variant.hullVariantId
         val candidates = matchingRootMembers(member, targetId)
 
-        diagnosticLog(
-                "findRootVariantMember(): member=${member} " +
-                        "(id=${member.id}, shipName=${member.shipName}, hullVariantId=${member.variant.hullVariantId})" +
-                        ", targetId=${targetId}, refitScreen=${runningFromRefitScreen()}" +
-                        ", refitRoot=${RefitButtonAdder.rootMember} " +
-                        "(id=${RefitButtonAdder.rootMember?.id}, shipName=${RefitButtonAdder.rootMember?.shipName}, " +
-                        "hullVariantId=${RefitButtonAdder.rootMember?.variant?.hullVariantId})" +
-                        ", candidates=${candidates.map { it.id }}, candidateShipNames=${candidates.map { it.shipName }}"
-        )
-
         // 1. Refit screen: the ship being refitted, anchored on the cached root FleetMember id (a
         //    stable marker, since the refit edits exactly one ship at a time). Resolves even when
         //    the entering member is a transient station-module member whose variant no candidate
         //    tree holds (the case that made instance-identity fail in the refit screen).
         if (runningFromRefitScreen()) {
             RefitButtonAdder.rootMember?.let {
+                diagnosticLog("[1] returning it\tit.shipName: ${it.shipName}, member.shipName: ${member.shipName}")
                 return it
             }
         }
 
         // 2. The true owner in a stable (non-refit) graph: its tree holds the member's concrete
         //    variant instance. This is the only step that disambiguates two identical hulls there.
-        candidates.firstOrNull { treeInstanceContains(it.variant, member.variant) }?.let {
+        candidates.firstOrNull { treeInstanceContains(it.variant, member.variant) && it.shipName == member.shipName }?.let {
+            diagnosticLog("[2] returning it\tit.shipName: ${it.shipName}, member.shipName: ${member.shipName}")
             return it
         }
 
         // 3. Status-quo: first fuzzy match (single ship -> exactly one candidate), else the old
         //    resolution.
         candidates.firstOrNull()?.let {
+            diagnosticLog("[3] returning it\tit.shipName: ${it.shipName}, member.shipName: ${member.shipName}")
             return it
         }
         val rootVariant = findRootVariant(member, member.variant)
         if (rootVariant == member.variant) return member
         val fallback = findModuleMember(rootVariant) ?: member
         return fallback
+    }
+
+    fun diagnosticLog(message: String) {
+        logger.error(message)
     }
 
     /**
