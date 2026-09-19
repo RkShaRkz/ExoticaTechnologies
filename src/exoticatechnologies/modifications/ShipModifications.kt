@@ -322,7 +322,7 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
     }
 
     override fun toString(): String {
-        return "ShipModifications{bandwidth=${bandwidth}, exotics=${exotics}, upgrades=${upgrades}}"
+        return "ShipModifications{bandwidth=${bandwidth}, exotics=${exotics}, exoticIdSet:${getExoticIdSet()}, upgrades=${upgrades}}"
     }
 
     private val tooltipColor = Misc.getTextColor()
@@ -507,3 +507,16 @@ class ShipModifications(var bandwidth: Float, var upgrades: ETUpgrades, var exot
         return obj
     }
 }
+
+/**
+ * Whether a list of [ShipModifications] is "effectively empty" — i.e. no entry would require
+ * the Exotica hullmod to be installed. `all {}` over an empty list is `true`, so this covers
+ * both `isEmpty()` AND the structural edge case where child modules carry placeholder (empty)
+ * ShipModifications written by [ShipModFactory.generateForChildModules] for tagless children —
+ * that case makes `wholeShipMods.isEmpty()` structurally dead for module ships, since their
+ * child entries always exist. Replaces those dead `.isEmpty()` guards at the strip decisions.
+ *
+ * Top-level (not a member extension) so the Java caller [exoticatechnologies.hullmods.ExoticaTechHM]
+ * can reach it as `ShipModificationsKt.isActuallyEmpty(wholeShipMods)`.
+ */
+fun List<ShipModifications>.isActuallyEmpty(): Boolean = all { !it.shouldApplyHullmod() }

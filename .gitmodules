@@ -1,0 +1,3 @@
+[submodule ".opencode-brain"]
+	path = .opencode-brain
+	url = https://github.com/RkShaRkz/Starsector-OpenCode

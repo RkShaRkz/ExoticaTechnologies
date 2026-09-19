@@ -1,0 +1,108 @@
+# plan-cache_model_migration.txt
+
+## Intent
+Restore child-module exotica/upgrades that the fix-rework2 branch no longer surfaces when
+loading a savegame created under the old (develop) cache model — by proving where the data
+actually lives in the save, then running a one-shot, evidence-gated migration. No theorizing;
+the decision gate is output from a diagnostic command run on both branches.
+
+## Verified background (source of truth)
+- Durable store never moved. Both branches persist `ShipModifications` as a `$$EXOTICA$$` JSON
+  tag on `ShipVariantAPI.tags`; both read it via `getFromVariant(variant)` (per-variant). The old
+  branch additionally mirrored child tags onto `member.variant` (root) when `variant != member.variant`
+  (develop `VariantTagProvider.set()`).
+- Old saves carry child data on the child variants themselves: child installs call
+  `ShipModLoader.set(member, moduleVariant, mods)` (develop `HullmodExotic.kt:214/220/329`).
+  Save layout = child tag on child variant + duplicate on root variant.
+- ET_MODMAP is ruled out for the old model: develop `PersistentDataProvider.set()` throws before
+  the only write to `shipModificationMap`. It is read (lazy backfill via `getFromId(member.id)`)
+  and cleaned, but never written by the old model. Only relevant defensively.
+- Loss is therefore read-path, not storage-location. The documented `fixVariant()`/`getRefitVariant`
+  churn (engine `_Start->_0/_1` tag-drop, refit.log 565617/565619) is the prime suspect: the new
+  branch walks the current post-churn variant graph and does not hit the surviving tags.
+- New branch cache is a per-(member, variantId) `ShipModifications` mirror keyed
+  `WeakHashMap<FleetMemberAPI, MutableMap<...>>` — invisible to the save, rebuilt from tags on
+  load/`clearCache()`. Not a migration target.
+
+## The decision gate (two recipes, chosen from evidence)
+Diagnostic columns per node on EACH branch:
+- `RAW=YES|NO (+ canonical)` — EXOTICA tag present on the variant itself (durable on-disk truth)
+- `RESOLVED=YES|NO (+ canonical)` — what `ShipModLoader.get(member, variant)` serves on that branch
+- root node additionally prints full raw tag text (JSON) to starsector.log
+- per-member `ET_MODMAP=YES|NO (+ canonical)` via raw Global persistentData `"ET_MODMAP"`
+
+```
+develop      : RAW=YES  RESOLVED=YES             (child data visible to old model)
+fix-rework2  : RAW=YES  RESOLVED=NO              -> Recipe A
+develop      : RAW=NO   RESOLVED=YES (root-only JSON contains child section) -> Recipe B
+either branch: ET_MODMAP=YES                     -> Pillar C
+```
+
+- Recipe A — re-assert (expected): surviving child tags exist but the new branch fails to surface
+  them. Migration = one-shot onGameLoad pass: for each affected (member, module), re-set() the
+  parsed mods onto the CURRENT module variant through the pipeline, verify a subsequent get()
+  returns the identical canonical mods, and only then strip the orphaned tags that are not the
+  freshly written node. set()'s writeThrough gets member/root/refit graphs consistent; the cache
+  follows.
+- Recipe B — true move: child variants genuinely bare; data only inside the root tag JSON's child
+  sections. Migration = split the root JSON per stat-module, set() onto each child, then strip
+  stale root-mirror clones after per-child verification.
+- Pillar C — ET_MODMAP backfill: legacy flushes already lazily via PersistentDataProvider.get;
+  after A/B the rerun must show those members RESOLVED=YES with the map no longer the sole source.
+
+ABSOLUTE safety rule (no exceptions): a durable tag is wiped only AFTER the re-asserted
+replacement has read back canonical-identical through ShipModLoader.get(). Never "move the cache
++ delete the tag" — the tag is the store.
+
+## Phase 1 — et_plan_migration console command
+Java, src/exoticatechnologies/commands/et_plan_migration.java, mirroring et_listmods.java
+(lazywizard BaseCommand / CommandContext / Console).
+
+Cross-branch compile constraints (verified):
+- References ONLY: ShipModLoader.get/getFromVariant (@JvmStatic both), ShipModifications
+  getExoticIdSet/getUpgradeMap/getBaseBandwidth (both), Starsector API, lazywizard console, org.json.
+- NO VariantTagProvider.inst / getInstance(), NO forEachModuleVariant, NO findRootVariant, NO
+  PersistentDataProvider class refs (ET_MODMAP read via raw Global persistentData).
+- Variant-tree walk inlined (develop lacks forEachModuleVariant): for slotId in
+  sorted(variant.getStationModules().keySet()) -> getModuleVariant(slot) -> recurse. Sorted for
+  deterministic diffing.
+- EXOTICA literal "$$EXOTICA$$" and map key "ET_MODMAP" duplicated as constants (identical on both).
+
+Behavior: strictly read-only (no set(), no resave, no tag mutation). Dump per player-fleet member,
+members sorted by getId(): header SHIP id=<id> hull=<hullId>, then per node (root first, module
+descendants pre-order) RAW/RESOLVED canonical columns + full raw tag text in the log path, and
+ET_MODMAP per member. Console lines = compact canonical; starsector.log (log4j INFO) = canonical +
+full raw JSON. isInCampaign() || isInMarket() gate; SUCCESS/WRONG_CONTEXT as et_listmods.
+
+Output is deterministic — log files diff cleanly.
+
+## Run protocol (ordering is mandatory)
+1. On develop, load the ORIGINAL pre-rework save, run the command, capture the starsector.log
+   lines. Exit WITHOUT saving — the command never saves, but a later save would rewrite tags under
+   the old model and poison the comparison.
+2. Same save file on fix-rework2, run, capture log lines, exit without resaving.
+3. Return both logs; diff node-by-node and select A / B / C from the gate table.
+
+## Phase 2 — migration implementation (post-gate)
+- Recipe executed as a one-shot onGameLoad-guarded pass or a second console command, exactly per
+  the recipe above including the verify-before-strip rule.
+- Cache steadiness after migration: set() refreshes mirrors; TTL sweep + clearCache() guarantee
+  re-sync on subsequent loads.
+
+## Validation
+1. Re-run et_plan_migration on fix-rework2 post-migration; RESOLVED canonical per node must equal
+   the develop run's RESOLVED/RAW canonical per node, ship-for-ship, module-for-module.
+2. In-game smoke (Windows build): refit screen shows all child exotics; fresh save; reload;
+   children persist without the migration pass (proves tags landed durable + correctly-located).
+3. ET_MODMAP no longer sole source for any member.
+
+## Guardrails
+- No object churn in loops; diagnostic is cold-path; StringBuilder for the log block.
+- Zero internal cross-branch references in the command; zero writes during Phase 1.
+- Tags are stripped only after canonical-identical read-back.
+
+## Not done (explicitly out of scope)
+- Any change to ShipModLoader/VariantTagProvider read or write paths (the new model ships as-is;
+  migration adapts data, not code).
+- FleetMemberHierarchy removal (parked, its own plan is on disk).
+- JAR build/deploy: Windows-side.

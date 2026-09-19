@@ -15,6 +15,7 @@ import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.refit.checkRefitVariant
+import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.StringUtils
 import exoticatechnologies.util.datastructures.Optional
 import exoticatechnologies.util.runningFromRefitScreen
@@ -50,22 +51,35 @@ open class HullmodExotic(
 
     override fun showWarningIfApplyingFromRefitScreen() = true
 
+    /**
+     * Whether this [HullmodExotic] installs its hullmod on the whole ship (every module) or only on the
+     * module it was installed on.
+     *
+     * This controls *install extent* and is separate from [shouldShareEffectToOtherModules], which governs
+     * whether an exotic owned by one module applies its effects (e.g. [applyExoticToStats]) to other modules.
+     * A [HullmodExotic] can therefore install its hullmod on a single module while still sharing its effects
+     * ship-wide.
+     *
+     * @return true if the hullmod should be installed on all modules of the ship, false if only on the owning module
+     */
+    open fun installsOnWholeShip(): Boolean = false
+
     override fun onInstall(member: FleetMemberAPI) {
-        val shouldShareEffectToOtherModules = shouldShareEffectToOtherModules(null, null)
+        val installsOnWholeShip = installsOnWholeShip()
         val isChildModule = member.shipName.isNullOrEmpty()
-        logIfOverMinLogLevel("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tshouldShareEffectToOtherModules = ${shouldShareEffectToOtherModules}, isChildModule = ${isChildModule}", Level.INFO)
-        //FIXME: for the time being, only "root" modules are able to share effects to all other (child) modules
-        // Ideally, any module should be able to share effects to all other modules
+        logIfOverMinLogLevel("--> onInstall()\tmember = ${member}\tmember.id = ${member.id}\tinstallsOnWholeShip = ${installsOnWholeShip}, isChildModule = ${isChildModule}", Level.INFO)
+        // Whole-ship installs anchor on the ship's root member, so they reach all modules no matter
+        // which module triggered them. For non-whole-ship installs we simply act on the member as-is.
         // Relevant issue: https://github.com/RkShaRkz/ExoticaTechnologies/issues/39
-        if (shouldShareEffectToOtherModules) {
-            // If we should share to other modules, lets just focus on being able to share from the root module
-            // to other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
-            // on how to allow replicating from *any* module to *all* other modules.
-            // SPOILER: the lookup to find the root module from which we'll discover the other modules is going to be
-            // much more difficult/trickier/slower
+        val rootMember = if (installsOnWholeShip) {
+            FleetMemberUtils.findRootVariantMember(member)
+        } else {
+            member
+        }
+        if (installsOnWholeShip) {
             HullmodExoticHandler.Flows.CheckAndInstallOnAllChildModulesVariants(
-                    fleetMember = member,
-                    fleetMemberVariant = member.variant,
+                    fleetMember = rootMember,
+                    fleetMemberVariant = rootMember.variant,
                     hullmodExotic = this,
                     onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
                         override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
@@ -76,14 +90,14 @@ open class HullmodExotic(
                         override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
                             logIfOverMinLogLevel("onInstall()\tinstallHullmodExoticToVariant result: ${onInstallResult}", Level.INFO)
                             logIfOverMinLogLevel("onInstall()\t--> installHullmodOnVariant()\tmoduleVariant: ${moduleVariant}", Level.INFO)
-                            installThisHullmodExoticToFleetMembersVariant(member, moduleVariant, moduleVariantMods)
+                            installThisHullmodExoticToFleetMembersVariant(rootMember, moduleVariant, moduleVariantMods)
                         }
                     }
             )
         }
         HullmodExoticHandler.Flows.CheckAndInstallOnMemberModule(
-                member = member,
-                memberVariant = member.variant,
+                member = rootMember,
+                memberVariant = rootMember.variant,
                 hullmodExotic = this@HullmodExotic,
                 onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
                     override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
@@ -92,10 +106,15 @@ open class HullmodExotic(
                 },
                 onInstallCallback = object: HullmodExoticHandler.Flows.OnInstallToMemberCallback {
                     override fun execute(onInstallResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
-                        installThisHullmodExoticToFleetMembersVariant(member, moduleVariant, moduleVariantMods)
+                        installThisHullmodExoticToFleetMembersVariant(rootMember, moduleVariant, moduleVariantMods)
                     }
                 }
         )
+
+        // Whole-ship installs: the grep flows now feed the FULL variant graph (campaign tree, refit
+        // and display trees, child FMs' .variants) into the expected set and install on every graph
+        // via the callbacks above - see plan-hullmod_exotic_installs_on_whole_ship-revision9. No
+        // separate propagate pass is needed anymore.
     }
 
     private fun installHullmodOnVariant(variant: ShipVariantAPI?) {
@@ -105,14 +124,16 @@ open class HullmodExotic(
     }
 
     override fun onDestroy(member: FleetMemberAPI) {
-        if (shouldShareEffectToOtherModules(null, null)) {
-            // If we should share to other modules, lets just focus on being able to share from the root module
-            // to other modules for now. Later on, when this issue starts 'hurting' more, we can take a better look
-            // on how to allow replicating from *any* module to *all* other modules.
-            // SPOILER: the lookup to find the root module from which we'll discover the other modules is going to be
-            // much more difficult/trickier/slower
+        val rootMember = if (installsOnWholeShip()) {
+            // Whole-ship removals anchor on the ship's root member, mirroring onInstall, so the remove
+            // bookkeeping matches the root-anchored InstallData no matter which module triggered it.
+            FleetMemberUtils.findRootVariantMember(member)
+        } else {
+            member
+        }
+        if (installsOnWholeShip()) {
             HullmodExoticHandler.Flows.CheckAndRemoveFromAllChildModulesVariants(
-                    fleetMember = member,
+                    fleetMember = rootMember,
                     hullmodExotic = this@HullmodExotic,
                     onShouldCallback = object: HullmodExoticHandler.Flows.OnShouldCallback {
                         override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
@@ -123,7 +144,7 @@ open class HullmodExotic(
                         override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
 
                             unapplyExoticHullmodAndRemoveExoticaAndHullmod(
-                                    member = member,
+                                    member = rootMember,
                                     moduleVariant = moduleVariant,
                                     optionalMemberMods = Optional.of(moduleVariantMods)
                             )
@@ -133,8 +154,8 @@ open class HullmodExotic(
         }
 
         HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
-                fleetMember = member,
-                fleetMemberVariant = member.variant,
+                fleetMember = rootMember,
+                fleetMemberVariant = rootMember.variant,
                 hullmodExotic = this@HullmodExotic,
                 onShouldCallback = object : HullmodExoticHandler.Flows.OnShouldCallback {
                     override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
@@ -145,7 +166,7 @@ open class HullmodExotic(
                     override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
 
                         unapplyExoticHullmodAndRemoveExoticaAndHullmod(
-                                member = member,
+                                member = rootMember,
                                 moduleVariant = moduleVariant,
                                 optionalMemberMods = Optional.empty()
                         )
@@ -156,8 +177,8 @@ open class HullmodExotic(
         // While this totally isn't needed for when we're sharing to other modules, it is **VERY** much necessary for when we don't
         if (runningFromRefitScreen()) {
             HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
-                    fleetMember = member,
-                    fleetMemberVariant = member.checkRefitVariant(),
+                    fleetMember = rootMember,
+                    fleetMemberVariant = rootMember.checkRefitVariant(),
                     hullmodExotic = this@HullmodExotic,
                     onShouldCallback = object : HullmodExoticHandler.Flows.OnShouldCallback {
                         override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
@@ -168,7 +189,7 @@ open class HullmodExotic(
                         override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
 
                             unapplyExoticHullmodAndRemoveExoticaAndHullmod(
-                                    member = member,
+                                    member = rootMember,
                                     moduleVariant = moduleVariant,
                                     optionalMemberMods = Optional.of(moduleVariantMods)
                             )
@@ -180,9 +201,12 @@ open class HullmodExotic(
         // And finally, for good measure
         HullmodExoticHandler.removeHullmodExoticFromFleetMember(
                 exoticHullmodId = getHullmodId(),
-                fleetMember = member
+                fleetMember = rootMember
         )
 
+        // Whole-ship removals: the remove flows now reach every graph the install wrote to through the
+        // install bookkeeping (see plan-hullmod_exotic_installs_on_whole_ship-revision9), so no
+        // separate strip/unapply pass is needed anymore.
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
         logIfOverMinLogLevel("<-- onDestroy()\tStill has hullmod: ${check}", Level.INFO)
     }
@@ -194,7 +218,9 @@ open class HullmodExotic(
      * - invoking [ShipModLoader.set] with [member], [moduleVariant] and [ShipModifications]
      * - Toggling [ExoticaTechHM] by calling [ExoticaTechHM.addToFleetMember]
      * - removing the [ExoticHullmod] by calling [removeHullmodFromVariant]
-     * - finally, unapplies the ExoticHullmod by calling [unapplyExoticHullmodFromVariant]
+     *
+     * The stat-unapply happens BEFORE this runs, inside [HullmodExoticHandler.removeHullmodExoticFromVariant]'s
+     * dual-scrub (parent member's stats + the variant's statsForOpCosts).
      *
      * **NOTE**: The [optionalMemberMods] is a somewhat "special" parameter that either contains [ShipModifications]
      * of the [moduleVariant] or in case it's empty, the 'mods' will be fetched manually via [get] before commencing
@@ -225,9 +251,9 @@ open class HullmodExotic(
         ExoticaTechHM.addToFleetMember(member, moduleVariant)
         removeHullmodFromVariant(moduleVariant)
 
-        // grab stats to use
-        val stats = HullmodExoticHandler.getNonNullStatsToUse(member, moduleVariant)
-        unapplyExoticHullmodFromVariant(moduleVariant, stats)
+        // The handler's removeHullmodExoticFromVariant already dual-scrubs the stats objects
+        // (parent member's stats + the variant's statsForOpCosts) BEFORE this callback runs, so no
+        // unapply is needed here - see plan-hullmod_exotic_installs_on_whole_ship-revision9.
     }
 
     private fun removeHullmodFromVariant(variant: ShipVariantAPI?) {
@@ -244,18 +270,6 @@ open class HullmodExotic(
             variant.removeMod(hullmodId)
             variant.removePermaMod(hullmodId)
         }
-    }
-
-    /**
-     * Utility method for calling [ExoticHullmod.removeEffectsBeforeShipCreation] on the 'internal' [exoticHullmod] with
-     * necessary parameters
-     *
-     * @param variant a [ShipVariantAPI] from which to unapply the [ExoticHullmod]
-     * @param stats the [MutableShipStatsAPI] from which to unapply the [ExoticHullmod]
-     */
-    private fun unapplyExoticHullmodFromVariant(variant: ShipVariantAPI, stats: MutableShipStatsAPI) {
-        val variantHullSize = variant.hullSpec.hullSize
-        exoticHullmod.removeEffectsBeforeShipCreation(variantHullSize, stats, exoticHullmod.hullModId)
     }
 
     override fun applyExoticToStats(

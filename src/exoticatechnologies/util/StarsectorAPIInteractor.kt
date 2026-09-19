@@ -25,13 +25,11 @@ object StarsectorAPIInteractor {
      * Check whether we're running from "Exotica Technologies" screen
      */
     fun runningFromExoticaTechnologiesScreen(): Boolean {
-        // This one will just naively rely on the fact that we have options showing in the background
-        val optional = getSectorHasOptionsOptional()
-        // If optional is empty, bail out
-        if (optional.isEmpty()) return false
-        // Proceed otherwise
-        val hasOptions = optional.isPresent() && optional.get()
-        return hasOptions
+        return if (IS_IN_TEST_MODE) {
+            TEST_MODE_VALUE
+        } else {
+            actualStarsectorAPIrunningFromExoticaTechnologiesScreen()
+        }
     }
 
     /**
@@ -45,15 +43,43 @@ object StarsectorAPIInteractor {
         }
     }
 
+    /**
+     * Returns whether the current core UI tab is the Refit or Fleet screen.
+     *
+     * Broader than [runningFromRefitScreen]: it ignores the interaction dialog's
+     * options panel entirely, matching the legacy tab-only check used by the
+     * variant-tag cache write path.
+     */
+    fun runningFromRefitOrFleetScreen(): Boolean {
+        return if (IS_IN_TEST_MODE) {
+            TEST_MODE_VALUE
+        } else {
+            val coreTab = Global.getSector()?.campaignUI?.currentCoreTab
+            coreTab == CoreUITabId.REFIT || coreTab == CoreUITabId.FLEET
+        }
+    }
+
     private fun actualStarsectorAPIrunningFromRefitScreen(): Boolean {
         // Refit screen is going to be on the REFIT core UI tab and won't have options
         val optional = getSectorHasOptionsOptional()
         // If empty, bail out
-        if (optional.isEmpty()) return false
+        if (optional.isEmpty()) {
+            return false
+        }
         // Otherwise proceed
         val hasOptions = optional.isPresent() && optional.get()
         val runningFromRefitScreen = Global.getSector().campaignUI.currentCoreTab == CoreUITabId.REFIT
         return runningFromRefitScreen && hasOptions.not()
+    }
+
+    private fun actualStarsectorAPIrunningFromExoticaTechnologiesScreen(): Boolean {
+        // This one will just naively rely on the fact that we have options showing in the background
+        val optional = getSectorHasOptionsOptional()
+        // If optional is empty, bail out
+        if (optional.isEmpty()) return false
+        // Proceed otherwise
+        val hasOptions = optional.isPresent() && optional.get()
+        return hasOptions
     }
 
     /**

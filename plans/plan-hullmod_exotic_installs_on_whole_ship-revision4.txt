@@ -1,0 +1,107 @@
+ISSUE #39 HULLMOD EXOTICS -> "INSTALL ON WHOLE SHIP" — REVISION 4
+================================================================
+Whole-ship installs now anchor on the correct ship AND actually reach every variant object
+graph the refit screen reads, so the exotic's hullmod (and its OP cost) shows on all modules
+again.
+
+Revision 4 replaces the rev-3 ONLY-IF-INSTANCE-OWNS resolution with (a) a stable refit root
+marker (cached root FleetMember id, NOT variant ===), and (b) a full write-through of the
+exotic's OWN hullmod id across all graphs, mirroring what ExoticaTechHM.addToFleetMember
+already does for the "exoticatech" marker hullmod.
+
+WHY REVISION 3 FAILED (user in-game test + logs.txt)
+----------------------------------------------------
+Two defects, one in resolution and one in reach:
+
+1) INSIDE THE REFIT SCREEN THE INSTANCE TEST CAN'T WIN. The entering member is the TRANSIENT
+   child FleetMember that the refit panel creates for the module being edited (e.g. 12b86). Its
+   variant (tbj_overslaught_left_Start) is a DISTINCT OBJECT that NO candidate's campaign tree
+   holds, so treeInstanceContains came up empty for BOTH twins and the flow resolved by pure
+   iteration luck: `resolved 3-first-match -> ff3c`. That is exactly the ===/churn hazard the
+   ModuleVariantHierarchy KDoc warned about: Starsector recreates the "same logical" variant as
+   different objects (stock -> REFIT -> combat), so variant identity is not a stable marker.
+   The log line "there was no install data for this key ... parentFleetMemberId=ff3c" was the
+   second twin's display tree showing a FF3C-keyed install.
+   (Note: campaign/simulation graphs DO NOT churn, so === remains trustworthy OUTSIDE refit —
+   the rev-3 destroy hits resolved 1-owner correctly, e.g. 1296b. The ownership test is kept
+   for the non-refit path.)
+
+2) THE EXOTIC'S OWN HULLMOD NEVER REACHES THE GRAPHS THE REFIT RENDERS. The whole-ship flows
+   add the exotic hullmod id (et_alphasubcore) ONLY to the CAMPAIGN tree's children
+   (HullmodExotic.kt installHullmodOnVariant -> installThisHullmodExoticToFleetMembersVariant).
+   The refit reads (a) the refit DISPLAY working tree and (b) each child FleetMemberAPI's own
+   .variant — neither gets the exotic's hullmod, so the OP cost does not drop on any module tab
+   when installing from the refit screen. ExoticaTechHM.addToFleetMember's apply-branch writes
+   only the "exoticatech" MARKER across all graphs; NOTHING wrote the exotic's own hullmod
+   across graphs. (The exoticaTech-screen path appeared to "work" because it drives the same
+   ExoticaTechHM write-through harder and re-syncs the display trees on panel close.)
+
+FIX PART 1 — STABLE REFIT ROOT MARKER (RefitButtonAdder + FleetMemberUtils)
+--------------------------------------------------------------------------
+The refit edits EXACTLY ONE SHIP at a time. That is a deterministic, clone-independent anchor.
+RefitButtonAdder gains a companion `rootMember: FleetMemberAPI?`:
+- advance(): whenever member.shipName?.isNotEmpty() == true, rootMember = member. A ship root
+  always carries a ship name; the transient station-module members (null shipName) do not
+  overwrite it, so the cache keeps the last displayed ROOT across module-tab edits.
+- refit-close branch: rootMember = null.
+findRootVariantMember() new step 1 (after the root fast-path):
+- if runningFromRefitScreen() && rootMember != null -> return rootMember (log "1-refit-root").
+Steps 2-owner / 3-first / 4-fallback are preserved for the NON-refit (campaign/simulation)
+path where instance ownership is safe and deterministic for identical hulls.
+
+FIX PART 2 — WRITE THE EXOTIC'S OWN HULLMOD THROUGH ALL GRAPHS (HullmodExotic.kt)
+---------------------------------------------------------------------------------
+Two new private helpers, called in onInstall and onDestroy when installsOnWholeShip():
+- propagateHullmodThroughoutShip(rootMember): pre-order-add hullmodId to rootMember.variant's
+  tree, rootMember.checkRefitVariant()'s tree, getRefitDisplayVariant()'s tree (the display
+  working tree the refit renders and re-binds — reachable even while a child module tab is
+  selected, when checkRefitVariant(root) falls back to the campaign tree), plus every child
+  FleetMemberAPI's .variant via rootMember.propagateFromVariantTree(hullmodId); then
+  fixVariant(rootMember), ModuleVariantHierarchy.refreshFleetCache on each tree, and
+  rootMember.updateStats(). Idempotent (addPermaMod is a no-op when present), safe for the
+  applyExoticToStats/applyToShip re-entries.
+- stripHullmodThroughoutShip(rootMember): the removal mirror, using the defensive
+  removeHullmodFromVariant() (already strips perma/mod/suppressed) over the same graphs,
+  incl. each child FM's variant, then the same fix/refresh/updateStats dance.
+
+FIX PART 3 — PUT THE DISPLAY TREE IN THE INSTALL BOOKKEEPING
+(HullmodExoticHandler.CheckAndInstallOnAllChildModulesVariants)
+--------------------------------------------------------------
+The refit branch of allVariantsList now also adds getRefitDisplayVariant() when it is not
+already in the list. While a child module is selected, fleetMember.checkRefitVariant() equals
+the campaign tree, so the display tree's children would otherwise escape the expected/installed
+bookkeeping that shouldInstallHullmodExoticToVariant gates on.
+
+FILES
+-----
+src/exoticatechnologies/refit/RefitButtonAdder.kt: companion rootMember (+KDoc), set in
+  advance(), null on refit close.
+src/exoticatechnologies/util/FleetMemberUtils.kt: findRootVariantMember step 1-refit-root,
+  KDoc rewritten to "stable markers, not variant identity".
+src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt: + imports, the two
+  helper pairs (propagate/strip, recursive add/strip), calls at ends of onInstall/onDestroy.
+src/exoticatechnologies/hullmods/exotics/HullmodExoticHandler.kt: allVariantsList refit
+  branch adds getRefitDisplayVariant() (+import).
+Revision-3 doc left untouched: record of the failed identity-only resolution. Ideas/history
+in -revision1 and -revision2.
+
+VERIFICATION (user, Windows build, in game)
+-------------------------------------------
+1. Two identical multimodule ships (two overslaughts), install AlphaSubcore on ship A from the
+   REFIT screen -> OP drops on ALL modules of A only; ship B untouched.
+2. Switch module tabs on A: every module tab shows the reduced OP.
+3. Destroy the exotic from A's refit screen -> only A's modules revert; B unchanged.
+4. Restore, then install AlphaSubcore from the EXOTICA SCREEN -> still reduces OP everywhere
+   (regression guard).
+5. Logs: whole-ship flows while in refit resolve "1-refit-root -> <rootId>" (NOT 3-first-match),
+   and no "no install data for this key ... <transient child id>" noise appears.
+
+COMMIT STYLE
+------------
+Single focused commit (anchors + write-through together — resolution without reach is the rev-3
+half-fix); message suggested at handoff, user commits locally.
+
+PLAN-NOTE
+---------
+Revision docs accumulate; originals are never overwritten. -revision3 remains as the record of
+the failed identity-only approach (its instance test is defeated by refit clone churn).

@@ -7,12 +7,10 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.ui.UIComponentAPI;
 import com.fs.starfarer.api.util.Misc;
 import com.fs.starfarer.api.util.Pair;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
 
 import java.awt.*;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,6 +34,22 @@ public class StringUtils {
         } catch (Throwable th) {
             return String.format("Failed to get String (parent: %s, key: %s)", parent, key);
         }
+    }
+
+    /**
+     * Method that joins a {@link Collection} of strings into a single string, built by an internal {@link StringBuffer}
+     * @param delimiter the delimiter character to use between each item
+     * @param items the collection of items to join into a string
+     * @return a stringified representation of the collection
+     */
+    public static String join(String delimiter, Collection<String> items) {
+        if (items == null || items.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (String item : items) {
+            if (sb.length() > 0) sb.append(delimiter);
+            sb.append(item);
+        }
+        return sb.toString();
     }
 
     /**

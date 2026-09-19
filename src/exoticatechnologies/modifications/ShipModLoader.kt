@@ -5,14 +5,16 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
-import exoticatechnologies.util.ShipStatsRegistry
+import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.FleetMemberUtils
+import exoticatechnologies.util.ModuleVariantHierarchy
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
+import exoticatechnologies.util.forEachModuleVariant
 
 class ShipModLoader {
     private var providers: List<Provider> = mutableListOf(
-        VariantTagProvider.inst,
+        VariantTagProvider.getInstance(),
         ZigguratDataProvider.inst,
         PersistentDataProvider.inst
     )
@@ -55,16 +57,7 @@ class ShipModLoader {
         val allShipSections = getAllShipSections(ship)
         // Now, map them onto variants
         val allShipSectionVariants = allShipSections.map { it.variant }
-        // As well as to their FMAPIs
-//        val allShipSectionsFMAPIs = allShipSections.map { findMemberFromShip(it) }
-        val allShipSectionsFMAPIs = allShipSections.map { it.fleetMember }
-        val rootFMAPI = findMemberFromShip(ship)
-
-        // Now that we have all of this, we can build a list of ship mods, by grabbing
-        // each index and calling getData(fmapi, variant)
-        //TODO this is debug only, but will point out potential problems immediatelly
-        // even though it could very well be that e.g. installing exotica on just one module will make it's size 1 versus the others being fuller
-        assertTrue(allShipSections.size == allShipSectionVariants.size && allShipSectionVariants.size == allShipSectionsFMAPIs.size, "The sizes of three lists did not match")
+        val allShipSectionsFMAPIs = allShipSections.map { findMemberFromShip(it) }
 
         val allModsList = mutableListOf<ShipModifications>()
         for (index in allShipSectionVariants.indices) {
@@ -82,31 +75,72 @@ class ShipModLoader {
     }
 
     private fun getAllDataFromStatsAPI(stats: MutableShipStatsAPI): List<ShipModifications> {
-        // First, grab all ships' stats
-        val allShipStats = ShipStatsRegistry.getWholeShipsStatsFromSingleStats(stats)
-        val allShipFleetMembers = allShipStats.map { it.fleetMember }
-        val rootModuleFleetMember = FleetMemberUtils.findMemberForStats(stats)
+        val allModsList = mutableSetOf<ShipModifications>()
 
-        val allModsList = mutableListOf<ShipModifications>()
-        for (someStats in allShipStats) {
-            val someStatsFM: FleetMemberAPI? = someStats.fleetMember
-            // if some stats FMAPI is non-null, proceed
-            someStatsFM?.let { statsFM ->
-                val moduleMods = ShipModLoader.get(statsFM, someStats.getVariant())
-                moduleMods?.let {
-                    allModsList.add(it)
-                }
-            }
-        }
+        // Collect the root FM's own mods, THEN walk the variant tree for every module variant
+        // (sibling modules and child-module data live on the child variants themselves).
+        val rootFM = FleetMemberUtils.findMemberForStats(stats) ?: return allModsList.toList()
+        get(rootFM, rootFM.variant)?.let { allModsList.add(it) }
+        collectModuleMods(rootFM, rootFM.variant, allModsList)
 
         return allModsList.toList()
     }
 
-    private fun assertTrue(value: Boolean, message: String) {
-        return if (!value) {
-            throw RuntimeException(message)
-        } else {
-//            value
+    private fun collectModuleMods(member: FleetMemberAPI, variant: ShipVariantAPI, result: MutableSet<ShipModifications>) {
+        for (slotId in variant.stationModules.keys) {
+            val childV = variant.getModuleVariant(slotId) ?: continue
+            val childMods = get(member, childV)
+            childMods?.let {
+                result.add(it)
+            }
+            collectModuleMods(member, childV, result)
+        }
+    }
+
+    private fun getWholeShipModsData(member: FleetMemberAPI, variant: ShipVariantAPI): List<ShipModifications> {
+        val result = ArrayList<ShipModifications>(4)
+        val seenVariantIds = HashSet<String>(8)
+        val rootVariant = resolveRootVariant(member, variant)
+        collectWholeShipMods(member, rootVariant, result, seenVariantIds)
+        // The REFIT display variant tree is a second object graph carrying the same tags
+        // (refit clones preserve child tags 1:1). Union it in so a read never depends on
+        // which variant instance the engine happened to hand us.
+        val refitVariant = runCatching { member.checkRefitVariant() }.getOrNull()
+        if (refitVariant != null && refitVariant !== rootVariant) {
+            collectWholeShipMods(member, refitVariant, result, seenVariantIds)
+        }
+        return result
+    }
+
+    // A variant that owns station modules IS the root of its tree. A leaf is either a
+    // single-module ship (no parent -> itself) or a child module -> climb to the root via
+    // stable hullVariantId keys (ModuleVariantHierarchy.findRootVariantId), NOT the identity
+    // map, which breaks after fixVariant churn.
+    private fun resolveRootVariant(member: FleetMemberAPI, variant: ShipVariantAPI): ShipVariantAPI {
+        if (variant.stationModules.isNotEmpty()) return variant
+        val rootVariantId = ModuleVariantHierarchy.findRootVariantId(variant.hullVariantId) ?: return variant
+        return FleetMemberUtils.findRootVariantByHullId(member, rootVariantId) ?: variant
+    }
+
+    // Recursive stationModules walk. Dedupes by hullVariantId so the same logical variant
+    // (stock / REFIT clone / combat clone) is never collected twice — otherwise a single
+    // installation would be iterated multiple times by whole-ship consumers like
+    // advanceInCampaign. Includes the variant's own ShipModifications.
+    private fun collectWholeShipMods(
+        member: FleetMemberAPI,
+        variant: ShipVariantAPI,
+        result: MutableList<ShipModifications>,
+        seenVariantIds: MutableSet<String>
+    ) {
+        if (!seenVariantIds.add(variant.hullVariantId)) return
+        get(member, variant)?.let { result.add(it) }
+        // Shared pre-order walk over every station-module descendant (Extensions.kt).
+        // The lambda captures only locals (member, result, seenVariantIds) and is a no-op
+        // append per visited node — stateless, short-lived, nothing allocated per iteration.
+        variant.forEachModuleVariant { childV ->
+            if (seenVariantIds.add(childV.hullVariantId)) {
+                get(member, childV)?.let { result.add(it) }
+            }
         }
     }
 
@@ -135,7 +169,7 @@ class ShipModLoader {
         @Synchronized
         fun getForSpecialData(shipData: ShipRecoverySpecial.PerShipData): ShipModifications? {
             if (shipData.getVariant() != null) {
-                val mods = VariantTagProvider.inst.getFromVariant(shipData.getVariant())
+                val mods = VariantTagProvider.getInstance().getFromVariant(shipData.getVariant())
                 if (mods != null) {
                     return mods
                 }
@@ -154,7 +188,7 @@ class ShipModLoader {
         @JvmStatic
         @Synchronized
         fun getFromVariant(variant: ShipVariantAPI): ShipModifications? {
-            return VariantTagProvider.inst.getFromVariant(variant)
+            return VariantTagProvider.getInstance().getFromVariant(variant)
         }
 
         @JvmStatic
@@ -166,7 +200,18 @@ class ShipModLoader {
         @JvmStatic
         @Synchronized
         fun getAllForStats(stats: MutableShipStatsAPI): List<ShipModifications> {
-            return inst.getAllDataFromStatsAPI(stats)
+            return inst.getAllDataFromStatsAPI(stats).distinct()
+        }
+
+        /**
+         * All ShipModifications present anywhere on the ship's variant tree (root + station module
+         * children), deduped by hullVariantId. Used by the hullmod install/uninstall decision and by
+         * campaign-layer effects so child-owned modifications are never missed.
+         */
+        @JvmStatic
+        @Synchronized
+        fun getWholeShipMods(member: FleetMemberAPI, variant: ShipVariantAPI): List<ShipModifications> {
+            return inst.getWholeShipModsData(member, variant)
         }
     }
 
