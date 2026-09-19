@@ -47,7 +47,10 @@ class RefitButtonAdder : EveryFrameScript {
          * Set whenever [member] is a ship root (has a ship name), cleared when the refit screen
          * closes. `null` outside the refit screen.
          */
-        var rootMember: FleetMemberAPI? = null
+        private var rootMember: FleetMemberAPI? = null
+
+        @Synchronized
+        fun getRootMember() = rootMember
     }
 
     private val fieldClass = Class.forName("java.lang.reflect.Field", false, Class::class.java.classLoader)
@@ -118,7 +121,7 @@ class RefitButtonAdder : EveryFrameScript {
                         // displayed root so whole-ship flows can anchor on the actual ship being
                         // refitted (see findRootVariantMember). Unambiguous: the refit displays one
                         // ship at a time.
-                        if (member?.shipName?.isNotEmpty() == true) {
+                        if (member?.shipName != null) {
                             rootMember = member
                         }
                         if (member == null) //shipName check catches modules

@@ -328,7 +328,7 @@ object FleetMemberUtils {
         //    the entering member is a transient station-module member whose variant no candidate
         //    tree holds (the case that made instance-identity fail in the refit screen).
         if (runningFromRefitScreen()) {
-            RefitButtonAdder.rootMember?.let {
+            RefitButtonAdder.getRootMember()?.let {
                 diagnosticLog("[1] returning it\tit.shipName: ${it.shipName}, member.shipName: ${member.shipName}")
                 return it
             }

@@ -1058,14 +1058,6 @@ fun getWholeVariantGraph(fleetMemberAPI: FleetMemberAPI): MutableSet<ShipVariant
         }
     }
 
-    // 4. Each campaign descendant module's real FleetMember variant (child FMs keep the stock
-    //    variant while the campaign tree holds the REFIT clones).
-    fleetMemberAPI.variant.forEachModuleVariant { childVariant ->
-        FleetMemberUtils.findModuleMember(childVariant)?.let { childFleetMember ->
-            variants.add(childFleetMember.variant)
-        }
-    }
-
     return variants
 }
 
