@@ -813,9 +813,10 @@ public class ExoticaTechHM extends BaseHullMod {
         ShipModifications mods = ShipModLoader.get(member, ship.getVariant());
         log.info("addPostDescriptionSection | member=" + member.getId() +
             " variant=" + ship.getVariant().getHullVariantId() +
-            " mods=" + (mods == null ? "null" : "UPGRADES: "+ (mods.getUpgradeMap() + ", EXOTICS: " + mods.getExoticSet())));
+            " mods=" + (mods == null ? "null" : "UPGRADES: "+ (mods.getUpgradeMap() + ", EXOTICS: " + mods.getExoticSet())) +
+            " mods.toString() = " + (mods == null ? "null" : mods.toString())
+        );
         if (mods == null) return;
-
 
         mods.populateTooltip(member, ship.getMutableStats(), hullmodTooltip, width, 500f, false, false, false);
     }
