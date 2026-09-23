@@ -122,26 +122,35 @@ class ShipModLoader {
         return FleetMemberUtils.findRootVariantByHullId(member, rootVariantId) ?: variant
     }
 
-    // Recursive stationModules walk. Dedupes by hullVariantId so the same logical variant
-    // (stock / REFIT clone / combat clone) is never collected twice — otherwise a single
+    // Recursive stationModules walk. Dedupes by (member id, hullVariantId) so the same logical
+    // variant (stock / REFIT clone / combat clone) is never collected twice — otherwise a single
     // installation would be iterated multiple times by whole-ship consumers like
-    // advanceInCampaign. Includes the variant's own ShipModifications.
+    // advanceInCampaign. The member id scopes the key so identical-root twin ships (whose nodes
+    // share hullVariantIds) can never have the first ship's mods swallowed by the second's walk.
+    // Includes the variant's own ShipModifications.
     private fun collectWholeShipMods(
         member: FleetMemberAPI,
         variant: ShipVariantAPI,
         result: MutableList<ShipModifications>,
         seenVariantIds: MutableSet<String>
     ) {
-        if (!seenVariantIds.add(variant.hullVariantId)) return
+        if (!seenVariantIds.add(wholeShipModKey(member, variant))) return
         get(member, variant)?.let { result.add(it) }
         // Shared pre-order walk over every station-module descendant (Extensions.kt).
         // The lambda captures only locals (member, result, seenVariantIds) and is a no-op
         // append per visited node — stateless, short-lived, nothing allocated per iteration.
         variant.forEachModuleVariant { childV ->
-            if (seenVariantIds.add(childV.hullVariantId)) {
+            if (seenVariantIds.add(wholeShipModKey(member, childV))) {
                 get(member, childV)?.let { result.add(it) }
             }
         }
+    }
+
+    // Deliberately collision-prone-safe composite key: scoping the hullVariantId by the acting
+    // member's stable id costs a couple of string concats per node and guarantees identical-root
+    // twins never dedupe into each other's mods.
+    private fun wholeShipModKey(member: FleetMemberAPI, variant: ShipVariantAPI): String {
+        return member.id + ":" + variant.hullVariantId
     }
 
     companion object {
@@ -205,8 +214,8 @@ class ShipModLoader {
 
         /**
          * All ShipModifications present anywhere on the ship's variant tree (root + station module
-         * children), deduped by hullVariantId. Used by the hullmod install/uninstall decision and by
-         * campaign-layer effects so child-owned modifications are never missed.
+         * children), deduped by (member id, hullVariantId). Used by the hullmod install/uninstall
+         * decision and by campaign-layer effects so child-owned modifications are never missed.
          */
         @JvmStatic
         @Synchronized

@@ -508,3 +508,32 @@ fun FleetMemberAPI.checkRefitVariant(): ShipVariantAPI {
  * [checkRefitVariant]; on a cast failure the display tree is simply unreachable and gets skipped.
  */
 fun getRefitDisplayVariant(): ShipVariantAPI? = runCatching { RefitButtonAdder.member?.checkRefitVariant() }.getOrNull()
+
+/**
+ * O(1) refit-state attribution gate for whole-ship flows (install AND remove): returns the refit
+ * display working tree only when it belongs to the ship [member] is a part of.
+ *
+ * The display tree is the tree the refit screen renders; it is a distinct object graph from the
+ * campaign tree and holds NEW hullmod clones the campaign tree never touches, so an install must
+ * mirror its tag/hullmod writes onto it or the edited module's live OP/costs never react (and a
+ * remove must reach it too, else the strip is stale until a screen switch re-derives it). But that
+ * tree belongs to EXACTLY ONE ship — the one the refit screen is editing — so an un-gated include
+ * can leak a whole-ship write onto a different ship's objects (the original cross-ship bug, which
+ * fuzzy hullVariantId comparisons cannot disambiguate for identical hulls).
+ *
+ * Attribution is by stable FleetMember id, never by hullVariantId:
+ * - refit closed -> [RefitButtonAdder.getRootMember] is null -> this returns null (zero work);
+ * - the acting root member (shipName present) -> tree included only when its id equals the
+ *   cached refit root id;
+ * - a transient station-module member (shipName null, created by the refit screen while a module
+ *   tab is selected) -> attributed to the refit root itself, so the gate holds trivially.
+ *
+ * @param member the [FleetMemberAPI] entering the whole-ship flow
+ * @return the display working tree when attributable to [member], else null
+ */
+fun getRefitDisplayVariant(member: FleetMemberAPI): ShipVariantAPI? {
+    val refitRootMember = RefitButtonAdder.getRootMember() ?: return null
+    val actorRootId = if (member.shipName != null) member.id else refitRootMember.id
+    if (refitRootMember.id != actorRootId) return null
+    return runCatching { RefitButtonAdder.member?.checkRefitVariant() }.getOrNull()
+}

@@ -5,6 +5,7 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.loading.VariantSource
 import exoticatechnologies.refit.checkRefitVariant
+import exoticatechnologies.refit.getRefitDisplayVariant
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.StarsectorAPIInteractor
 import exoticatechnologies.util.datastructures.Optional
@@ -43,6 +44,22 @@ open class VariantTagProvider : ShipModLoader.Provider {
 
         /** How often we do a full sweep for expired entries (every N calls to get()). */
         private const val CLEANUP_INTERVAL = 1000
+
+        /**
+         * Upper bound on the number of distinct object GRAPHS a single tag write is mirrored onto by
+         * [writeThrough]. This counts tree ROOTS, not module nodes: a ship's actual module count is
+         * orthogonal (each root's station-module tree is walked node-by-node in [findVariantInTree],
+         * never enumerated here). The four graphs, all subtrees of the same acting ship, are:
+         *
+         * 1. the member's own variant tree ([FleetMemberAPI.variant])
+         * 2. the resolved root tree ([FleetMemberUtils.findShipScopedRootVariant])
+         * 3. the REFIT contract tree ([FleetMemberAPI.checkRefitVariant])
+         * 4. the refit DISPLAY working tree ([getRefitDisplayVariant])
+         *
+         * Each of these may alias one another (a single-module ship resolves all four to the same
+         * variant), and [writeThrough] dedupes by identity before populating the list.
+         */
+        private const val NUMBER_OF_GRAPHS = 4
     }
 
     private val cache: MutableMap<FleetMemberAPI, MutableMap<String, ShipModifications>> = WeakHashMap()
@@ -172,18 +189,36 @@ open class VariantTagProvider : ShipModLoader.Provider {
     /**
      * Mirrors a single tag write ([tag] == null means strip) onto every object graph a later
      * whole-ship read may walk: the member's own variant tree, the resolved root tree (which may
-     * be a different object after fixVariant churn), and the REFIT display tree. Each graph is
-     * independently written at the node fuzzy-matching the target variant — see [findVariantInTree].
+     * be a different object after fixVariant churn), the REFIT variant tree, and the refit DISPLAY
+     * working tree. Each graph is independently written at the node fuzzy-matching the target
+     * variant — see [findVariantInTree].
+     *
+     * The display tree is the graph the refit screen actually renders and re-binds on confirm; the
+     * strip side already reaches it ([ExoticaTechHM.removeHullmodEverywhere]), so the install/tag
+     * side must reach it too or the edited module's live OP/costs never react to an install until a
+     * screen switch re-derives everything. It is attributed O(1) to the acting member via refit
+     * state, so a write on one ship can never mirror onto another ship's display tree.
      */
     private fun writeThrough(member: FleetMemberAPI, variant: ShipVariantAPI, tag: String?) {
         val targetId = variant.hullVariantId
+        val rootGraph = FleetMemberUtils.findShipScopedRootVariant(member, variant)
+        logger.error("writeThrough()\tANCHOR\tmember.@identityHashCode = ${System.identityHashCode(member)}\t" +
+                "member.id = ${member.id}\t" +
+                "variant.@identityHashCode = ${System.identityHashCode(variant)}\t" +
+                "variant.hullVariantId = ${variant.hullVariantId}\t" +
+                "resolvedRootGraph.@identityHashCode = ${rootGraph?.let { System.identityHashCode(it) }}\t" +
+                "resolvedRootGraph.hullVariantId = ${rootGraph?.hullVariantId}\ttag = $tag")
 
-        val graphs = ArrayList<ShipVariantAPI>(3)
+        val graphs = ArrayList<ShipVariantAPI>(NUMBER_OF_GRAPHS)
         member.variant?.let { graphs.add(it) }
-        val rootVariant = FleetMemberUtils.findRootVariant(member, variant)
-        if (rootVariant !== member.variant) graphs.add(rootVariant)
+        rootGraph?.let { rootVariant ->
+            if (rootVariant !== member.variant && graphs.none { it === rootVariant }) graphs.add(rootVariant)
+        }
         val refitVariant = runCatching { member.checkRefitVariant() }.getOrNull()
         if (refitVariant != null && graphs.none { it === refitVariant }) graphs.add(refitVariant)
+        getRefitDisplayVariant(member)?.let { displayVariant ->
+            if (graphs.none { it === displayVariant }) graphs.add(displayVariant)
+        }
 
         for (graph in graphs) {
             val target = findVariantInTree(graph, targetId) ?: continue

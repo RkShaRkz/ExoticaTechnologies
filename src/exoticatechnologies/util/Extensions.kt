@@ -1051,8 +1051,11 @@ fun getWholeVariantGraph(fleetMemberAPI: FleetMemberAPI): MutableSet<ShipVariant
         addVariantTree(refitVariant)
     }
 
-    // 3. Display tree: the working tree the refit screen actually renders.
-    getRefitDisplayVariant()?.let { displayRoot ->
+    // 3. Display tree: the working tree the refit screen actually renders, included only when it
+    //    is attributable to THIS ship (O(1) refit-state member-id gate — see the
+    //    [getRefitDisplayVariant] overload). Un-gated, the refit display tree of whatever ship is
+    //    being edited could leak into another ship's write graph and re-open cross-ship writes.
+    getRefitDisplayVariant(fleetMemberAPI)?.let { displayRoot ->
         if (displayRoot !== fleetMemberAPI.variant) {
             addVariantTree(displayRoot)
         }
