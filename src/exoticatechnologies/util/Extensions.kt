@@ -12,6 +12,7 @@ import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
+import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.refit.getRefitDisplayVariant
 import exoticatechnologies.util.reflect.ReflectionUtils
@@ -1012,6 +1013,45 @@ fun getAllModulesVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantAP
     retVal.add(fleetMemberAPI.variant)
 
     return retVal.toList()
+}
+
+/**
+ * Method used to plug a certain hole in the logic and timing of things mostly concerning [HullmodExotic]s;
+ * Namely, [InstallMethod] will write an [Exotic] directly into the installing member; which will then query
+ * [HullmodExoticHandler]s flows to install or propagate to other sibling modules.
+ *
+ * **HOWEVER** if the installing module already had some exotics, and installing e.g. AlphaSubcore brings it to MAX,
+ * then the just-installed hullmod exotic won't actually be applied to the installing module due to not being
+ * under the max exotic limit.
+ *
+ * This method checks whether [this] is under exotic limit, and then checks if [this] already contains [exotic] in the case
+ * it's not under limit.
+ *
+ * @return whether [this] is under limit or already contains this exotic
+ *
+ * @see [Exotic.isUnderExoticLimit]
+ * @see [Exotic.hasExotic]
+ */
+fun ShipModifications.shouldAllowInstallation(member: FleetMemberAPI, exotic: Exotic): Boolean {
+    val underExoticLimit = this.isUnderExoticLimit(member)
+    // If we're not under exotic limit due to InstallMethod's direct write, check if we have it
+    return if (underExoticLimit) {
+        // If we're under limit, then we should most certainly proceed
+        true
+    } else {
+        // If we're at limit, due to InstallMethod's direct write; if that module actually
+        // had an exotic, and then the InstallMethod pre-wrote a HullmodExotic, with default
+        // settings, that module will have already reached 2, so it would not be considered
+        // under the limit; however, if it gets skipped then everything will fall apart
+        // well - break is more like it, because the installing module will actually NOT get
+        // the HullmodExotic's hullmod applied to it; in the case of e.g. AlphaSubcore - it's OP
+        // will not have been reduced. Which is why we must let it through, even if it's already installed.
+
+        val alreadyHasExotic = this.hasExotic(exotic)
+
+        // And return if we should proceed
+        alreadyHasExotic
+    }
 }
 
 /**
