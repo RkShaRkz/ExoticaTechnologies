@@ -15,11 +15,8 @@ import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
 import exoticatechnologies.modifications.exotics.ExoticData
 import exoticatechnologies.refit.checkRefitVariant
-import exoticatechnologies.util.FleetMemberUtils
-import exoticatechnologies.util.StringUtils
+import exoticatechnologies.util.*
 import exoticatechnologies.util.datastructures.Optional
-import exoticatechnologies.util.runningFromRefitScreen
-import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.json.JSONObject
@@ -72,7 +69,19 @@ open class HullmodExotic(
         // which module triggered them. For non-whole-ship installs we simply act on the member as-is.
         // Relevant issue: https://github.com/RkShaRkz/ExoticaTechnologies/issues/39
         val rootMember = if (installsOnWholeShip) {
-            FleetMemberUtils.findRootVariantMember(member)
+            // Screen-aware anchor (plan-rev17): on the REFIT screen this anchors on the stable
+            // refit-root id (CHANGE A, plan-rev11) - the only dependable marker there, since the
+            // refit creates transient station-module FMAPIs whose ids reshuffle every query; if the
+            // refit root is not cached/null, do ZERO whole-ship work. Outside the refit (planet-side
+            // exoticatech shop / campaign storm) the entering member IS the real root FleetMemberAPI
+            // with a stable id, so we anchor on it directly - never a cross-fleet fuzzy scan, which
+            // previously bled whole-ship installs onto the wrong ship (the stale refit cache).
+            val resolved = FleetMemberUtils.resolveWholeShipRootMember(member)
+            if (resolved == null) {
+                logger.error("onInstall()\tCHANGE-A\tresolveWholeShipRootMember() returned null (refit root not cached) - doing ZERO whole-ship work\tmember.id = ${member.id}")
+                return
+            }
+            resolved
         } else {
             member
         }
@@ -111,10 +120,10 @@ open class HullmodExotic(
                 }
         )
 
-        // Whole-ship installs: the grep flows now feed the FULL variant graph (campaign tree, refit
-        // and display trees, child FMs' .variants) into the expected set and install on every graph
-        // via the callbacks above - see plan-hullmod_exotic_installs_on_whole_ship-revision9. No
-        // separate propagate pass is needed anymore.
+        // Whole-ship installs: the flows now feed the FULL variant graph (campaign tree, refit
+        // and display trees, child FMs' .variants) into the iterate+expected sets and install on
+        // every graph through the callbacks above - see plan-hullmod_exotic_installs_on_whole_ship-revision16.
+        // The child flow iterates the refit and display roots too, so no separate pour pass is needed.
     }
 
     private fun installHullmodOnVariant(variant: ShipVariantAPI?) {
@@ -125,12 +134,25 @@ open class HullmodExotic(
 
     override fun onDestroy(member: FleetMemberAPI) {
         val rootMember = if (installsOnWholeShip()) {
-            // Whole-ship removals anchor on the ship's root member, mirroring onInstall, so the remove
-            // bookkeeping matches the root-anchored InstallData no matter which module triggered it.
-            FleetMemberUtils.findRootVariantMember(member)
+            // Screen-aware anchor (plan-rev17): on the REFIT screen this anchors on the stable
+            // refit-root id (CHANGE A, plan-rev11) - the only dependable marker there, since the
+            // refit creates transient station-module FMAPIs whose ids reshuffle every query; if the
+            // refit root is not cached/null, do ZERO whole-ship work. Outside the refit (planet-side
+            // exoticatech shop / campaign) the entering member IS the real root FleetMemberAPI with
+            // a stable id, so we anchor on it directly - never a cross-fleet fuzzy scan. Without
+            // this, planet-side uninstall bailed at the anchor and never reached the root/children.
+            val resolved = FleetMemberUtils.resolveWholeShipRootMember(member)
+            if (resolved == null) {
+                logger.error("onDestroy()\tCHANGE-A\tresolveWholeShipRootMember() returned null (refit root not cached) - doing ZERO whole-ship work\tmember.id = ${member.id}")
+                return
+            }
+            resolved
         } else {
             member
         }
+        // Tell HullmodExoticHandler that we're initiating uninstallation for this 'rootMember'
+        HullmodExoticHandler.startUninstallSequenceForMember(rootMember)
+
         if (installsOnWholeShip()) {
             HullmodExoticHandler.Flows.CheckAndRemoveFromAllChildModulesVariants(
                     fleetMember = rootMember,
@@ -151,34 +173,11 @@ open class HullmodExotic(
                         }
                     }
             )
-        }
 
-        HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
-                fleetMember = rootMember,
-                fleetMemberVariant = rootMember.variant,
-                hullmodExotic = this@HullmodExotic,
-                onShouldCallback = object : HullmodExoticHandler.Flows.OnShouldCallback {
-                    override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
-                        // Again, do nothing
-                    }
-                },
-                onRemoveFromMemberModuleCallback = object : HullmodExoticHandler.Flows.OnRemoveFromMemberCallback {
-                    override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
-
-                        unapplyExoticHullmodAndRemoveExoticaAndHullmod(
-                                member = rootMember,
-                                moduleVariant = moduleVariant,
-                                optionalMemberMods = Optional.empty()
-                        )
-                    }
-                }
-        )
-
-        // While this totally isn't needed for when we're sharing to other modules, it is **VERY** much necessary for when we don't
-        if (runningFromRefitScreen()) {
+            // If we're doing the whole ship, we should cover the root as well
             HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
                     fleetMember = rootMember,
-                    fleetMemberVariant = rootMember.checkRefitVariant(),
+                    fleetMemberVariant = rootMember.variant,
                     hullmodExotic = this@HullmodExotic,
                     onShouldCallback = object : HullmodExoticHandler.Flows.OnShouldCallback {
                         override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
@@ -190,6 +189,51 @@ open class HullmodExotic(
 
                             unapplyExoticHullmodAndRemoveExoticaAndHullmod(
                                     member = rootMember,
+                                    moduleVariant = moduleVariant,
+                                    optionalMemberMods = Optional.empty()
+                            )
+                        }
+                    }
+            )
+        }
+
+        // And this one actually covers the 'regular' child module's FMAPI
+        HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
+                fleetMember = member,
+                fleetMemberVariant = member.variant,
+                hullmodExotic = this@HullmodExotic,
+                onShouldCallback = object : HullmodExoticHandler.Flows.OnShouldCallback {
+                    override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
+                        // Again, do nothing
+                    }
+                },
+                onRemoveFromMemberModuleCallback = object : HullmodExoticHandler.Flows.OnRemoveFromMemberCallback {
+                    override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
+
+                        unapplyExoticHullmodAndRemoveExoticaAndHullmod(
+                                member = member,
+                                moduleVariant = moduleVariant,
+                                optionalMemberMods = Optional.empty()
+                        )
+                    }
+                }
+        )
+
+        if (runningFromRefitScreen()) {
+            HullmodExoticHandler.Flows.CheckAndRemoveFromMemberModule(
+                    fleetMember = member,
+                    fleetMemberVariant = member.checkRefitVariant(),
+                    hullmodExotic = this@HullmodExotic,
+                    onShouldCallback = object : HullmodExoticHandler.Flows.OnShouldCallback {
+                        override fun execute(onShouldResult: Boolean, moduleVariant: ShipVariantAPI) {
+                            // Again, do nothing
+                        }
+                    },
+                    onRemoveFromMemberModuleCallback = object : HullmodExoticHandler.Flows.OnRemoveFromMemberCallback {
+                        override fun execute(onRemoveResult: Boolean, moduleVariant: ShipVariantAPI, moduleVariantMods: ShipModifications) {
+
+                            unapplyExoticHullmodAndRemoveExoticaAndHullmod(
+                                    member = member,
                                     moduleVariant = moduleVariant,
                                     optionalMemberMods = Optional.of(moduleVariantMods)
                             )
@@ -204,11 +248,56 @@ open class HullmodExotic(
                 fleetMember = rootMember
         )
 
+
         // Whole-ship removals: the remove flows now reach every graph the install wrote to through the
-        // install bookkeeping (see plan-hullmod_exotic_installs_on_whole_ship-revision9), so no
-        // separate strip/unapply pass is needed anymore.
+        // install bookkeeping (see plan-hullmod_exotic_installs_on_whole_ship-revision16), so no
+        // separate strip/unapply/nuke pass is needed anymore. The child remove flow iterates the
+        // refit and display roots from listOfVariantsWeInstalledOn, matching the install side.
+        //TODO (plan-revision16): if a shipModificationMap entry for a member id survives a whole-ship
+        // uninstall, re-add the graph-enumerated member-id purge here - deferred until the current
+        // child-install / other-child-uninstall scenarios pass their test plans.
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
         logIfOverMinLogLevel("<-- onDestroy()\tStill has hullmod: ${check}", Level.INFO)
+    }
+
+    override fun onPostDestroy(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {
+        super.onPostDestroy(member, variant, mods)
+        logIfOverMinLogLevel("--> onPostDestroy()\tmember: ${member}, variant: ${variant}, mods: ${mods}", Level.INFO)
+        // If we're installing everywhere, figure out the rootMember as well like in onDestroy
+        val rootMember = if (installsOnWholeShip()) {
+            // Screen-aware anchor (plan-rev17): on the REFIT screen this anchors on the stable
+            // refit-root id (CHANGE A, plan-rev11) - the only dependable marker there, since the
+            // refit creates transient station-module FMAPIs whose ids reshuffle every query; if the
+            // refit root is not cached/null, do ZERO whole-ship work. Outside the refit (planet-side
+            // exoticatech shop / campaign) the entering member IS the real root FleetMemberAPI with
+            // a stable id, so we anchor on it directly - never a cross-fleet fuzzy scan. Without
+            // this, planet-side uninstall bailed at the anchor and never reached the root/children.
+            val resolved = FleetMemberUtils.resolveWholeShipRootMember(member)
+            if (resolved == null) {
+                logger.error("onPostDestroy()\tCHANGE-A\tresolveWholeShipRootMember() returned null (refit root not cached) - doing ZERO whole-ship work\tmember.id = ${member.id}")
+                HullmodExoticHandler.finishUninstallSequenceForMember(member)
+                return
+            }
+            resolved
+        } else {
+            member
+        }
+
+        // And why not nuke it again from both just to be sure ...
+        HullmodExoticHandler.removeHullmodExoticFromFleetMember(
+                exoticHullmodId = getHullmodId(),
+                fleetMember = member
+        )
+        HullmodExoticHandler.removeHullmodExoticFromFleetMember(
+                exoticHullmodId = getHullmodId(),
+                fleetMember = rootMember
+        )
+
+        // And also, finish the uninstall sequence for this rootMember
+        HullmodExoticHandler.finishUninstallSequenceForMember(rootMember)
+
+        val check = member.checkRefitVariant().hasHullMod(hullmodId)
+        logIfOverMinLogLevel("<-- onPostDestroy()\tStill has hullmod: ${check}", Level.INFO)
     }
 
     /**
@@ -332,7 +421,19 @@ open class HullmodExotic(
         // This is the installWorkaround code - relevant mostly for modules we "shared installation" to
         // We have this "if under exotic limit" for child modules, since the InstallMethod will take care of
         // the installing-module (it won't be applicable if over)
-        if (moduleVariantMods.isUnderExoticLimit(member)) {
+        // IMPORTANT CAVEAT: this method re-introduces a very similar "logic gate" that HullmodExoticHandler already does
+        // in it's Flows. And the problem arrives/happens in the following scenario:
+        // - MAX_EXOTICS is 2
+        // - root module has one Exotic installed on it
+        // - children have 0 or 1 exotica on them
+        // - we install some HullmodExotic (e.g. AlphaSubcore) on root module from planetside "exoticatech" or refit
+        // - we enter this method, the InstallMethod already pre-installed the Exotica on the installing module
+        // - HullmodExoticHandler will let them through to children modules AND the root/installing module
+        // - this method will fail for the root/installing module, because 2 < 2 ? false
+        // This is why we should let the installation proceed if we're under exotica limit OR we already have the exotica in our mods
+        val isUnderExoticLimitOrAlreadyContains = moduleVariantMods.shouldAllowInstallation(member, this)
+
+        if (isUnderExoticLimitOrAlreadyContains) {
             // Install the hullmod since we're under the exotic limit, this could have been done outside
             // but somehow feels cleaner to do here
             installHullmodOnVariant(moduleVariant)

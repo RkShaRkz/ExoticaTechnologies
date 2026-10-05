@@ -10,6 +10,7 @@ import exoticatechnologies.campaign.listeners.CampaignEventListener.Companion.ac
 import exoticatechnologies.refit.RefitButtonAdder
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.FleetMemberUtils.findFleetForVariant
+import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 
 object FleetMemberUtils {
     @JvmField
@@ -347,52 +348,79 @@ object FleetMemberUtils {
     }
 
     /**
-     * Resolves the root [FleetMemberAPI] of the module tree containing [member], used by whole-ship
-     * (`installsOnWholeShip()`) install/remove flows so that bookkeeping always anchors on the ship's
-     * root member regardless of which member entered the flow.
-     * Returns [member] itself for single-module ships or when the root member cannot be reached,
-     * preserving today's behavior in those cases.
+     * Resolves the root [FleetMemberAPI] that a whole-ship ([HullmodExotic.installsOnWholeShip]) flow must anchor
+     * on, so bookkeeping stays inside the entering member's OWN ship and never bleeds onto another.
      *
-     * ## Stable markers, not variant identity
+     * ## Attribution is by ship name, never by the refit cache
      *
-     * ShipVariantAPI instances get recreated by Starsector across the stock -> REFIT -> combat clone
-     * churn, so `===` on variants is NOT a dependable identity (see [checkRefitVariant]'s KDoc).
-     * We therefore disambiguate with stable markers:
+     * [RefitButtonAdder.getRootMember] is a screen-scoped cache naming whichever ship the refit screen
+     * last displayed - NOT the ship the entering member belongs to. Substituting it for the member
+     * re-anchors unrelated work onto that ship: with ship2's refit open, ship1's `onInstall` was
+     * redirected onto ship2 and wrote ship1's exotic into ship2's variant tags. The planet-side
+     * exoticatech dialog likewise reports the REFIT tab as current while the cache holds the last ship
+     * refitted, producing the same bleed with no refit interaction at all.
      *
-     * - **Refit screen**: the refit edits exactly one ship at a time, so the last root
-     *   [FleetMemberAPI] it displayed — [RefitButtonAdder.rootMember], cached from the display — is
-     *   an unambiguous anchor for the ship being refitted, even when a transient station-module
-     *   member entered the flow. FleetMember ids are stable across the clone churn.
-     * - **Campaign/simulation**: variants do not churn there, so the candidate whose station-module
-     *   tree instance-contains the triggering member's concrete variant is unambiguously the owner —
-     *   ship B's tree never holds ship A's variant object — and the tie between identical hulls is
-     *   broken deterministically.
+     * A member whose [FleetMemberAPI.getShipName] is non-empty therefore always anchors on ITSELF.
+     * FleetMember ids are re-derived on refit churn and are not a safe attribution key, so they are
+     * consulted only where nothing else identifies the ship.
      *
-     * ## Refit screen fallback
+     * ## Child modules
      *
-     * If the refit-root marker is not populated yet (refit cache empty on the very first frame),
-     * we fall back to the first fuzzy-owner candidate, preserving today's behavior for the
-     * single-ship case.
-     */
-    /**
-     * CHANGE A (plan-rev11): resolves the ship that a whole-ship flow must anchor on by the STABLE
-     * refit-root FleetMember id. Returns null when the refit root is not cached or when no live
-     * fleetData member carries that id; the caller MUST then do ZERO whole-ship work (never fall
-     * back to a transient/child FMAPI — its id reshuffles every query).
+     * A child-module member carries no ship name - the same test `HullmodExotic.onInstall` uses at
+     * `member.shipName.isNullOrEmpty()` - so the refit screen is the only thing that can say which
+     * ship it belongs to. The cached root must additionally CARRY that module, compared by variant-id
+     * STRING equality; never `===` on variants, which is not dependable across fixVariant churn and
+     * refit cloning (see [findRootVariantMember]).
+     *
+     * ## Fail-closed
+     *
+     * CHANGE A (plan-rev11): when no cached root exists, when no live fleetData member carries its
+     * id, or when that root does not carry the entering module, return null and the caller MUST do
+     * ZERO whole-ship work - never fall back to a transient/child FMAPI, whose id reshuffles every
+     * query.
      */
     @JvmStatic
-    fun resolveWholeShipRootMember(): FleetMemberAPI? {
-        //TODO introduce a hint 'fleet' argument to search for instead of always searching through all fleets
-        val refitRoot = RefitButtonAdder.getRootMember() ?: return null
-        val targetId = refitRoot.id
-        for (fleet in activeFleets) {
-            if (fleet == null) continue
-            fleet.fleetData?.fleet?.membersWithFightersCopy
-                    ?.filterNotNull()
-                    ?.firstOrNull { it.id == targetId }
-                    ?.let { return it }
+    fun resolveWholeShipRootMember(member: FleetMemberAPI): FleetMemberAPI? {
+        if (!member.shipName.isNullOrEmpty()) {
+            return member
         }
-        return null
+
+        if (runningFromRefitScreen()) {
+            val refitRoot = RefitButtonAdder.getRootMember() ?: return null
+            val targetId = refitRoot.id
+            for (fleet in activeFleets) {
+                if (fleet == null) continue
+                fleet.fleetData?.fleet?.membersWithFightersCopy
+                        ?.filterNotNull()
+                        ?.firstOrNull { it.id == targetId }
+                        ?.let { return if (rootCarriesModule(it, member)) it else null }
+            }
+            return null
+        }
+        return member
+    }
+
+    /**
+     * Whether [root]'s variant tree carries [member]'s variant by variant-id STRING equality - that
+     * is, whether [member] is [root] itself or one of its station modules.
+     *
+     * String-only by design: two identical hulls share a hullVariantId, and `===` on variants is not
+     * dependable across fixVariant churn / refit cloning. Fails closed when a variant cannot be read.
+     */
+    private fun rootCarriesModule(root: FleetMemberAPI, member: FleetMemberAPI): Boolean {
+        val rootVariant = root.variant
+        val memberVariant = member.variant
+        if (rootVariant == null || memberVariant == null) {
+            return false
+        }
+        val memberVariantId = memberVariant.hullVariantId
+        if (memberVariantId == null || memberVariantId.isEmpty()) {
+            return false
+        }
+        if (rootVariant.hullVariantId == memberVariantId) {
+            return true
+        }
+        return rootVariant.stationModules.values.contains(memberVariantId)
     }
 
     @JvmStatic

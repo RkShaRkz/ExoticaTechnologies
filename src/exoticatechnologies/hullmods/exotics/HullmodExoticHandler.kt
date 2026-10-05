@@ -7,11 +7,8 @@ import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.refit.checkRefitVariant
-import exoticatechnologies.util.FleetMemberUtils
-import exoticatechnologies.util.StarsectorAPIInteractor
+import exoticatechnologies.util.*
 import exoticatechnologies.util.datastructures.Optional
-import exoticatechnologies.util.getWholeVariantGraph
-import exoticatechnologies.util.shouldLog
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.jetbrains.annotations.TestOnly
@@ -29,6 +26,7 @@ object HullmodExoticHandler {
     private val MIN_LOG_LEVEL: Level = Level.WARN
 
     private val lookupMap: MutableMap<HullmodExoticKey, HullmodExoticInstallData> = ConcurrentHashMap()
+    private val uninstallLatch: MutableSet<FleetMemberAPI> = Collections.newSetFromMap(ConcurrentHashMap())
 
     /**
      * Method for checking whether the [HullmodExotic] should be installed onto a [ShipVariantAPI] by checking
@@ -650,6 +648,18 @@ object HullmodExoticHandler {
         }
     }
 
+    @JvmStatic
+    fun startUninstallSequenceForMember(member: FleetMemberAPI) {
+        logIfOverMinLogLevel("startUninstallSequenceForMember()\tmember: ${member}", Level.INFO)
+        uninstallLatch.add(member)
+    }
+
+    @JvmStatic
+    fun finishUninstallSequenceForMember(member: FleetMemberAPI) {
+        logIfOverMinLogLevel("finishUninstallSequenceForMember()\tmember: ${member}", Level.INFO)
+        uninstallLatch.remove(member)
+    }
+
     /**
      * Inner "class" holding certain "flows" which are a somewhat long list of steps/actions to perform, such as:
      * - checking and installing on all child modules' variants
@@ -695,8 +705,7 @@ object HullmodExoticHandler {
                     onShouldCallback: OnShouldCallback,
                     onInstallToChildModuleCallback: OnInstallToChildModuleCallback
             ) {
-                // First things first, figure out whether we're running from Refit or Exotica screen
-                val isFromRefitScreen = runningFromRefitScreen()
+                // First things first, figure out what work mode we're in
                 val workModeOptional = getWorkModeOptional()
                 val workMode = if (ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT && isOutsideExoticaOrRefit()) {
                     OUTSIDE_EXOTICA_OR_REFIT_FALLBACK_WORKMODE
@@ -711,24 +720,27 @@ object HullmodExoticHandler {
                 }
 
                 // Carry on
+                // SPECIAL HANDLING: if this fleetMember is in the process of uninstalling - do nothing and bail out
+                if (uninstallLatch.contains(fleetMember)) {
+                    logIfOverMinLogLevel("CheckAndInstallOnAllChildModulesVariants() tried doing it's thing on FleetMemberAPI that is currently undergoing uninstallation - bailing out!", Level.WARN)
+                    return
+                }
 
-                // Feed the FULL variant graph of the ship into the expected set: the campaign tree,
-                // the refit and display trees (while on the refit screen), and each child module's
-                // real FleetMember variant. The remove side iterates listOfVariantsWeInstalledOn,
-                // so the expected set is what guarantees install and uninstall cover the same
-                // graphs. The member's own root and refit variants are taken OUT of the iterate
-                // list here - they belong to CheckAndInstallOnMemberModule - but stay in the
-                // expected set. The recursion guard still holds: updateStats ->
-                // applyEffectsBeforeShipCreation -> onInstall re-entry is broken by the
-                // alreadyIn / hasNotInstalledAlready checks regardless of how broad the expected
-                // list is.
+                // Feed the FULL variant graph of the ship into the iterate+expected set: the
+                // campaign tree, the refit and display trees (while on the refit screen), and each
+                // child module's real FleetMember variant. The remove side iterates
+                // listOfVariantsWeInstalledOn, so the expected set is what guarantees install and
+                // uninstall cover the same graphs. The member's own campaign root variant is taken
+                // OUT of the iterate list here - it belongs to CheckAndInstallOnMemberModule - but
+                // stays in the expected set. The refit/display roots and their descendants stay in
+                // the iterate list: they are always installed by THIS for-loop, which is what makes
+                // the separate pourClonePermaMods pass redundant. The recursion guard still holds:
+                // updateStats -> applyEffectsBeforeShipCreation -> onInstall re-entry is broken by
+                // the alreadyIn / hasNotInstalledAlready checks regardless of how broad the
+                // expected list is.
                 val wholeVariantGraph = getWholeVariantGraph(fleetMember)
                 val childModuleVariants = LinkedHashSet(wholeVariantGraph).apply {
                     remove(fleetMemberVariant)
-                    if (isFromRefitScreen) {
-                        val refitVariant = fleetMember.checkRefitVariant()
-                        if (refitVariant !== fleetMemberVariant) remove(refitVariant)
-                    }
                 }
                 val allVariantsList = wholeVariantGraph.toList()
 
@@ -752,10 +764,21 @@ object HullmodExoticHandler {
                                     variantList = Optional.of(allVariantsList),
                                     workMode = workMode
                             )
-                            val underExoticLimit = nonNullMods.isUnderExoticLimit(fleetMember)
-                            val shouldProceedWithInstallation = shouldInstallOnModuleVariant && underExoticLimit
+                            // If we're not under exotic limit due to InstallMethod's direct write, check if we have it
+                            //
+                            // If we're under limit, then we should most certainly proceed
+                            // If we're at limit, due to InstallMethod's direct write; if that module actually
+                            // had an exotic, and then the InstallMethod pre-wrote a HullmodExotic, with default
+                            // settings, that module will have already reached 2, so it would not be considered
+                            // under the limit; however, if it gets skipped then everything will fall apart
+                            // during uninstallation step. We must have it in the bookkeeping map.
+                            // Besides, it's already installed on it - so, the return value of this branch
+                            // really just depends on whether that module already contains the hullmod exotic
+                            val isUnderExoticLimitOrAlreadyContains = nonNullMods.shouldAllowInstallation(fleetMember, hullmodExotic)
+
+                            val shouldProceedWithInstallation = shouldInstallOnModuleVariant && isUnderExoticLimitOrAlreadyContains
                             onShouldCallback.execute(shouldProceedWithInstallation, moduleVariant)
-                            logIfOverMinLogLevel("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, underExoticLimit: ${underExoticLimit}, variant: ${moduleVariant}", Level.INFO)
+                            logIfOverMinLogLevel("onInstall()\tshouldInstallOnModuleVariant: ${shouldInstallOnModuleVariant}, isUnderExoticLimitOrAlreadyContains: ${isUnderExoticLimitOrAlreadyContains}, shouldProceedWithInstallation: ${shouldProceedWithInstallation}, variant: ${moduleVariant}", Level.INFO)
                             if (shouldProceedWithInstallation) {
                                 // Lets try starting from the HullmodExoticHandler installation
                                 val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
@@ -814,6 +837,11 @@ object HullmodExoticHandler {
 
                 // Carry on
                 val installsOnWholeShip = hullmodExotic.installsOnWholeShip()
+                // SPECIAL HANDLING: if this fleetMember is in the process of uninstalling - do nothing and bail out
+                if (uninstallLatch.contains(member)) {
+                    logIfOverMinLogLevel("CheckAndInstallOnMemberModule() tried doing it's thing on FleetMemberAPI that is currently undergoing uninstallation - bailing out!", Level.WARN)
+                    return
+                }
 
                 // This 'variantList' is complicating things alot
                 // because the Optional must be present if we don't already have an entry in HullmodExoticHandler's map
@@ -864,10 +892,20 @@ object HullmodExoticHandler {
                             variantList = variantListOptional,
                             workMode = workMode
                     )
-                    val underExoticLimit = nonNullMods.isUnderExoticLimit(member)
-                    val shouldProceedWithInstallation = shouldInstallOnMemberVariant && underExoticLimit
+                    // If we're not under exotic limit due to InstallMethod's direct write, check if we have it
+                    // If we're under limit, then we should most certainly proceed
+                    // If we're at limit, due to InstallMethod's direct write; if that module actually
+                    // had an exotic, and then the InstallMethod pre-wrote a HullmodExotic, with default
+                    // settings, that module will have already reached 2, so it would not be considered
+                    // under the limit; however, if it gets skipped then everything will fall apart
+                    // during uninstallation step. We must have it in the bookkeeping map.
+                    // Besides, it's already installed on it - so, the return value of this branch
+                    // really just depends on whether that module already contains the hullmod exotic
+                    val isUnderExoticLimitOrAlreadyContains = nonNullMods.shouldAllowInstallation(member, hullmodExotic)
+
+                    val shouldProceedWithInstallation = shouldInstallOnMemberVariant && isUnderExoticLimitOrAlreadyContains
                     onShouldCallback.execute(shouldProceedWithInstallation, memberVariant)
-                    logIfOverMinLogLevel("onInstall()\tshouldInstallOnMemberVariant: ${shouldInstallOnMemberVariant}, underExoticLimit: ${underExoticLimit}, variant: ${memberVariant}", Level.INFO)
+                    logIfOverMinLogLevel("onInstall()\tshouldInstallOnMemberVariant: ${shouldInstallOnMemberVariant}, isUnderExoticLimitOrAlreadyContains: ${isUnderExoticLimitOrAlreadyContains}, shouldProceedWithInstallation: ${shouldProceedWithInstallation}, variant: ${memberVariant}", Level.INFO)
                     if (shouldProceedWithInstallation) {
                         val installResult = HullmodExoticHandler.installHullmodExoticToVariant(
                                 hullmodExotic = hullmodExotic,
@@ -934,11 +972,9 @@ object HullmodExoticHandler {
                 // Carry on now that we have install data
 
                 val parentMemberVariant = currentInstallData.parentFleetMemberAPI.variant
-                val parentMemberRefitVariant = currentInstallData.parentFleetMemberAPI.checkRefitVariant()
                 for (installedOnVariant in installedOnVariantsList) {
                     // If we run into the 'parent variant' just skip it, this one should remove from children only
                     if (installedOnVariant == parentMemberVariant) continue
-                    if (installedOnVariant == parentMemberRefitVariant) continue
 
                     // Carry on
                     val mods = getCorrectMods(fleetMember, installedOnVariant)
