@@ -348,37 +348,62 @@ object FleetMemberUtils {
     }
 
     /**
-     * Resolves the root [FleetMemberAPI] that a whole-ship ([HullmodExotic.installsOnWholeShip]) flow must anchor
-     * on, so bookkeeping stays inside the entering member's OWN ship and never bleeds onto another.
+     * Resolves the root [FleetMemberAPI] that a whole‑ship flow
+     * ([HullmodExotic.installsOnWholeShip]) must anchor on, so bookkeeping
+     * stays strictly within the edited ship’s OWN module tree and never
+     * bleeds onto another fleet ship.
      *
-     * ## Attribution is by ship name, never by the refit cache
+     * ## Stable markers, not variant identity
      *
-     * [RefitButtonAdder.getRootMember] is a screen-scoped cache naming whichever ship the refit screen
-     * last displayed - NOT the ship the entering member belongs to. Substituting it for the member
-     * re-anchors unrelated work onto that ship: with ship2's refit open, ship1's `onInstall` was
-     * redirected onto ship2 and wrote ship1's exotic into ship2's variant tags. The planet-side
-     * exoticatech dialog likewise reports the REFIT tab as current while the cache holds the last ship
-     * refitted, producing the same bleed with no refit interaction at all.
+     * ShipVariantAPI instances are recreated across the stock → REFIT → combat churn,
+     * so `===` on variants is not a dependable identity (see [checkRefitVariant] /
+     * [findRootVariantMember]). Attribution must therefore use stable markers:
      *
-     * A member whose [FleetMemberAPI.getShipName] is non-empty therefore always anchors on ITSELF.
-     * FleetMember ids are re-derived on refit churn and are not a safe attribution key, so they are
-     * consulted only where nothing else identifies the ship.
+     * - **Refit screen**: only one ship is edited at a time. The last root [FleetMemberAPI]
+     *   displayed — [RefitButtonAdder.rootMember], cached from the UI — is the unambiguous
+     *   anchor for the ship being refitted, even when transient station‑module members
+     *   enter the flow. FleetMember ids are stable across churn.
+     * - **Outside refit** (planet‑side exoticatech shop / campaign): the entering [member]
+     *   itself is the real root FleetMemberAPI the flow was invoked for. Its id is stable,
+     *   so anchor directly; never cross‑fleet scan.
+     * - **Named members**: if [FleetMemberAPI.getShipName] is non‑empty, the member always
+     *   anchors on itself. FleetMember ids are consulted only when no other identifier exists.
+     *
+     * ## Attribution vs. refit cache
+     *
+     * [RefitButtonAdder.getRootMember] is a screen‑scoped cache naming whichever ship the
+     * refit screen last displayed — NOT necessarily the ship the entering member belongs to.
+     * Substituting it for the member re‑anchors unrelated work: with ship2’s refit open,
+     * ship1’s `onInstall` was redirected onto ship2 and wrote ship1’s exotic into ship2’s
+     * variant tags. The planet‑side exoticatech dialog likewise reports the REFIT tab as
+     * current while the cache holds the last ship refitted, producing the same bleed with
+     * no refit interaction at all.
      *
      * ## Child modules
      *
-     * A child-module member carries no ship name - the same test `HullmodExotic.onInstall` uses at
-     * `member.shipName.isNullOrEmpty()` - so the refit screen is the only thing that can say which
-     * ship it belongs to. The cached root must additionally CARRY that module, compared by variant-id
-     * STRING equality; never `===` on variants, which is not dependable across fixVariant churn and
-     * refit cloning (see [findRootVariantMember]).
+     * A child‑module member carries no ship name (`member.shipName.isNullOrEmpty()`).
+     * In this case the refit screen cache is the only source of attribution. The cached
+     * root must additionally carry that module, checked by variant‑id STRING equality;
+     * never `===` on variants, which reshuffle across fixVariant churn and refit cloning.
      *
-     * ## Fail-closed
+     * ## Fail‑closed directive (plan‑rev11)
      *
-     * CHANGE A (plan-rev11): when no cached root exists, when no live fleetData member carries its
-     * id, or when that root does not carry the entering module, return null and the caller MUST do
-     * ZERO whole-ship work - never fall back to a transient/child FMAPI, whose id reshuffles every
-     * query.
+     * On the refit screen, anchor only by the STABLE refit‑root FleetMember id. If no cached
+     * root exists, if no live fleetData member carries that id, or if the root does not carry
+     * the entering module, return null. The caller MUST then perform ZERO whole‑ship work —
+     * never fall back to a transient/child FMAPI, whose id reshuffles every query.
+     *
+     * The refit cache must not be consulted outside the refit screen: the planet‑side
+     * exoticatech dialog reports the REFIT tab as current while the cache holds the last
+     * ship refitted, which previously caused installs to bleed onto the wrong ship.
+     *
+     * ## Example of bleed
+     *
+     * With ship2’s refit open, ship1’s `onInstall` was redirected onto ship2 and wrote
+     * ship1’s exotic into ship2’s variant tags. This is why attribution must be by ship
+     * name or validated refit‑root, never blindly by cache.
      */
+
     @JvmStatic
     fun resolveWholeShipRootMember(member: FleetMemberAPI): FleetMemberAPI? {
         if (!member.shipName.isNullOrEmpty()) {
