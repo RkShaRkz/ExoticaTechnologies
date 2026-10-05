@@ -296,8 +296,107 @@ open class HullmodExotic(
         // And also, finish the uninstall sequence for this rootMember
         HullmodExoticHandler.finishUninstallSequenceForMember(rootMember)
 
+        // In case the HullmodExoticHandler nuked the key with the first call, we'll have some stranglers remaining...
+        // At this point, the HullmodExotic uninstallation is guaranteed to be completed;
+        // however, some hullmods or just hullmod effects might still have lingered on - those need cleaning up.
+        clearHullmodLeftovers(member, rootMember, variant)
+
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
-        logIfOverMinLogLevel("<-- onPostDestroy()\tStill has hullmod: ${check}", Level.INFO)
+        logIfOverMinLogLevel("<-- onPostDestroy()\tStill has hullmod (hullmodId=${hullmodId}): ${check}", if (check) { Level.ERROR } else { Level.INFO })
+    }
+
+    /**
+     * Method for cleaning up the 'dirty' hullmod leftovers (and their effects) left after uninstalling the HullmodExotic.
+     * It will remove the hullmod via [removeHullmodFromVariant] and remove their effects via [ExoticHullmod.removeEffectsBeforeShipCreation]
+     *
+     * It will scrub:
+     * - each [variant]'s module variant,
+     * - each [member.variant]'s module variant,
+     * - whole [member]'s variant graph ([getWholeVariantGraph])
+     * - whole [rootMember]'s variant graph ([getWholeVariantGraph])
+     *
+     * @param member the member/child module member we're scrubbing from
+     * @param rootMember the ship's root module member we should also scrub
+     * @param variant the variant we're scrubbing from as well.
+     */
+    private fun clearHullmodLeftovers(member: FleetMemberAPI, rootMember: FleetMemberAPI, variant: ShipVariantAPI) {
+        val exoticHullmodOptional = ExoticHullmodLookup.getFromMap(hullmodId)
+        val exoticHullmod: ExoticHullmod
+        if (exoticHullmodOptional.isPresent()) {
+            exoticHullmod = exoticHullmodOptional.get()
+
+            // Scrub everything under reachable module variants
+            variant.forEachModuleVariant { moduleVariant ->
+                removeHullmodFromVariant(moduleVariant)
+
+                exoticHullmod.removeEffectsBeforeShipCreation(
+                        hullSize = moduleVariant.hullSpec.hullSize,
+                        stats = member.stats,
+                        id = exoticHullmod.hullModId
+                )
+                moduleVariant.statsForOpCosts?.let { statsForOpCosts ->
+                    exoticHullmod.removeEffectsBeforeShipCreation(
+                            hullSize = moduleVariant.hullSpec.hullSize,
+                            stats = statsForOpCosts,
+                            id = exoticHullmod.hullModId
+                    )
+                }
+            }
+            member.variant.forEachModuleVariant { moduleVariant ->
+                removeHullmodFromVariant(moduleVariant)
+
+                exoticHullmod.removeEffectsBeforeShipCreation(
+                        hullSize = member.variant.hullSpec.hullSize,
+                        stats = member.stats,
+                        id = exoticHullmod.hullModId
+                )
+                moduleVariant.statsForOpCosts?.let { statsForOpCosts ->
+                    exoticHullmod.removeEffectsBeforeShipCreation(
+                            hullSize = moduleVariant.hullSpec.hullSize,
+                            stats = statsForOpCosts,
+                            id = exoticHullmod.hullModId
+                    )
+                }
+            }
+
+            // Now do the whole graphs - first for 'member' then for 'rootMember'
+            val memberGraphVariantAPIs = getWholeVariantGraph(member)
+            for (graphVariant in memberGraphVariantAPIs) {
+                removeHullmodFromVariant(graphVariant)
+
+                exoticHullmod.removeEffectsBeforeShipCreation(
+                        hullSize = graphVariant.hullSpec.hullSize,
+                        stats = graphVariant.statsForOpCosts,
+                        id = exoticHullmod.hullModId
+                )
+                graphVariant.statsForOpCosts?.let { statsForOpCosts ->
+                    exoticHullmod.removeEffectsBeforeShipCreation(
+                            hullSize = graphVariant.hullSpec.hullSize,
+                            stats = statsForOpCosts,
+                            id = exoticHullmod.hullModId
+                    )
+                }
+            }
+
+            // And the same thing for 'rootMember'
+            val rootMemberGraphVariantAPIs = getWholeVariantGraph(rootMember)
+            for (graphVariant in rootMemberGraphVariantAPIs) {
+                removeHullmodFromVariant(graphVariant)
+
+                exoticHullmod.removeEffectsBeforeShipCreation(
+                        hullSize = graphVariant.hullSpec.hullSize,
+                        stats = graphVariant.statsForOpCosts,
+                        id = exoticHullmod.hullModId
+                )
+                graphVariant.statsForOpCosts?.let { statsForOpCosts ->
+                    exoticHullmod.removeEffectsBeforeShipCreation(
+                            hullSize = graphVariant.hullSpec.hullSize,
+                            stats = statsForOpCosts,
+                            id = exoticHullmod.hullModId
+                    )
+                }
+            }
+        }
     }
 
     /**
