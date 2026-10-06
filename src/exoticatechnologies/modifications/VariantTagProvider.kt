@@ -6,12 +6,8 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.loading.VariantSource
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.refit.getRefitDisplayVariant
-import exoticatechnologies.util.FleetMemberUtils
-import exoticatechnologies.util.StarsectorAPIInteractor
+import exoticatechnologies.util.*
 import exoticatechnologies.util.datastructures.Optional
-import exoticatechnologies.util.fixVariant
-import exoticatechnologies.util.forEachModuleVariant
-import exoticatechnologies.util.log
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.json.JSONException
@@ -20,6 +16,8 @@ import java.util.WeakHashMap
 
 open class VariantTagProvider : ShipModLoader.Provider {
     companion object {
+        val MIN_LOG_LEVEL: Level = Level.WARN
+
         @JvmStatic
         private var inst: VariantTagProvider = VariantTagProvider()
         @JvmStatic
@@ -202,12 +200,6 @@ open class VariantTagProvider : ShipModLoader.Provider {
     private fun writeThrough(member: FleetMemberAPI, variant: ShipVariantAPI, tag: String?) {
         val targetId = variant.hullVariantId
         val rootGraph = FleetMemberUtils.findShipScopedRootVariant(member, variant)
-        logger.error("writeThrough()\tANCHOR\tmember.@identityHashCode = ${System.identityHashCode(member)}\t" +
-                "member.id = ${member.id}\t" +
-                "variant.@identityHashCode = ${System.identityHashCode(variant)}\t" +
-                "variant.hullVariantId = ${variant.hullVariantId}\t" +
-                "resolvedRootGraph.@identityHashCode = ${rootGraph?.let { System.identityHashCode(it) }}\t" +
-                "resolvedRootGraph.hullVariantId = ${rootGraph?.hullVariantId}\ttag = $tag")
 
         val graphs = ArrayList<ShipVariantAPI>(NUMBER_OF_GRAPHS)
         member.variant?.let { graphs.add(it) }
@@ -385,6 +377,15 @@ open class VariantTagProvider : ShipModLoader.Provider {
             // Nothing in the cache, bail out
             Optional.empty()
         }
+    }
+
+    private fun logIfOverMinLogLevel(logMsg: String, logLevel: Level) {
+        shouldLog(
+            logMsg = logMsg,
+            logger = logger,
+            logLevel = logLevel,
+            minLogLevel = MIN_LOG_LEVEL
+        )
     }
 
     fun getFromVariant(variant: ShipVariantAPI): ShipModifications? {

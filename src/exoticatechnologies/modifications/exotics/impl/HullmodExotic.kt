@@ -78,7 +78,7 @@ open class HullmodExotic(
             // previously bled whole-ship installs onto the wrong ship (the stale refit cache).
             val resolved = FleetMemberUtils.resolveWholeShipRootMember(member)
             if (resolved == null) {
-                logger.error("onInstall()\tCHANGE-A\tresolveWholeShipRootMember() returned null (refit root not cached) - doing ZERO whole-ship work\tmember.id = ${member.id}")
+                logIfOverMinLogLevel("onInstall()\tresolveWholeShipRootMember() returned null (refit root not cached) - doing ZERO whole-ship work\tmember.id = ${member.id}", Level.ERROR)
                 return
             }
             resolved
