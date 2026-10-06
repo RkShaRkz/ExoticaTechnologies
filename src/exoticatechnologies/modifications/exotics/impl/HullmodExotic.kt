@@ -46,7 +46,7 @@ open class HullmodExotic(
             }
         }
 
-    override fun showWarningIfApplyingFromRefitScreen() = true
+    override fun showWarningIfApplyingFromRefitScreen() = false
 
     /**
      * Whether this [HullmodExotic] installs its hullmod on the whole ship (every module) or only on the
@@ -253,9 +253,6 @@ open class HullmodExotic(
         // install bookkeeping (see plan-hullmod_exotic_installs_on_whole_ship-revision16), so no
         // separate strip/unapply/nuke pass is needed anymore. The child remove flow iterates the
         // refit and display roots from listOfVariantsWeInstalledOn, matching the install side.
-        //TODO (plan-revision16): if a shipModificationMap entry for a member id survives a whole-ship
-        // uninstall, re-add the graph-enumerated member-id purge here - deferred until the current
-        // child-install / other-child-uninstall scenarios pass their test plans.
         val check = member.checkRefitVariant().hasHullMod(hullmodId)
         logIfOverMinLogLevel("<-- onDestroy()\tStill has hullmod: ${check}", Level.INFO)
     }
