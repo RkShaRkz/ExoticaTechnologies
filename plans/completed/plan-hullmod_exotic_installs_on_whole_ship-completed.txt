@@ -1,0 +1,196 @@
+# Completed Plan: plan-hullmod_exotic_installs_on_whole_ship-completed.txt
+
+## Intent
+
+The plan family started from a simple decoupling goal: `shouldShareEffectToOtherModules(...)`
+was driving **two different concerns** at once — (1) *install extent* (which modules get the
+exotic's hullmod installed) and (2) *effect sharing* (whether an exotic owned by one module
+applies exotic-level effects to other modules). The intent was to introduce
+`installsOnWholeShip()` as the single source of truth for concern #1, so a `HullmodExotic`
+could install on ONE module while still sharing exotic-level effects with ALL modules.
+
+In practice the "whole-ship install" half consumed the entire plan: anchoring whole-ship
+writes on the correct ship, keeping identical-hull twins from bleeding into each other, and
+making install/remove/OP-reset symmetric across every variant graph the game can read.
+That second half is what this plan ultimately shipped.
+
+## Scope
+
+- `HullmodExotic.kt` — install/remove/destroy lifecycle, whole-ship anchoring, cleanup.
+- `HullmodExoticHandler.kt` — install/remove flows, bookkeeping, work modes, gates.
+- `FleetMemberUtils.kt` — root resolution, member/stats/variant identity helpers.
+- `Extensions.kt` — `getWholeVariantGraph`, `shouldAllowInstallation`, refit predicates.
+- `RefitButtonAdder.kt` — refit-root cache and display variant accessors (read/used, not edited
+  by the final work).
+- `VariantTagProvider.kt`, `ShipModLoader.kt` — write-through and whole-ship mod reads.
+- `AlphaSubcore.kt`, `DaemonCore.kt` — the two `installsOnWholeShip() = true` exotics.
+- Test/results files and the planetside exoticatech + refit screens.
+
+## Evolution
+
+The committed code does NOT follow revisions 1-18 as a ladder. The revision family is a
+record of seventeen attempts; HEAD assembled three surviving pieces and a set of new fixes.
+
+**Surviving pieces (in the order the revisions introduced them):**
+
+1. **Base plan** — the `installsOnWholeShip()` split. Committed: `HullmodExotic.installsOnWholeShip()`,
+   overridden `= true` by `AlphaSubcore.kt:100` and `DaemonCore.kt:123`; the handler flows take it as
+   a parameter and `shouldShareEffectToOtherModules` no longer controls install extent.
+2. **Revision 9** — `getWholeVariantGraph(fleetMember)` (campaign + refit + display trees).
+   Committed as the walk the install flows and `getInitialVariantsListForMember` use.
+3. **Revision 10** — the O(1) object-identity display-tree gate. Committed within
+   `getWholeVariantGraph` step 3 via `getRefitDisplayVariant(fleetMemberAPI)`.
+4. **Revision 11** — CHANGE-A: anchor whole-ship flows on the STABLE refit-root id from
+   `RefitButtonAdder.getRootMember()`, fail closed (null -> ZERO whole-ship work).
+   Committed as the refit branch of `resolveWholeShipRootMember`.
+5. **Revision 16** — the architecture that actually stuck: the Handler child flows own the
+   FULL variant graph symmetrically on install and remove; all of the extra
+   HullmodExotic pour/strip/refresh/purge passes were deleted. Committed as-is, including the
+   keeper list (`installThisHullmodExoticToFleetMembersVariant`, `installHullmodOnVariant`,
+   `removeHullmodFromVariant`, `unapplyExoticHullmodAndRemoveExoticaAndHullmod`,
+   `removeHullmodExoticFromFleetMember` bookkeeping).
+6. **Revision 17** — the screen-aware two-branch anchor `resolveWholeShipRootMember(member)`:
+   refit `->` CHANGE-A (rev-11) anchor, else `-> return member`. Committed, then extended (see
+   Deviations).
+7. **Revision 18** — diagnostic-only instrumentation (`logWholeShipModsDiag`,
+   `logStaleCacheShadow`, `writeThrough() ANCHOR`). Committed temporarily, then fully removed by
+   the Oct-06 cleanup commits.
+
+**Discarded within the family (absent from HEAD):**
+
+- revisions 1-4 root-resolution walkways — `findRootVariantMember`, `matchingRootMembers`,
+  `treeInstanceContains`, `findRootVariantByHullId` still EXIST in `FleetMemberUtils.kt` but are
+  now DEAD CODE (no callers outside their own definitions).
+- revision 8's `moduleOwnerIds` sole-owner guard — NOT in HEAD; `moduleMap` survives in its
+  pre-rev-8 unguarded form (FleetMemberUtils.kt:17).
+- revisions 12-15 `pourClonePermaMods`, `stripClonePermaMods`, `refreshStatsEffectsAcrossShipGraphs`,
+  `removeExoticDataAcrossShipGraphs` (incl. the ET_MODMAP member-id purge) — all deleted by rev-16.
+
+**Uncommitted at the end (this session's ongoing refactor):** none. HEAD is
+
+   8e75f9e  Oct-06 03:54  Latest JAR
+
+## Outcome
+
+The feature works end-to-end and is validated:
+
+- `installsOnWholeShip()` split shipped, with AlphaSubcore/DaemonCore opting into whole-ship.
+- Whole-ship install reaches, and remove strips, every variant the game can read stats/costs
+  from (`getWholeVariantGraph` = campaign + refit + display, id-gated to this ship).
+- Cross-ship bleed between identical hulls is closed by a screen-aware, fail-closed
+  `resolveWholeShipRootMember(member)` (named members always return themselves; child modules on
+  the refit screen anchor on the stable refit-root id and must be carried by that root by
+  variant-id string equality; planet-side never consults the refit cache).
+- OP resets reliably across every module on uninstall. The mechanism that finally closed this is
+  an `onPostDestroy` cleanup that is NOT from any revision: after the handler completes, it
+  removes bookkeeping for both entering and resolved root member, finishes the uninstall
+  sequence, then `clearHullmodLeftovers` scrubs the hullmod + stats listeners from the union of
+  the callback variant's modules, the entering member's variant modules, and both whole graphs.
+- Acceptance: `TEST_RESULTS22.txt` (refit + planetside ExoticaTech runs) passes — zero
+  cross-ship mixed graphs, 250 listener removals, 12 anticipated `CHANGE-A` fail-closed paths,
+  no OP reset failures, no flakiness.
+- All diagnostic logging added during the work has been removed (commits f41a4c5, 830b265);
+  the diagnostic emitters and `MIN_LOG_LEVEL = Level.WARN` gate the remaining lifecycle logs to
+  ERROR-and-above only.
+
+## Deviations
+
+The committed code differs from what revisions 1-18 outlined. Differences by revision:
+
+| # | What the revision planned | Committed reality (HEAD) |
+|---|---|---|
+| 1-4 | Fuzzy walk / refit-authority / instance-ownership root resolution | **Dead code.** `resolveWholeShipRootMember` uses none of it. `findRootVariantMember` retained but has zero callers. |
+| 8 | `moduleOwnerIds` sole-owner guard on `moduleMap` | **Not shipped.** `moduleMap` is still globally written/read (FleetMemberUtils.kt:17) without the guard. |
+| 9 | `getWholeVariantGraph` + whole-graph flows; delete the propagate/strip passes | Shipped as planned (the delete happened in the flow of rev-16's consolidation). |
+| 10 | O(1) id-gated display tree + `refreshStatsEffectsAcrossShipGraphs` symmetric refresh | Display gate shipped inside `getWholeVariantGraph`; the `refreshStatsEffectsAcrossShipGraphs` function was later deleted by rev-16. |
+| 11 | CHANGE-A stable refit-root-id anchor | Shipped, but extended with `rootCarriesModule` (see below). |
+| 12 | Refit-only clone permaMod pour/strip + unconditional remove-side scrub | **Reverted** by rev-16 (deleted); the symmetric full-graph flows replaced it. |
+| 13-15 | `removeExoticDataAcrossShipGraphs` / remove-then-set purge / ET_MODMAP member-id purge | **Reverted** by rev-16 (deleted entirely); rev-16's `//TODO` to re-add the member-id purge is also gone — resolved by the new `onPostDestroy` cleanup. |
+| 16 | Symmetric full-graph flows; delete redundant passes | **Shipped as planned** and is the backbone of HEAD. |
+| 17 | Screen-aware anchor: refit = rev-11 anchor, non-refit = `return member` | Shipped, then extended with the named-member fast path and `rootCarriesModule`. |
+| 18 | Diagnostics only; fix deferred | Diagnostics shipped, ran, and were removed. The "following revision" fix was never written as a revision doc — it landed directly in commits `f4da0c7`/`ffe8a76`/`f41a4c5` and this session's `34f4a48`-era cross-ship fix. |
+
+**Additions in HEAD that NO revision planned:**
+
+1. **Named-member fast path** in `resolveWholeShipRootMember` — `if (!member.shipName.isNullOrEmpty()) return member`
+   (FleetMemberUtils.kt:409-411). A ship root carrying a name is authoritative; no cache look-up,
+   no fuzzy scan, so an install/remove entering through a root can never be attributed to another
+   ship's stale refit cache. Root cause of the "Phaeon leak" observed during the revision era.
+2. **`rootCarriesModule(root, member)`** (FleetMemberUtils.kt:435) — validates the refit-root
+   candidate actually carries the entering module by `hullVariantId` STRING equality (root id or
+   `stationModules.values`), failing closed on null variants/ids. The refit branch ONLY returns a
+   root that both matches the stable id AND carries the module; otherwise null => ZERO whole-ship
+   work. Never cross-ship.
+3. **`ShipModifications.shouldAllowInstallation(member, exotic)`** (Extensions.kt:1035) —
+   `underExoticLimit || alreadyHasExotic`. Wired into the handler install gates
+   (HullmodExoticHandler.kt:777, :904). This removed the original "install vetoed at limit" block
+   that kept a root from ever receiving the exotic's hullmod. Not in any revision.
+4. **`onPostDestroy` + `clearHullmodLeftovers`** (HullmodExotic.kt:260-397). `onPostDestroy` is
+   genuinely new — it did not exist at the rev-16-era baseline (812a109), and nothing in revisions
+   1-18 called for a destroy-time cleanup pass. It runs AFTER the handler flows/sequence complete:
+   - re-removes exotic bookkeeping for both `member` and `rootMember`,
+   - `finishUninstallSequenceForMember(rootMember)`,
+   - `clearHullmodLeftovers(member, rootMember, variant)`: removes the hullmod and calls
+     `removeEffectsBeforeShipCreation` across the union of (a) callback `variant`'s module
+     variants, (b) `member.variant`'s module variants, (c) `getWholeVariantGraph(member)`,
+     (d) `getWholeVariantGraph(rootMember)`.
+   This belt-and-braces pass is what made OP reset deterministic on every module for the refit
+   and planetside paths (`TEST_RESULTS20`-`22`). It was largely delivered/committed by the user
+   directly (commits `f4da0c7`, `ffe8a76`), so it never travelled through the revision docs.
+5. **`findShipScopedRootVariant`** (FleetMemberUtils.kt:287) — write-side root scoping used by
+   `VariantTagProvider.writeThrough` (VariantTagProvider.kt:202), so tag mirrors stay inside the
+   acting ship's own graphs.
+6. **Uninstall-in-progress gates** in the install flows ("tried doing its thing on FleetMemberAPI
+   that is currently undergoing uninstallation - bailing out!") — committed, prevents install
+   re-entry while a remove is in flight.
+
+**Logging state as committed:**
+
+- All rev-18 diagnostic emitters removed (no `DIAG`, no `ANCHOR`, no `logStaleCacheShadow`,
+  no `logWholeShipModsDiag`).
+- Remaining lifecycle/`CHANGE-A` logs exist but are gated by
+  `MIN_LOG_LEVEL = Level.WARN` (HullmodExotic.kt:558, HullmodExoticHandler.kt:26,
+  ExoticHullmodLookup.kt:10, ExoticaTechHM.java:43), so only ERROR-and-above surface at runtime.
+- `manageHullmodLeftovers`-style diagnostic logs inside `clearHullmodLeftovers` are absent; the
+  method is comment-only and log-free.
+
+## Clarifying Implementation Details
+
+- **Why the resolver looks the way it does.** The bleed problem was never "find the root"; it
+  was "you attributed a write to the WRONG root". The committed resolver therefore refuses to
+  guess: a named member IS the root; a child on the refit screen must match the stable cached
+  root id AND be carried by that root's variant strings; everywhere else it returns `member` so
+  the planet-side path never touches `RefitButtonAdder` (whose cache holds "the last ship
+  refitted", not "this ship" — the exact trap that caused the Phaeton leak).
+- **String, not identity.** All attribution in `rootCarriesModule` and the resolver is by
+  `hullVariantId`/`id` strings. `===` on variants is never used for ownership: variants reshuffle
+  across `fixVariant` churn and refit cloning.
+- **`clearHullmodLeftovers` is intentionally redundant.** The Handler flows + `onPostDestroy`
+  already remove bookkeeping on the recorded `listOfVariantsWeInstalledOn`; the cleanup pass is a
+  no-cost second sweep over the union of graphs (remove-first, then stats scrubbing) precisely so
+  a regenerated/display clone or a child member the flows never visited cannot keep reduced OP.
+  `removeEffectsBeforeShipCreation` is idempotent (single `removeListenerOfClass` in
+  AlphaSubcoreHM/DaemonCoreHM; `hullSize` is currently ignored), so double-scrubbing is safe.
+- **`shouldAllowInstallation` is the root-install fix.** Without it, a root module at exotic
+  limit (e.g. after InstallMethod's direct write) was vetoed; the installing child got the hullmod
+  but the root never did. The committed gate lets the already-present exotic through so the whole
+  ship gets covered.
+- **No `updateStats()` inside the install/remove write-through anywhere** — the rev-5
+  StackOverflowError rule survived the consolidation; the only refresh points are
+  `ExoticaTechHM.addToFleetMember` and the refit flow's own triggers.
+- **Test artifacts** `TEST_RESULTS20`.txt through `TEST_RESULTS22`.txt capture acceptance;
+  `TEST_RESULTS22` is the authoritative pass for both refit and planetside ExoticaTech.
+
+## Reflection
+
+This plan is the record of a genuinely hard problem whose hard part was never code volume — it
+was **attribution**: deciding, unambiguously and in every screen, which ship a write belongs to
+when identical hulls make string-only matching ambiguous and object identity churns with every
+refit. The revision ladder documents the theorem: instance identity fails inside the refit;
+fuzzy string scans fail across twins; a cached root fails when stale. The committed solution
+does not resolve ownership more cleverly — it *refuses to guess*. Named member => that member.
+Refit child => only the exact cached root that demonstrably carries it. Everything else does
+zero whole-ship work. Adding a deterministic `onPostDestroy` cleanup on top then closed the
+second half of the problem (OP reset) without re-opening the first. The enduring lessons:
+favor fail-closed over smart resolution, keep string keys over instance identity, and let a
+consolidation pass (rev-16) delete machinery rather than extend it.

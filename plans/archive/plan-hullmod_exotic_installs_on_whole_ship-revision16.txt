@@ -1,0 +1,118 @@
+REVISION 16 - CHILD FLOW OWNS THE FULL VARIANT GRAPH (ORCHESTRATE, DON'T RELOCATE)
+==================================================================================
+
+STATUS: IMPLEMENTED (build-mode). Decisions locked via Q&A.
+BASELINE: revision 15 shipped the graph-enumerated ET_MODMAP purge (TEST_RESULTS10
+  forensics). Rev-16 is the consolidation pass the user asked for: make the Handler flows
+  own the FULL variant graph on BOTH install and remove sides so they are perfectly
+  symmetric, and delete the redundant pour/strip/refresh/nuke passes in HullmodExotic
+  instead of relocating or extending them.
+
+-----------------------------------------------------------------------
+0. ORCHESTRATION ANALYSIS (what this revision changes and why)
+-----------------------------------------------------------------------
+- The install flow ALREADY computed wholeVariantGraph = getWholeVariantGraph(fleetMember)
+  internally. What made it asymmetric was that it removed BOTH the campaign root AND the
+  refit root (isFromRefitScreen) from childModuleVariants - so the refit root's hullmod was
+  only ever poured by HullmodExotic.pourClonePermaMods, outside the flow's bookkeeping.
+- The user asked HOW extra graphs should be folded into the flows. Q&A answer:
+  "Child flow owns full graph". The child for-loop is the SINGLE install surface for every
+  graph in the ship; CheckAndInstallOnMemberModule keeps only the campaign root + the
+  bookkeeping seeding. This is orchestration between HullmodExotic and the Handler, NOT a
+  code relocation (user's explicit direction).
+- Remove side mirrors it: the child remove flow no longer skips the refit root, so it
+  reaches every variant that listOfVariantsWeInstalledOn records - the identical full-graph
+  set the install flow wrote.
+
+-----------------------------------------------------------------------
+1. CHANGE 1 - CHECKANDINSTALLONALLCHILDMODULESVARIANTS OWNS THE FULL GRAPH
+-----------------------------------------------------------------------
+- HullmodExoticHandler.CheckAndInstallOnAllChildModulesVariants (~:691-769):
+  - Removed the `val isFromRefitScreen = runningFromRefitScreen()` local.
+  - childModuleVariants = LinkedHashSet(wholeVariantGraph).apply { remove(fleetMemberVariant) }
+    - before: also removed the refit root when on the refit screen.
+    - now: only the campaign root is removed (it belongs to CheckAndInstallOnMemberModule).
+      Refit and display roots + all descendants stay in the iterate list; allVariantsList
+      (= whole graph) still feeds the expected set, so install AND uninstall cover the same
+      graphs.
+  - The recursion guard is unaffected: updateStats -> applyEffectsBeforeShipCreation ->
+    onInstall re-entry is still broken by the alreadyIn / hasNotInstalledAlready checks.
+
+-----------------------------------------------------------------------
+2. CHANGE 2 - CHECKANDREMOVEFROMALLCHILDMODULESVARIANTS MIRRORS IT
+-----------------------------------------------------------------------
+- HullmodExoticHandler.CheckAndRemoveFromAllChildModulesVariants (~:897-944):
+  - Removed `val parentMemberRefitVariant = currentInstallData.parentFleetMemberAPI.checkRefitVariant()`
+    and the `if (installedOnVariant == parentMemberRefitVariant) continue` skip.
+  - Only the campaign root (parentMemberVariant) is still skipped - it belongs to
+    CheckAndRemoveFromMemberModule. Remove side is now symmetric with install.
+- HullmodExotic.onDestroy: deleted the separate whole-ship refit-root strip
+  (`if (runningFromRefitScreen()) { CheckAndRemoveFromMemberModule(rootMember.checkRefitVariant(), ...) }`
+  block) that existed specifically because the child flow used to skip the refit root.
+
+-----------------------------------------------------------------------
+3. CHANGE 3 - DELETE THE NOW-REDUNDANT HULLMODEXOTIC PASSES (REVERT TOWARD 812a109)
+-----------------------------------------------------------------------
+- Deleted methods: pourClonePermaMods, stripClonePermaMods, removeExoticDataAcrossShipGraphs,
+  refreshStatsEffectsAcrossShipGraphs.
+- onInstall: replaced the pour/refresh block with a short comment - the child flow now feeds
+  the full graph and the callbacks pour/deploy per variant, no separate pass is needed.
+- onDestroy: removed the strip/refresh/nuke block.
+- KEPT (change anchor + variant-level helpers, per user: do NOT move): resolveWholeShipRootMember
+  CHANGE-A anchor in onInstall/onDestroy, flow delegation (CheckAndInstallOnAllChildModulesVariants,
+  CheckAndInstallOnMemberModule, CheckAndRemoveFromAllChildModulesVariants,
+  CheckAndRemoveFromMemberModule, removeHullmodExoticFromFleetMember bookkeeping),
+  installThisHullmodExoticToFleetMembersVariant, unapplyExoticHullmodAndRemoveExoticaAndHullmod,
+  installHullmodOnVariant (reverted to clean addPermaMod - the AnonymousLogger DIAG call is gone),
+  removeHullmodFromVariant.
+- Imports removed: PersistentDataProvider, getRefitDisplayVariant, AnonymousLogger,
+  forEachModuleVariant, getWholeVariantGraph, runningFromRefitScreen.
+  Imports kept: checkRefitVariant (onDestroy line ~205), FleetMemberUtils, StringUtils,
+  Optional, shouldLog, Level, Logger, JSONObject, Color.
+
+-----------------------------------------------------------------------
+4. CHANGE 4 - ET_MODMAP MEMBER-ID PURGE: DROPPED, TODO FALLBACK
+-----------------------------------------------------------------------
+- User decision (Q&A): "Drop it, TODO fallback". removeExoticDataAcrossShipGraphs (rev-15's
+  graph-enumerated member-id shipModificationMap purge) is deleted entirely.
+- Added //TODO in HullmodExotic.onDestroy (plan-revision16): if a shipModificationMap entry
+  for a member id survives a whole-ship uninstall, re-add the graph-enumerated member-id
+  purge here - deferred until the current child-install / other-child-uninstall scenarios
+  pass their test plans.
+
+-----------------------------------------------------------------------
+5. FILES TOUCHED
+-----------------------------------------------------------------------
+- src/exoticatechnologies/hullmods/exotics/HullmodExoticHandler.kt
+  - CheckAndInstallOnAllChildModulesVariants: full-graph iterate (only campaign root removed).
+  - CheckAndRemoveFromAllChildModulesVariants: refit-root skip removed.
+- src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt
+  - Deleted pour/strip/refresh/nuke passes; onInstall/onDestroy comment updates; onDestroy
+    //TODO fallback note; import cleanup; installHullmodOnVariant DIAG removed.
+- plans/plan-hullmod_exotic_installs_on_whole_ship-revision16.txt: this file.
+
+-----------------------------------------------------------------------
+6. VERIFY (user rebuilds and reruns)
+-----------------------------------------------------------------------
+- TEST_PLAN global install from exoticatech screen: hullmod present on EVERY graph variant
+  (campaign children + refit + display roots and descendants) - no pour pass behind the
+  flows' backs.
+- TEST_PLAN refit uninstall: hullmod + tag + OP stats stripped on the SAME full-graph set;
+  no leftover ET_MODMAP member-id residue expected (survivor is the TODO trigger).
+- Regression: STRICT mode bookkeeping (expected set) unchanged; single-module ships
+  (installsOnWholeShip == false) untouched; other ships' exotics untouched.
+
+-----------------------------------------------------------------------
+7. RATIONALE NOTES (session decisions)
+-----------------------------------------------------------------------
+- Why orchestration, not relocation: the user's direction was to keep flows in the Handler
+  and make the two sides symmetric, feeding the full variant graph into the flows - NOT to
+  move pour/strip logic into the Handler. The race was the install/remove asymmetry (refit
+  root poured only by pourClonePermaMods), not code volume.
+- Why ET_MODMAP purge is dropped: rev-15's member-id scrub was a band-aid for the ts-957759
+  child-key residue; with the full graph now recorded and iterated on both sides, the
+  uninstall reaches every graph variant directly. If a map entry still survives (the
+  "post-scrub survivor"), the TODO documents the re-add, gated on future test plans.
+- Kept: CREATE PLAN PRIOR, CHANGE-A anchor in HullmodExotic (SRP), LENIENT no-data branch in
+  shouldInstallHullmodExoticToVariant, runningFromRefitScreen gating in getWholeVariantGraph,
+  install-side pour postponed (covered by the child flow's callbacks now).
