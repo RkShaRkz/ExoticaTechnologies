@@ -1,0 +1,112 @@
+REVISION 13 - WHOLE-SHIP UNINSTALL DATA PURGE (kill the reinstall loop)
+=========================================================================
+
+STATUS: IMPLEMENTED (build-mode). Decisions locked via Q&A.
+BASELINE: revision 12 IMPLEMENTED (install side verified clean in TEST_RESULTS7; no cross-ship
+  pollution). Revision 13 addresses the uninstall-side residual bug from TEST_RESULTS7.
+
+------------------------------------------------------------------------
+0. ROOT CAUSE (TEST_RESULTS7, confirmed via code)
+------------------------------------------------------------------------
+- The uninstall itself mostly worked: writeThrough removed the exotic from every variant tag it
+  touched (~18 instances), permaMod was stripped from all graph nodes, OP listeners were removed
+  from all 4 snapshot stats objects, and removeHullmodExoticFromFleetMember deleted the lookupMap
+  bookkeeping key.
+- BUT ~0.8s after the uninstall (timestamp 5159705, TEST_RESULTS7 line 41501) a RE-INSTALL fired
+  on the same ship (f1c1): shouldInstallHullmodExoticToVariant returned true via its "no install
+  data" branch (HullmodExoticHandler.kt:108-127 returns true when the lookupMap entry is absent),
+  and the whole-ship install flow re-poured permaMod + listeners + tags onto all graph variants.
+- WHY it fired at all: ExoticaTechHM.applyEffectsBeforeShipCreation (ExoticaTechHM.java:541-596)
+  runs on EVERY hullmod-effects re-application and, per exotic, scans
+  ShipModLoader.getWholeShipMods(member, stats.getVariant()) (ShipModLoader.kt:100-147: root
+  member's stored variant tree + refit display tree, read from each node's $$EXOTICA$$ tag).
+  If ANY of those ShipModifications objects still hasExotic(AlphaSubcore), it calls
+  exotic.applyExoticToStats(...) -> HullmodExotic.applyExoticToStats (HullmodExotic.kt:443-451)
+  -> onInstall(member) -> whole-ship reinstall.
+- The specific leak: a REGENERATED campaign copy (left_Start@679065849, a NEW identity replacing
+  the scrubbed left_Start@1923599124) still carried AlphaSubcore in its $$EXOTICA$$ tag. The
+  revision-12 uninstall cleared tags on the graph instances it visited but not the instance the
+  regenerator clones from. Combined with the missing bookkeeping key, the no-data -> true branch
+  let the reinstall proceed.
+- Consequences: OP stays reduced on every module, the exotic still shows as installed on children
+  after a ship switch, listeners get re-attached every stats pass.
+
+------------------------------------------------------------------------
+1. STRATEGY (user-confirmed via Q&A)
+------------------------------------------------------------------------
+- ONE fix: make the whole-ship uninstall purge the exotic's ShipModifications data from EVERY
+  variant the engine can re-derive from - the same union getWholeShipMods()/getWholeVariantGraph
+  read - so nothing anywhere contains the exotic after uninstall.
+- Once nothing contains it: ExoticaTechHM's hasExotic gate (java:568-577) skips the exotic, so
+  applyExoticToStats/applyToShip are never called for it, and onInstall() can never be re-triggered
+  (this reasoning was user-confirmed; NO changes to applyExoticToStats/applyToShip were accepted).
+- Explicitly NOT touched (user rejections this session):
+  - shouldInstallHullmodExoticToVariant: no presence-guard added. Its no-data -> true branch is the
+    legitimate manual-install / LENIENT-churn path and cannot be hit on re-sync once the purge
+    completes (applyExoticToStats no longer fires because no data survives).
+  - applyExoticToStats / applyToShip in HullmodExotic, AlphaSubcore, DaemonCore: left as-is.
+  - ExoticaTechHM.java, the handler Flows, InstallMethod/FreeMethod/ChipMethod: left as-is.
+
+------------------------------------------------------------------------
+2. CHANGE 1 - REMOVE EXOTIC DATA ACROSS ALL SHIP GRAPHS (HullmodExotic.kt)
+------------------------------------------------------------------------
+- onDestroy's installsOnWholeShip() branch now ends with the purge, after the strip and the
+  apply=false refresh:
+
+      if (installsOnWholeShip()) {
+          if (runningFromRefitScreen()) {
+              stripClonePermaMods(rootMember)
+          }
+          refreshStatsEffectsAcrossShipGraphs(rootMember, apply = false)
+          removeExoticDataAcrossShipGraphs(rootMember)
+      }
+
+- New private method removeExoticDataAcrossShipGraphs(rootMember) (comment-free, no elvis / no !!,
+  runCatching + getOrNull style):
+  - iterate getWholeVariantGraph(rootMember) (campaign tree = member.variant + every
+    station-module descendant, refit tree, display tree - same store the re-sync reads).
+  - per variant: val mods = runCatching { ShipModLoader.get(rootMember, variant) }.getOrNull()
+  - if mods == null -> log DIAG "mods=null"; continue.
+  - else: val hadExotic = mods.hasExotic(this); val removed = mods.removeExotic(this); log DIAG
+    (variant hullVariantId@identityHashCode, hadExotic, removed, exoticsLeft =
+    mods.getExoticIdSet().map { it.key }); if removed -> ShipModLoader.set(rootMember, variant, mods).
+- Idempotent: removeExotic on already-clean mods is a no-op; ShipModLoader.set only fires when
+  something was actually removed.
+- WHY this placement works: ShipModLoader.set writes through the same providers the read uses
+  (VariantTagProvider first), so a regenerated clone of a purged stored variant rehydrates clean,
+  and the next ExoticaTechHM pass sees hasExotic=false across the whole ship -> no reinstall.
+
+------------------------------------------------------------------------
+3. FILES TOUCHED
+------------------------------------------------------------------------
+- src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt
+  - onDestroy: removeExoticDataAcrossShipGraphs(rootMember) call added.
+  - new private method removeExoticDataAcrossShipGraphs, placed beside stripClonePermaMods.
+  - NO new comments added; existing comments untouched. DIAG via AnonymousLogger (Level.INFO),
+    matching pourClonePermaMods/stripClonePermaMods style.
+
+------------------------------------------------------------------------
+4. VERIFY (user rebuilds and reruns)
+------------------------------------------------------------------------
+- TEST_PLAN 7-10: uninstall -> OP resets on EVERY module; purge DIAG shows exotic removed from all
+  campaign/refit/display nodes; the regenerated clone comes out CLEAN (kill the
+  left_Start@679065849-style survivor). Confirm NO re-install sequence (~0.8s after) in the log.
+- TEST_PLAN 12-21: ship switch + return shows the exotic genuinely NOT installed; no cross-ship
+  pollution; other ships' exotics untouched.
+- Regression: re-install after uninstall still works (InstallMethod -> onInstall -> flows;
+  shouldInstall no-data -> true still the first-install path).
+- If the DIAG (or a run) shows exotic data re-appearing on an identity the purge did not reach,
+  the surviving store is the child FM's own .variant vs. the root's moduleVariants[slot] copy, or
+  a provider past VariantTagProvider - extend the sweep there (revision 14 candidate).
+
+------------------------------------------------------------------------
+5. RATIONALE NOTES (session decisions)
+------------------------------------------------------------------------
+- User: "the method calling shouldInstall should not have been called if it were really
+  uninstalled" - confirmed the bug is THE PURGE, not the defensive-restore calls; those are only
+  reachable when data exists, so removing them was rejected ("why would it reinstall ... when
+  uninstalled ... nothing contains it ... applyToStats nor applyToShip ... will never be called").
+- User rejected the shouldInstall presence-guard: refit/display clones churn constantly and the
+  handler's LENIENT/bookkeeping design must keep letting legitimate variants through; guarding on
+  mods presence would cause more bugs (the handler exists to control the game's broken API calls).
+- User approved DIAG in the purge.

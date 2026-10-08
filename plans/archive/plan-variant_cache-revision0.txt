@@ -1,0 +1,103 @@
+Objective:
+
+- Complete the VariantTagProvider cache rework (branch fix-rework2):
+  (a) write-TTL eviction  [DONE + VALIDATED]
+  (b) module-variant recovery in combat  [FAILS - THIS PLAN]
+  Goal state: combat children resolve their OWN ShipModifications (empty-by-default,
+  real data if the module owns an exotic), parity with refit behavior, never NULL.
+
+Validated facts (evidence: refit.log / campaign.log / combat-sim.log / refitlog2.txt / combat-real.log.txt):
+
+- Eviction PASS: single "EVICTED EXPIRED" at 705007 (~2 game-days after write), immediate
+  "TAG READ + cache" re-sync, cache resumes. 0 evictions in sim AND real combat because the
+  campaign clock is frozen during combat - write-TTL is correct, no combat concern.
+- Recovery FAIL: 0 "MODULE TAG RECOVERY" across all 5 logs. Combat children NULL:
+  sim (refitlog2): left_0/right_1 = 662 NULL; real combat: left_0/right_1 = 22,594 NULL.
+- Real combat vs sim difference: runningFromRefitOrFleetTab() = FALSE in real combat
+  (campaignUI.currentCoreTab null) -> cache writes ENABLED (2 "TAG READ + cache" observed).
+  In the sim it is TRUE (stale REFIT tab) -> no cache writes. Recovery must work in both.
+- Root cause: tag-loss is ship-specific and correlated with the refit-clone path.
+  Ships NOT refit'd this session (e8dba8fb..., a7d1c694... UUID-variant ships): combat
+  clones carry variantTags=1 with real upgrades, campaign/clone ids MATCH, exact CACHE HITs
+  (23,046 reads), zero fuzzy needed - system works. The player's tbj_overslaught (refit'd):
+  campaign children tagged "tbj_overslaught_left_Start", combat clones "left_0"/"right_1"
+  variantTags=0. Tagged "_Start" children appear 0 times in combat logs (campaign tree
+  unreachable). Engine preserves tags on cloning (e8dba8fb proves it), so the loss happens
+  upstream in the mod's refit-clone path (fixVariant/getRefitVariant, Extensions.kt:54-89).
+- Children read under BOTH member patterns in combat: root member (1040c: 14,736 NULL) and
+  module-FM members (real combat: d23c1d84.../964087a1...: 7,858 NULL; sim: 117ce/117d2).
+- Enemy ships (ora_wisdom_variant) + fighters (broadsword_Fighter) NULL: expected/harmless.
+- Child tags are INTENTIONALLY empty: ShipModFactory.generateForChildModules (line 90-101)
+  writes ShipModifications() bandwidth-only per child. So combat child NULL vs refit child
+  EMPTY is a consistency/parity bug, not a gameplay break (exotic still applies to child
+  sections via wholeShipsMods fallback - "APPLYING exotic" fires on left_0/right_1).
+  Recovery only changes gameplay for ships where a MODULE owns its own exotic.
+
+Constraints (AGENTS.md + user):
+- NO FleetMemberHierarchy usage in new work (banned until fully fixed). Root-ascension
+  must be self-contained in FleetMemberUtils.
+- Never commit / never git config. Files CRLF-normalized at commit; use git diff -w.
+- Incremental: one small change at a time, validate after each. No 500-line batches.
+- Cache: WeakHashMap<FleetMemberAPI, Map<variantId, ShipModifications>>; JSON variant tags
+  are the durable store; only writer is addToFleetMember -> generateForFleetMember.
+- Performance: recovery is the cold path (cache-miss only) - per-call fleet scan is fine,
+  but avoid per-frame work; no allocation churn in hot get() path.
+
+Phase 1 - DIAGNOSTIC (resolves remaining unknowns, no behavior change):
+  Add temporary [DIAG] logging at:
+  (a) End of fixVariant()/getRefitVariant(): dump member.variant children ids + child tag
+      counts after the clone, and the pre-clone originals' child tags. -> confirm WHERE the
+      tag loss happens (mod clone vs engine refit-display clone).
+  (b) VariantTagProvider recovery probe: for a NULL child query, dump member.id, query id,
+      member.variant.getStationModules(), and (if resolved) campaign FM's variant + its tree
+      children + tags, plus query variant getOriginalVariant() string. -> confirms campaign
+      tree reachability post-refit, module-FM campaign variant ids, and getOriginalVariant()
+      semantics on combat clones (cannot be tested in CI).
+  Run: real combat with the player's tbj ship (refit'd) + one child-owned-exotic ship.
+
+Phase 2 - CORE FIX (Option D, campaign-anchored, both lookups):
+  1. FleetMemberUtils.collectModuleVariants(member): collect ALL variants of a member's
+     tree (root or child member; child-to-child via recursive stationModules walk;
+     descendants-first, root last; NO fuzzy logic). Self-contained, no FleetMemberHierarchy.
+  2. FleetMemberUtils.resolveCampaignMemberById(id): player fleet membersWithFightersCopy()
+     first, then CampaignEventListener.activeFleets fallback (pattern of
+     ExoticaTechHM.findMemberByVariantId). Returns the campaign FM for a combat member id.
+  3. VariantTagProvider.get() NULL path (replaces current findMatchingTreeVariant):
+     a. exact: if query variant.getOriginalVariant() non-null/non-empty, match a collected
+        campaign variant by that id -> read tags.
+     b. fuzzy: prefix-match query id against collected campaign variants (existing
+        substringBeforeLast("_") semantics).
+     c. return/cache per runningFromRefitOrFleetTab(); cache under the QUERY member + query
+        variantId so subsequent combat reads (same member object, WeakHashMap identity) hit.
+     d. covers BOTH read patterns: root member (walk tree) and module-FM member (its own
+        campaign variant is the tagged child).
+  Deleted: VariantTagProvider.findMatchingTreeVariant (moves to the collect+match split).
+
+Phase 3 - EVALUATE (based on Phase 1 findings):
+  - If campaign tree (or module FM's campaign variant) still yields untagged children after
+    a refit session (i.e. the tagged _Start originals are unreachable in-session): add
+    NULL->EMPTY normalization for station-module children at ShipModLoader.getData boundary
+    (contract: children always have ShipModifications, possibly empty). Guard must be precise
+    (variant != member.variant AND member.variant.stationModules contains the id) so enemy
+    roots / fighters stay NULL. Verify no consumer mutates the received ShipModifications
+    before adopting a shared EMPTY singleton.
+  - If Phase 1 proves the refit-clone path itself drops child tags (upstream root cause):
+    fix Extensions.kt getRefitVariant/fixVariant to preserve child tags - this eliminates
+    the whole problem class (tbj clones then behave like e8dba8fb). Do NOT do this until
+    Phase 1 confirms the mechanism.
+
+Phase 4 - VALIDATION (after each phase; rebuild via IntelliJ, run sessions):
+  - Campaign: park fleet >2 game-days -> exactly one EVICTED EXPIRED + TAG READ + cache
+    re-sync, then CACHE HITs resume.
+  - Refit: open refit, verify children EMPTY (not NULL) on the tbj ship.
+  - Sim: verify children EMPTY on tbj (recovery runs but does not cache - sim policy).
+  - Real combat: tbj children EMPTY under BOTH 1040c and module-FM keys; e8dba8fb/a7d1c694
+    ships keep exact CACHE HITs (no regression); enemy/fighters still NULL; 0 new evictions
+    during combat.
+  - Child-owned-exotic ship: exotic survives combat via recovery (real mods, not empty).
+  - Check git diff -w clean; no FleetMemberHierarchy references in new code.
+
+Next move:
+1. Get user approval to exit plan mode and write this to plan-variant_cache-revision0.txt.
+2. Implement Phase 1 diagnostic; user runs the scenarios; return logs.
+3. Analyze Phase 1 output, then Phase 2, etc.

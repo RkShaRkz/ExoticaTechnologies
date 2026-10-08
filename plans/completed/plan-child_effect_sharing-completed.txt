@@ -1,0 +1,64 @@
+# Completed Plan: plan-child_effect_sharing-completed.txt
+
+## Intent
+Fix exotic effect sharing to child modules on multi-module ships, so a ship-wide exotic like
+FullMetalSalvo's +1000 cargo/armor buff and its afterimage highlight apply correctly to every
+module (root AND children). The big-picture goal was that children must never resolve to the
+root's mods — each module resolves its OWN per-variant ShipModifications, and the per-ship
+cache plus a persistent root hullmod make sharing work across refit, campaign, and combat.
+
+## Scope
+Systems affected: VariantTagProvider (the per-ship modification cache), ShipModLoader
+(whole-ship data reads), ExoticaTechHM (the root hullmod), and the FleetMemberHierarchy /
+FleetMemberUtils module-resolution helpers. Spans campaign (refit highlight, advance effects),
+combat (apply-before/after-ship-creation stats), and the cache internals.
+
+## Evolution
+- Implemented revision: plan-child_effect_sharing-revision1.txt (lineage record).
+- Borrowed elements from: plan-orchestration.txt, plan-variant_cache.txt (+ revision0..3),
+  plan-hullmod_installation.txt — all sub-plans of this umbrella.
+- General idea followed from: plan-child_effect_sharing.txt (base).
+
+The effort was coordinated through plan-orchestration, which split the umbrella into two
+concrete tracks. The cache track (plan-variant_cache) made the per-member, per-module cache
+correct via write-side invalidation and TTL eviction. The hullmod track
+(plan-hullmod_installation) made the root ExoticaTechHM persist based on whole-ship data.
+Each sub-plan's internal evolution (revisions) is documented in its own completed file.
+
+## Outcome
+Both implementation tracks landed at HEAD (branch fix-rework2), so the umbrella objective is
+met:
+- The cache is a WeakHashMap<FleetMemberAPI, MutableMap<String, ShipModifications>> — per
+  member, per module-variant — with no read-side recovery, correct write-side invalidation
+  across all instances/aliases, and bounded per-member TTL eviction.
+- Children resolve their own ShipModifications (their durable tag, possibly empty), never the
+  root's, and never NULL for ships our code runs on.
+- The root hullmod is decided from the whole ship's modifications, persists while any module
+  holds any Modification, and is stripped everywhere only when the whole ship is empty.
+- All diagnostic probe code ([DIAG] diagnosticLog methods and callsites) was stripped at
+  f610ce1.
+
+## Deviations
+- The abstract cache ideal ("no context bypasses it") was not literally met: a
+  runningFromRefitOrFleetScreen() bypass on the read path makes refit/fleet screens pure
+  readers (returns without caching/bumping lastWrite). This was an intentional, pre-TTL
+  decision — a miss-bump on a frame-polled screen would reset the write clock so the eviction
+  backstop never fires and stale mirrors are served forever.
+- The final cache design shipped the write-side mirror (write-through + cross-instance invalidation)
+  instead of the read-side recovery (Path B / campaign-anchored) that earlier revisions
+  promoted. Writes are rare and the purge cheap; recovery machinery for a failure class
+  writes prevent was abandoned.
+
+## Clarifying Implementation Details
+- TTL eviction is measured from the last WRITE, not the last read (so frame-polled members
+  still age out); sentinel 2xTTL forces eviction when the game clock is unavailable; a
+  1000-read sweep bounds memory from transient members.
+- Whole-ship data is computed by walking the variant tree (stationModules recursion), never by
+  identity-based FleetMemberHierarchy calls, which break across fixVariant churn.
+
+## Reflection
+The umbrella was well-served by being split into two coordinated, independently-validated
+tracks. Fixing the hullmod first gave the cache track a clean baseline to measure the true
+remaining gap (combat tag loss), which the write-side design then eliminated. The result is a
+correct, bounded cache and a persistent root hullmod that together make exotic effects share
+across all three game layers.

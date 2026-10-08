@@ -1,0 +1,85 @@
+# plan-fleet_member_hierarchy_removal-revision1.txt — Rename FleetMemberHierarchy → ModuleVariantHierarchy + comment repair
+
+Revision 1 of `plan-fleet_member_hierarchy_removal.txt`. The original slim
+(commit `744c930`) is DONE and in HEAD. This revision covers two follow-ups
+decided after the slim: a user-requested rename of the slimmed object, and a
+full audit of comments affected by the slim (the FHM KDoc-stripping plus the
+removed identity machinery that older comments still referenced).
+
+The original plan file is left untouched as a historical record.
+
+## 1. Objective
+1. Rename the slimmed `FleetMemberHierarchy` object (and its file) to
+   `ModuleVariantHierarchy` — the name now reflects what the object actually
+   is: a module variant-tree map keyed by stable hullVariantId strings.
+2. Repair every comment referencing the old name or referencing removed
+   FleetMemberHierarchy machinery (the identity WeakHashMap, deleted members),
+   per `.opencode-brain/RULES.md` §2: update stale comments in place, never
+   delete a comment whose WHY still holds; comments whose subject was removed
+   stay deleted (their WHY is consolidated in the class KDoc).
+
+## 2. Change set
+
+### 2.1 Rename
+- `git mv src/exoticatechnologies/util/FleetMemberHierarchy.kt`
+  → `src/exoticatechnologies/util/ModuleVariantHierarchy.kt`
+- Rename `object FleetMemberHierarchy` → `object ModuleVariantHierarchy` and
+  the `Logger.getLogger(FleetMemberHierarchy::class.java)` arg accordingly.
+- Call-site updates (all mechanical, no behavior change):
+  - `ETModPlugin.java`: import `:28`, comments `:66`/`:94`, `reinitialize()`
+    calls `:67`/`:95` (both comment+call blocks identical → one replaceAll).
+  - `ExoticaTechHM.java`: comment `:72`, `findRootVariantId` calls `:73`/`:271`,
+    `refreshFleetCache` calls `:108`-`:109`, `isChildStats` call `:382`,
+    comment `:515`. No import change (wildcard `util.*`).
+  - `ShipModLoader.kt`: import `:9` (sort order: ModuleVariantHierarchy after
+    FleetMemberUtils), comment `:117`, `findRootVariantId` call `:121`.
+  - `FleetMemberUtils.kt:261` KDoc link only.
+
+### 2.2 Comment repair (RULES.md §2: update, never delete)
+STALE → fixed:
+- `RefitButtonAdder.kt` `checkRefitVariant` KDoc §"Child-member gap after
+  fixVariant": referenced the removed identity `WeakHashMap` lookups. Rewritten
+  for the truth: ModuleVariantHierarchy's string keys do NOT break across
+  fixVariant churn (unlike identity), but REFIT clones carry fresh
+  hullVariantIds whose parent links need `reinitialize`/`refreshFleetCache`.
+- `FleetMemberUtils.kt:45` comment referenced the removed
+  `collectModuleMembers2` → now names only `propagateFromVariantTree`.
+
+DROPPED-BUT-STILL-TRUE → restored (rationale cut from retained KDocs by the slim):
+- `variantIdToParentId` KDoc: re-add the "safe to query from MutableShipStatsAPI
+  contexts where the variant instance differs" rationale (string keys).
+- `findRootVariantId` KDoc: re-add the "## Safe across fixVariant churn" section
+  (string keys survive variant instance re-creation).
+- `reinitialize` KDoc: re-add the "Why clearing is needed" section (string keys
+  survive churn so stale links must be dropped by clearing first).
+
+REMOVED-MEMBER comments → correctly left deleted (subjects gone, WHY already in
+the class KDoc): `variantToParent`, `getFleetContext`, `isVariantInFleet`,
+`isOwnerOf`, `collectModuleMembers(2)`, `getAllModules`, `findRootVariant`,
+`isRootModule`, `isChildModule`, `getRootModule`, `getAllChildModules`,
+`getAllModulesStatsFromSingleStats`, `getCacheSize`.
+
+### 2.3 Not touched
+- `logspam.txt` historical ERROR-logger lines (old FHM names are a historical
+  record, not code).
+- Original `plan-fleet_member_hierarchy_removal.txt` (this file is the revision).
+- `AGENTS.md` — comment-preservation law lives only in `.opencode-brain/RULES.md`
+  §2 (user decision; adding it to both places was explicitly rejected).
+
+## 3. Validation
+- `grep -rn "FleetMemberHierarchy" src/` → empty (verified post-edit).
+- `grep -rn "ModuleVariantHierarchy" src/` → the renamed file + all updated refs.
+- File read: renamed file contains no residual `FleetMemberHierarchy` token.
+- Windows build + savegame smoke (user-held, same list as original plan §6):
+  child-installed exotic → refit highlight on all modules, root hullmod
+  persists, combat full-salvo on all modules, full uninstall strips everywhere.
+  The `744c930` regression fix (root FM's own mods read, ShipModLoader:77-87)
+  is still in HEAD and untouched by this revision.
+- If anything regresses, revert that single hunk.
+
+## 4. Deliverables
+- `src/exoticatechnologies/util/ModuleVariantHierarchy.kt` (renamed + re-doc'd).
+- Updated refs in ETModPlugin.java, ExoticaTechHM.java, ShipModLoader.kt,
+  FleetMemberUtils.kt, RefitButtonAdder.kt.
+- This revision doc. Plan closes when: grep clean, Windows build passes,
+  savegame smoke test intact.

@@ -12,6 +12,9 @@ import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
+import exoticatechnologies.modifications.exotics.Exotic
+import exoticatechnologies.refit.checkRefitVariant
+import exoticatechnologies.refit.getRefitDisplayVariant
 import exoticatechnologies.util.reflect.ReflectionUtils
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -47,25 +50,6 @@ import kotlin.math.*
  */
 fun FleetMemberAPI.getMods(): ShipModifications = ShipModFactory.generateForFleetMember(this)
 
-fun ShipVariantAPI.getRefitVariant(): ShipVariantAPI {
-    var shipVariant = this
-    if (shipVariant.isStockVariant || shipVariant.source != VariantSource.REFIT) {
-        shipVariant = shipVariant.clone()
-        shipVariant.originalVariant = null
-        shipVariant.source = VariantSource.REFIT
-    }
-    return shipVariant
-}
-
-fun FleetMemberAPI.fixVariant() {
-    val newVariant = this.variant.getRefitVariant()
-    if (newVariant != this.variant) {
-        this.setVariant(newVariant, false, false)
-    }
-
-    newVariant.fixModuleVariants()
-}
-
 fun ShipVariantAPI.fixModuleVariants() {
     this.stationModules.forEach { (slotId, _) ->
         val moduleVariant = this.getModuleVariant(slotId)
@@ -76,6 +60,72 @@ fun ShipVariantAPI.fixModuleVariants() {
 
         newModuleVariant.fixModuleVariants()
     }
+}
+
+fun ShipVariantAPI.getRefitVariant(): ShipVariantAPI {
+    var shipVariant = this
+    val originalShipVariantTags = shipVariant.tags
+    if (shipVariant.isStockVariant || shipVariant.source != VariantSource.REFIT) {
+        shipVariant = shipVariant.clone()
+        shipVariant.originalVariant = null
+        shipVariant.source = VariantSource.REFIT
+        // if ship variant tags are empty and original ones are not, refresh them
+        if (shipVariant.tags.isNullOrEmpty() && originalShipVariantTags.isNotEmpty()) {
+            refreshShipVariantTags(shipVariant, originalShipVariantTags)
+        }
+    }
+    return shipVariant
+}
+
+private fun refreshShipVariantTags(variant: ShipVariantAPI, originalTags: Collection<String>) {
+    variant.clearTags()
+    for (tag in originalTags) {
+        variant.addTag(tag)
+    }
+}
+
+/**
+ * Single-abstract-method callback for [ShipVariantAPI.forEachModuleVariant].
+ *
+ * Declared as a `fun interface` rather than a plain `(ShipVariantAPI) -> Unit` so Java callers get
+ * a native void-returning SAM (no `Unit.INSTANCE` boilerplate) while Kotlin callers still get
+ * SAM-converted lambda syntax.
+ *
+ * Implementations MUST stay small, stateless, and short-lived: they may capture only local values
+ * (accumulators, string ids), never `this`, member fields, or globals. Java's invokedynamic
+ * hoists and caches stateless lambdas, so a capture-free implementation costs nothing after first
+ * creation. The same instance is applied to every descendant of the walked tree.
+ */
+fun interface ModuleVariantAction {
+    fun accept(variant: ShipVariantAPI)
+}
+
+/**
+ * Pre-order walk of every station-module descendant of [this] variant (children before
+ * grandchildren), invoking [action] once per descendant. The receiver itself is NOT visited.
+ *
+ * Cold-path traversal used by hullmod install/remove and whole-ship modification reads. It is
+ * deliberately **non-inline**: the body recurses into itself, so inlining across the call sites
+ * would only duplicate the loop body (plus the recursion forces the compiler to retain a separate
+ * non-inline copy anyway) without removing any measurable call overhead on these cold paths.
+ *
+ * @param action the [ModuleVariantAction] to invoke once per descendant
+ */
+fun ShipVariantAPI.forEachModuleVariant(action: ModuleVariantAction) {
+    for (slotId in stationModules.keys) {
+        val childV = getModuleVariant(slotId) ?: continue
+        action.accept(childV)
+        childV.forEachModuleVariant(action)
+    }
+}
+
+fun FleetMemberAPI.fixVariant() {
+    val newVariant = this.variant.getRefitVariant()
+    if (newVariant != this.variant) {
+        this.setVariant(newVariant, false, false)
+    }
+
+    newVariant.fixModuleVariants()
 }
 
 fun UIPanelAPI.getChildrenCopy(): List<UIComponentAPI> {
@@ -963,6 +1013,95 @@ fun getAllModulesVariantList(fleetMemberAPI: FleetMemberAPI): List<ShipVariantAP
     retVal.add(fleetMemberAPI.variant)
 
     return retVal.toList()
+}
+
+/**
+ * Method used to plug a certain hole in the logic and timing of things mostly concerning [HullmodExotic]s;
+ * Namely, [InstallMethod] will write an [Exotic] directly into the installing member; which will then query
+ * [HullmodExoticHandler]s flows to install or propagate to other sibling modules.
+ *
+ * **HOWEVER** if the installing module already had some exotics, and installing e.g. AlphaSubcore brings it to MAX,
+ * then the just-installed hullmod exotic won't actually be applied to the installing module due to not being
+ * under the max exotic limit.
+ *
+ * This method checks whether [this] is under exotic limit, and then checks if [this] already contains [exotic] in the case
+ * it's not under limit.
+ *
+ * @return whether [this] is under limit or already contains this exotic
+ *
+ * @see [Exotic.isUnderExoticLimit]
+ * @see [Exotic.hasExotic]
+ */
+fun ShipModifications.shouldAllowInstallation(member: FleetMemberAPI, exotic: Exotic): Boolean {
+    val underExoticLimit = this.isUnderExoticLimit(member)
+    // If we're not under exotic limit due to InstallMethod's direct write, check if we have it
+    return if (underExoticLimit) {
+        // If we're under limit, then we should most certainly proceed
+        true
+    } else {
+        // If we're at limit, due to InstallMethod's direct write; if that module actually
+        // had an exotic, and then the InstallMethod pre-wrote a HullmodExotic, with default
+        // settings, that module will have already reached 2, so it would not be considered
+        // under the limit; however, if it gets skipped then everything will fall apart
+        // well - break is more like it, because the installing module will actually NOT get
+        // the HullmodExotic's hullmod applied to it; in the case of e.g. AlphaSubcore - it's OP
+        // will not have been reduced. Which is why we must let it through, even if it's already installed.
+
+        val alreadyHasExotic = this.hasExotic(exotic)
+
+        // And return if we should proceed
+        alreadyHasExotic
+    }
+}
+
+/**
+ * Returns the identity-deduped set of every variant in [fleetMemberAPI]'s reachable variant graphs.
+ *
+ * The whole-ship install flows walk this instead of [getChildModuleVariantList] so that every graph
+ * the game can read stats/costs from is covered symmetrically on install and remove (@see
+ * plan-hullmod_exotic_installs_on_whole_ship-revision9):
+ *
+ * 1. the campaign tree: [FleetMemberAPI.variant] and every station-module descendant
+ * 2. the refit tree: [checkRefitVariant] and descendants, only when it is a distinct instance
+ * 3. the display tree: [getRefitDisplayVariant] and descendants, only when non-null and distinct
+ * 4. every campaign descendant module's real FleetMember variant ([FleetMemberUtils.findModuleMember])
+ *
+ * Trees 2 and 3 read [exoticatechnologies.refit.RefitButtonAdder] state and are therefore only
+ * populated on the refit screen; on the planetside "exoticatech" screen they resolve to identity
+ * skips and the returned set stays the campaign tree. Nulling in test mode is inherent: with no
+ * refit state the refit/display trees are absent and no Starsector API is reached.
+ *
+ * @param fleetMemberAPI the [FleetMemberAPI] of the root module
+ * @return the whole variant graph, member's own root variant included
+ */
+fun getWholeVariantGraph(fleetMemberAPI: FleetMemberAPI): MutableSet<ShipVariantAPI> {
+    val variants = LinkedHashSet<ShipVariantAPI>()
+
+    fun addVariantTree(root: ShipVariantAPI) {
+        variants.add(root)
+        root.forEachModuleVariant { variants.add(it) }
+    }
+
+    // 1. Campaign tree: the member's own variant and every descendant module variant.
+    addVariantTree(fleetMemberAPI.variant)
+
+    // 2. Refit tree: the refit-screen contract variant when refit is active on this member.
+    val refitVariant = fleetMemberAPI.checkRefitVariant()
+    if (refitVariant !== fleetMemberAPI.variant) {
+        addVariantTree(refitVariant)
+    }
+
+    // 3. Display tree: the working tree the refit screen actually renders, included only when it
+    //    is attributable to THIS ship (O(1) refit-state member-id gate — see the
+    //    [getRefitDisplayVariant] overload). Un-gated, the refit display tree of whatever ship is
+    //    being edited could leak into another ship's write graph and re-open cross-ship writes.
+    getRefitDisplayVariant(fleetMemberAPI)?.let { displayRoot ->
+        if (displayRoot !== fleetMemberAPI.variant) {
+            addVariantTree(displayRoot)
+        }
+    }
+
+    return variants
 }
 
 /**

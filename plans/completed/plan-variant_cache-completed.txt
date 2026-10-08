@@ -1,0 +1,65 @@
+# Completed Plan: plan-variant_cache-completed.txt
+
+## Intent
+Rework the VariantTagProvider cache so it is both correct and bounded. Correctness: a ship must
+never read different mods than its current durable tags contain, guaranteed by invalidating on
+every write rather than validating on read. Boundedness: replace whole-cache clears with
+deterministic per-member, age-based eviction so the hot path stays a cheap lookup.
+
+## Scope
+Systems affected: VariantTagProvider (the per-(ship,module) ShipModifications cache) and the
+FleetMemberUtils / refit helpers it calls. Covers the campaign, combat, and refit/fleet reads
+that all route through the same cache. No fabrication of empty ShipModifications when null is
+the correct answer.
+
+## Evolution
+- Implemented revision: plan-variant_cache-revision3.txt.
+- Borrowed elements from: plan-variant_cache.txt (abstract ideal), plan-variant_cache-revision0,
+  -revision1, -revision2.
+- General idea followed from: plan-variant_cache.txt — the core invariant (invalidate on write,
+  not read) held throughout.
+
+Revisions traced the discovery process: revision0 showed eviction PASS but null-child recovery
+FAIL; revision1 disproved read-side Path A and promoted Path B; revision2 retired a probe phase
+and made Path B primary; revision3 records the shipped write-side design that superseded the
+read-side recovery entirely.
+
+## Outcome
+At HEAD the cache ships:
+- Structurally per-(ship,module): WeakHashMap<FleetMemberAPI, MutableMap<String,
+  ShipModifications>>.
+- A write-side correctness model: Invalidates a written variant's mirrors across ALL instances
+  and aliases (exact + prefix) before the fresh write; mirrors writes onto the member tree, the
+  resolved root tree, and the refit display tree (write-through).
+- A read path with no recovery machinery: parse once on miss, serve plain lookups on hit, fuzzy
+  prefix match for module clones.
+- Bounded per-member TTL eviction (2 game days from last write, sentinel 2xTTL, 1000-read
+  sweep), with no whole-cache clears and nothing firing bulk mid-combat.
+- Refit/fleet screens as pure readers (intentional bypass).
+
+## Deviations
+- Item "no context bypasses it" (abstract ideal) was not met literally: the
+  runningFromRefitOrFleetScreen() read-path bypass makes refit/fleet pure readers. Intentional —
+  a miss-bump on a frame-polled screen would keep resetting the last-write clock so the
+  eviction backstop never fires. TTL is measured from last write.
+- The earlier-revision Path B (campaign-anchored read recovery) and Option D
+  (findMatchingTreeVariant) were NOT implemented. The write-side mirror (write-through + exact-
+  and-prefix invalidation) prevents the stale/NULL-mirror failure class at the source, making
+  hot-path recovery machinery unnecessary.
+- Write-through landed as part of an unrelated "[MAYBE REVERT] Iterate on the hullmod removal"
+  commit (ee6e2c9), not the cache rework itself, then stabilized through f71728d/1ba9613/f610ce1.
+
+## Clarifying Implementation Details
+- TTL measured from the last WRITE, not the last read; else frame-polled members never age out.
+  Sentinel = 2xTTL so the EXPIRED vs CLOCK-UNAVAILABLE log labels stay unambiguous at first
+  genuine expiry, while still > TTL to force eviction.
+- FleetMemberAPI identity is not a stable cross-instance cache key; the variantId is. Hence
+  cross-instance invalidation is keyed off the written variantId (exact + prefix-fuzzy).
+- Guardrail "no diagnostic probes" satisfied at HEAD: all [DIAG] methods and callsites stripped
+  (f610ce1).
+
+## Reflection
+The "correctness lives in the write path" invariant proved robust. Read-side recovery was the
+original instinct but writes being rare and purges cheap meant the write-side design eliminated
+the failure class with less machinery. The result is a bounded, correct cache serving all three
+game layers.

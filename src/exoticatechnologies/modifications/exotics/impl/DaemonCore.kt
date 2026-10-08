@@ -120,7 +120,9 @@ class DaemonCore(key: String, settingsObj: JSONObject) :
         return 60f * (exoticData?.type?.getPositiveMult(member, mods) ?: 1f)
     }
 
-    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
+    override fun installsOnWholeShip() = true
+
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = false
 
     override fun shouldAffectModulesToShareEffectsToOtherModules() = false
 
