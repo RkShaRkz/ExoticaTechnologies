@@ -355,7 +355,10 @@ open class VariantTagProvider : ShipModLoader.Provider {
             // hopefully all ship variants have the snakecase naming scheme but if they don't...
             if (lastUnderscoreIndex <= 0) {
                 // no underscore, bail out
-                log(logMsg = "No underscore found in cache keyset for variantId ${variantId} - bailing out!", logger = logger, logLevel = Level.INFO)
+                logIfOverMinLogLevel(
+                    logMsg = "No underscore found in cache keyset for variantId ${variantId} - bailing out!",
+                    logLevel = Level.INFO
+                )
             } else {
                 val prefix = variantId.substringBeforeLast("_", variantId)
                 // Now, find the best-matching key to this prefix
