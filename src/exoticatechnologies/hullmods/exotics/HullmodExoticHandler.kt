@@ -66,7 +66,10 @@ object HullmodExoticHandler {
             // Major difference being in that the duplicates all have "shipName = null", so try discarding those if possible
             // unless those are for the child modules themselves.
             if (parentFleetMember.shipName == null) {
-                logIfOverMinLogLevel("shouldInstallHullmodExoticToVariant()\tEncountered parentFleetMember with shipName == null !!! Bailing out !!!", Level.WARN)
+                // Since HullmodExotics are no longer locked to root modules only, this one isn't quite as big of a deal anymore,
+                // so it shouldn't be a warning anymore; both of them have `installsOnWholeShip() = true`, so this log
+                // will just end up producing log spam for each of their child modules whereas the root module will handle everything?
+                logIfOverMinLogLevel("shouldInstallHullmodExoticToVariant()\tEncountered parentFleetMember with shipName == null !!! Bailing out !!!", Level.INFO)
                 return false
             }
 
