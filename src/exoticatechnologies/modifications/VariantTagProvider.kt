@@ -357,14 +357,13 @@ open class VariantTagProvider : ShipModLoader.Provider {
                 // no underscore, bail out
                 log(logMsg = "No underscore found in cache keyset for variantId ${variantId} - bailing out!", logger = logger, logLevel = Level.INFO)
             } else {
-                val prefix = variantId.substring(0, lastUnderscoreIndex)
+                val prefix = variantId.substringBeforeLast("_", variantId)
                 // Now, find the best-matching key to this prefix
                 // If it matches completely on everything but the last '_suffix' part - we'll consider it "fuzzy equal"
                 // We use this to match "different" variants we get from the game for the same member
                 // e.g. 'tbj_overslaught_left_0' to 'tbj_overslaught_left_Start' and 'tbj_overslaught_right_1' to 'tbj_overslaught_right_Start'
                 for (cacheVariantId in cacheForMember.keys) {
-                    val lastCacheUnderscoreIndex = cacheVariantId.lastIndexOf("_")
-                    val sanitizedCacheVariantId = cacheVariantId.substring(0, lastCacheUnderscoreIndex)
+                    val sanitizedCacheVariantId = cacheVariantId.substringBeforeLast("_", cacheVariantId)
                     if (sanitizedCacheVariantId.contentEquals(prefix)) {
                         return Optional.of(cacheVariantId)
                     }
