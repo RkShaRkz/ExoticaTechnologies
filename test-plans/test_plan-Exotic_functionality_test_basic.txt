@@ -1,0 +1,11 @@
+TEST PLAN/SCRIPT
+
+0)
+et_addexotic ShipFishingHookSystem
+et_addexotic SpooledFeeders
+
+1) install both on the root module of some ship
+2) start simulation
+3) see both of them activate
+4) start actual combat
+5) see both of them activate
