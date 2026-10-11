@@ -126,9 +126,9 @@ class DaemonCore(key: String, settingsObj: JSONObject) :
 
     override fun shouldAffectModulesToShareEffectsToOtherModules() = false
 
-    override fun shouldAffectModule(moduleStats: MutableShipStatsAPI) = false
+    override fun shouldAffectModule(moduleStats: MutableShipStatsAPI) = true
 
-    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
+    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = true
 
     inner class DaemonCoreDamageTakenListener(val member: FleetMemberAPI, val mods: ShipModifications, val exoticData: ExoticData) : DamageTakenModifier {
         override fun modifyDamageTaken(
