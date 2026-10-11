@@ -358,11 +358,10 @@ object HullmodExoticHandler {
                 // STRICT work mode resolves by instance identity; LENIENT resolves by hullId so a
                 // regenerated/churned clone (refit working tree, reloaded fleet) still scrubs and
                 // removes the variant we actually installed on.
-                val variantToRemove = if (workMode == HullmodExoticHandlerWorkMode.STRICT) {
-                    installedOnVariants.firstOrNull { it == variant }
-                } else {
-                    installedOnVariants.firstOrNull { it.hullSpec.hullId == variant.hullSpec.hullId }
-                }
+                val variantToRemove = when(workMode) {
+                    HullmodExoticHandlerWorkMode.STRICT -> installedOnVariants.firstOrNull { it == variant }
+                    HullmodExoticHandlerWorkMode.LENIENT -> installedOnVariants.firstOrNull { it.hullSpec.hullId == variant.hullSpec.hullId }
+                }.exhaustive
 
                 // If we found a match, remove and unset from the list
                 if (variantToRemove != null) {
@@ -603,12 +602,12 @@ object HullmodExoticHandler {
         return StarsectorAPIInteractor.runningFromRefitScreen()
     }
 
-    private fun runningFromExoticaScreen(): Boolean {
+    private fun runningFromExoticaTechnologiesScreen(): Boolean {
         return StarsectorAPIInteractor.runningFromExoticaTechnologiesScreen()
     }
 
     private fun isOutsideExoticaOrRefit(): Boolean {
-        return runningFromRefitScreen().not() && runningFromExoticaScreen().not()
+        return runningFromRefitScreen().not() && runningFromExoticaTechnologiesScreen().not()
     }
 
     /**
@@ -688,7 +687,7 @@ object HullmodExoticHandler {
              * throws a [OnShouldCallback] for each of them before proceeding to install the hullmod exotic on all of them
              * (meeting the "should install" criteria) after which a [OnInstallToChildModuleCallback] is called for each of them.
              *
-             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.findRootVariantMember].
+             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.resolveWholeShipRootMember].
              *
              * @param fleetMember the [FleetMemberAPI] of the root module, from which all child modules will be obtained
              * @param fleetMemberVariant the [ShipVariantAPI] of the root module, so that we can generate a list of all variants on which we should install
@@ -698,7 +697,7 @@ object HullmodExoticHandler {
              *
              * @see shouldInstallHullmodExoticToVariant
              * @see installHullmodExoticToVariant
-             * @see FleetMemberUtils.findRootVariantMember
+             * @see FleetMemberUtils.resolveWholeShipRootMember
              */
             @JvmStatic
             fun CheckAndInstallOnAllChildModulesVariants(
@@ -803,7 +802,7 @@ object HullmodExoticHandler {
              * (or rather, the whole [fleetMember] itself for single-module ships), calls a [OnShouldCallback] with the result
              * before proceeding to install after which a [OnInstallToMemberCallback] is called with the installation result
              *
-             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.findRootVariantMember].
+             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.resolveWholeShipRootMember].
              *
              * @param member the [FleetMemberAPI] of the root module
              * @param memberVariant the [ShipVariantAPI] of the root module, so that we can generate a list of all variants on which we should install
@@ -813,7 +812,7 @@ object HullmodExoticHandler {
              *
              * @see shouldInstallHullmodExoticToVariant
              * @see installHullmodExoticToVariant
-             * @see FleetMemberUtils.findRootVariantMember
+             * @see FleetMemberUtils.resolveWholeShipRootMember
              */
             @JvmStatic
             fun CheckAndInstallOnMemberModule(
@@ -926,7 +925,7 @@ object HullmodExoticHandler {
              * throws a [OnShouldCallback] for each of them before proceeding to remove the hullmod exotic from all of them
              * (meeting the "should remove" criteria) after which a [OnRemoveFromChildModuleCallback] is called for each of them.
              *
-             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.findRootVariantMember].
+             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.resolveWholeShipRootMember].
              *
              * @param fleetMember the [FleetMemberAPI] of the root module, from which all child modules will be obtained
              * @param hullmodExotic the [HullmodExotic] to remove from these child modules' variants
@@ -935,7 +934,7 @@ object HullmodExoticHandler {
              *
              * @see shouldRemoveHullmodExoticFromVariant
              * @see removeHullmodExoticFromVariant
-             * @see FleetMemberUtils.findRootVariantMember
+             * @see FleetMemberUtils.resolveWholeShipRootMember
              */
             @JvmStatic
             fun CheckAndRemoveFromAllChildModulesVariants(
@@ -1020,7 +1019,7 @@ object HullmodExoticHandler {
              * (or rather, the whole [fleetMember] itself for single-module ships), calls a [OnShouldCallback] with the result
              * before proceeding to remove after which a [OnRemoveFromMemberCallback] is called with the removal result
              *
-             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.findRootVariantMember].
+             * Callers **MUST** satisfy the root-module requirement via [FleetMemberUtils.resolveWholeShipRootMember].
              *
              * @param fleetMember the [FleetMemberAPI] of the root module
              * @param fleetMemberVariant the [ShipVariantAPI] of the root module, so that we can generate a list of all variants from which we should remove
@@ -1030,7 +1029,7 @@ object HullmodExoticHandler {
              *
              * @see shouldRemoveHullmodExoticFromVariant
              * @see removeHullmodExoticFromVariant
-             * @see FleetMemberUtils.findRootVariantMember
+             * @see FleetMemberUtils.resolveWholeShipRootMember
              */
             @JvmStatic
             fun CheckAndRemoveFromMemberModule(
@@ -1138,7 +1137,7 @@ object HullmodExoticHandler {
     private fun getWorkModeOptional(): Optional<HullmodExoticHandlerWorkMode> {
         return if (runningFromRefitScreen()) {
             Optional.of(HullmodExoticHandlerWorkMode.LENIENT)
-        } else if (runningFromExoticaScreen()) {
+        } else if (runningFromExoticaTechnologiesScreen()) {
             Optional.of(HullmodExoticHandlerWorkMode.STRICT)
         } else {
             Optional.empty()
@@ -1159,7 +1158,7 @@ object HullmodExoticHandler {
      * Depending on [installsOnWholeShip], it returns either an empty list or [getWholeVariantGraph]
      *
      * @param member the [FleetMemberAPI] to return an initial list of variants for
-     * @param installsOnWholeShip whether the [HullmodExotic] should install its hullmod on the whole ship or not
+     * @param installsOnWholeShip whether the [HullmodExotic] should install itself on the whole ship (all of it's modules) or not
      * @return the initial list of variants
      */
     private fun getInitialVariantsListForMember(member: FleetMemberAPI, installsOnWholeShip: Boolean): List<ShipVariantAPI> {
