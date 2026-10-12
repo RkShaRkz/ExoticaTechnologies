@@ -1,0 +1,54 @@
+Objective:
+
+- Fix exotic effect sharing to child modules on multi-module ships so FullMetalSalvo's +1000 cargo/armor and afterimage highlight apply to children correctly
+
+Important Details:
+
+- Architecture: Every module (root AND children) should have it's own ShipModifications stored as Exotica tag on THAT variant. Children should NEVER resolve to root's mods - the cache returning root's mods for child queries is itself a bug.
+- thisModuleOwnsIt semantics: true only for the module that actually owns the exotic. Other modules see thisModuleOwnsIt = false, presentSomewhereOnShip = true, triggering the sharing path in shouldSkipModification.
+- Cache key bug: VariantTagProvider.cache = WeakHashMap<FleetMemberAPI, ShipModifications> is keyed only by FMAPI identity. Querying (rootFM, childVariant) returns root's mods from cache -> thisModuleOwnsIt = true on children bypassing sharing. Fix: WeakHashMap<FleetMemberAPI, WeakHashMap<String, ShipModifications>> where inner map is keyed by hullVariantId.
+- VariantTagProvider.set() adds tag to member.variant unconditionally (lines 70-72) - would corrupt root variant if set() called for child variant with root FM. Need to guard: only cache/sync when variant == member.variant.
+- moduleMap doesn't need changing - FleetMemberUtils.moduleMap (HashMap<String, FMAPI>, child hullVariantId->root FM) serves its purpose correctly: resolving child stats/ships to root FM. Its readers(findMemberForStats, findMemberForShip, findFleetForVariant) all want the root FM. Changing to WeakHashMap would add complexity with no benefit for this fix.
+- Child detection: member.shipName == null identifies module FMs. Prior code had if(stats.getFleetMember() != null && stats.getFleetMember.getShipName == null && !exotic.shouldAffectModule(stats)) continue; - this was lost.
+- statsForOpCosts is a shim, not the real MutableShipStatsAPI from applyEffectsBeforeShipCreation.
+- Children are NOT in fleet member list -- only reachable through root variant's station module tree.
+- FleetMemberHierarchy is known broken/unreliable - must e logged extensively before any fix depends on it.
+- Incremental approach: one small change at a time, no 500-1000 line batches. The framework rework broke because large changesets were written and validated as a block.
+- Children do NOT get initialized with their own ShipModifications when hullmod propagates. addToFleetMember -> installHullmodRecursive + propagateFromVariantTree only add HULLMOD_ID to child variants/FMs. No $EXOTICA$ tag, no bandwidth, no mods object. ShipModFactory.generateForFleetMember(member) only runs for root.
+- Log analysis proved: After installing FMSalvo on root of tbj_overslaught (2 child modules): root gets full effects, children get hullmod highlight only (no buffs). [DIAG addToFleetMember | child logs sho hasHM=true, hasExoticaTag=false, childMods=null. [DIAG] applyEffectsBeforeShipCreation | NULL mods fires for both children - early return prevents any sharing.
+- VariantTagProvider.inst.getFromVariant() can return tag-only data bypassing cache - used in diagnostic to prove children lack tags even when cache returns something.
+- User confirmed: FleetMemberUtils.moduleMap does NOT need restructuring. Only VariantTagProvider.cache needs the key change.
+- diagnosticLog() method: Each of the 5 files (VariantTagProvider.kt, ShipModLoader.kt, PersistentDataProvider.kt, ExoticaTechHM.java, Extensions.kt) has it's own private diagnosticLog() that prefixes [DIAG] to messages. Uses Logger.getLogger() not Global.getLogger(). Easy cleanup; remove the methods and call sites.
+
+
+Work State
+
+- Completed:
+  - Hullmod-removal guard fix at ExoticaTechHM.java (prevents root hullmod from being stripped when processing child stats).
+  - VariantTagProvider.get() fallback removed (was causing thisModuleOwnsIt = true everywhere).
+  - Removed PersistentDataProvider.set() ded code (throws RuntimeException).
+  - VariantTagProvider.kt: Global.getLogger -> Logger.getLogger (line 19).
+  - Diagnostic logging refactored across 5 files to use private diagnosticLog("[DIAG] ...") methods:
+    - VariantTagProvider.kt: companion diagnosticLog, 4 call sites (CACHE HIT, TAG READ no cache, TAG READ + cache, NULL)
+    - ShipModLoader.kt: instance diagnosticLog, 1 call site (getData)
+    - PersistentDataProvider.kt: companion diagnosticLog, 2 call sites
+    - ExoticaTechHM.java: static diagnosticLog, 9 call sites (addToFleetMember entry/AFTER APPLY/REMOVING, advanceInCampaign entry/null, applyEffectsBeforeShipCreation entry/null/removed HM, applyEffectsAfterShipCreation)
+    - Extensions.kt: top-level diagnosticLog(log, msg), 5 call sites (getRefitVariant CLONING/REFRESHING/NO CLONE, fixModuleVariants CLONES/NOT CLONES)
+  - New diagnostic logs proving children lack initialization:
+    - ExoticaTechHM.addToFleetMember (after propagateFromVariantTree): iterates rootMember.getVariant().getStationModules(), checks hasHM, hasExoticaTag (starts with("$$EXOTICA$$")), childMods via ShipModLoader.getFromVariant(childV)
+    - ExoticaTechHM.applyBeforeShipCreation (inside mods==null block): logs isRoot, hasHM, full tags list via StringUtils.join(",", stats.getVariant().getTags())
+  - Test run confirmed proof: log6.txt shows root gets FullMetalSalvoEffects, children get hullmod but no buffs. Children have hasExoticaTags=false, childMods=null even after hullmod propagation.
+
+- Active:
+  - User has test proof from log6.txt. Ready to implement the fix: ensure children get their ShipModifications (bandwidth + empty exotics) initialized when hullmod propagates.
+- Blocked:
+  - (none)
+
+Next move
+
+1. Implement the cache key fix in VariantTagProvider.kt: change cache from WeakHashMap<FleetMemberAPI, ShipModifications> to WeakHashMap<FleetMemberAPI, WeakHashMap<String, ShipModifications>>, update get() to use cache[member]?.get(variant.hullVariantId) and set() to use cache.computeIfAbsent(member) { WeakHashMap() }[variant.hullVariantId] = mods.
+2. In set(), remove the if (variant != member.variant) member.variant.addTag(tag) block (lines 70-72) to stop child writes from polluting root variant.
+3. Initialize children's ShipModifications when hullmod propagates in addToFleetMember - call shipModFActory.generateForFleetMember(childFM) for each child FM found via propagateFromVariantTree, so children get their own $EXOTICA$ tag with bandwidth and empty exotics.
+4. Retest to verify thisModuleOwnsIt = false for children and sharing path correctly applies FMSalvo effects.
+5. Once proof is confirmed, clean up all [DIAG] diagnostic methods and call sites.
+

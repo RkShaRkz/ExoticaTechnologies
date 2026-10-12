@@ -1,0 +1,80 @@
+# Completed Plan: plan-cache_model_migration-completed.txt
+
+## Intent
+The fix-rework2 branch reworked how `ShipModifications` are resolved per module on
+multi-module ships (per-variant per-child truth instead of a whole-ship mirror). The plan
+was opened under the suspicion that loading a savegame created under the old (develop)
+model had "lost" child-module exotica/upgrades on fix-rework2. The big-picture goal: prove
+where child-module data actually lives in the save, then run a one-shot, evidence-gated
+migration to restore anything genuinely missing. No theorizing — the decision gate was the
+output of a diagnostic command run on both branches.
+
+**Resolution: closed as a non-issue. No migration was performed.** Nothing was lost; the
+apparent loss was an artifact of how the two branches *report* the same durable data.
+
+## Scope
+Systems involved: `ShipModLoader` get/getFromVariant, `VariantTagProvider`, the per-ship
+cache, `ExoticaTechHM` (root hullmod), and the new `et_plan_migration` console command
+(Java, mirrors `et_listmods.java`). Read/diagnostic only during Phase 1; Phase 2 (migration
+code) was never reached. Windows build/test gate out of scope here (user-held).
+
+## Evolution
+- Implementation: `et_plan_migration` console command, `src/exoticatechnologies/commands/et_plan_migration.java`.
+- Borrowed structure from: `et_listmods.java` (lazywizard BaseCommand / CommandContext / Console).
+- General idea followed from: `plan-cache_model_migration.txt` (see `plans/archive/`), the base plan.
+
+The plan was written as a two-phase, decision-gated flow: Phase 1 = a strictly read-only
+diagnostic that dumps per-module `RAW`/`RESOLVED`/`ET_MODMAP` columns for every node on a
+save; Phase 2 = whichever migration recipe (A/B/C) the diff chose, with an ABSOLUTE
+verify-before-strip safety rule on the durable `$$EXOTICA$$` tag.
+
+## Outcome
+Phase 1 was implemented and run on both branches (original pre-rework save on develop, then
+the same save on fix-rework2). The gate resolved to **no recipe**:
+
+- **Raw diffs: 0 / 123 nodes.** The durable `$$EXOTICA$$` tag is byte-identical across
+  branches on every node — develop and fix-rework2 agree on the on-disk store.
+- **Resolved diffs: 0 / 123 nodes.** Every node the new model serves (including the 15 real
+  child-module tags in ships `154a799`, `d74209`, `fe0e7a`) resolves identically on both branches.
+- **ET_MODMAP = NO everywhere.** Not a factor in either model; only relevant defensively.
+- The 33 "empty" children carry `raw=NULL` on **both** branches. They were never lost — under
+  the old model they merely appeared populated because develop's `resolved` echoed the root's
+  entire tag onto every bare child (the old whole-ship mirror); fix-rework2's NULL is the
+  correct per-child truth.
+- **The `log2` re-run (a second save/session pair) reproduced the identical verdict:** 0 raw
+  diffs, 0 resolved diffs, and the full `d74209` (dorn-dhe, `ork_superdread_main`) node dump
+  matched across branches — `WS0028`/`WS0029` each carrying `SpooledFeeders`, root carrying
+  `FullMetalSalvo`.
+
+The conclusive proof the migration would have been a no-op: exotics genuinely installed on
+child modules on develop (the two `SpooledFeeders` on d74209 WS0028/WS0029) survive the branch
+switch and resolve correctly on fix-rework2.
+
+## Deviations
+- **Phase 2 was never written.** The decision gate is the whole point, and it resolved to no
+  recipe — so no migration code, no one-shot onGameLoad pass, no tag stripping/deletion exists.
+- The migration itself was the wrong tool for the observed symptom because the symptom was not
+  real: it was a comparison of a *derived* read column whose semantics changed between models,
+  not a loss of *stored* data. Running Recipe A ("re-assert") anyway would have rewritten
+  intact raw tags through the pipeline for zero functional benefit and real corruption risk.
+
+## Clarifying Implementation Details
+- The cabal of factors that produced the false alarm:
+  1. An early diff pass read the wrong regex columns (a tuple-index bug swapped
+     `raw`/`resolved`/`source`), which fabricated the "missing" set.
+  2. The new branch deliberately serves NULL for bare children (per-module truth) where the old
+     branch served a root echo — a legitimate semantic change that *looks* like loss.
+  3. Log lines are duplicated per event (lazywizard Console logger + the command's own
+     log.info), so raw line counts (150 SHIP / 246 NODE) double the true node count (75 / 123)
+     and invited miscounting. The command runs once; the duplication is just two log sinks.
+- Corrected parser: `variant, source, raw, resolved` from the NODE regex; 123 nodes per log.
+
+## Reflection
+The plan's structure was sound: it insisted on an evidence gate and an absolute
+verify-before-strip rule instead of "just migrate." That gate did exactly its job — it
+converted an expensive, risky migration into a no-op the moment real data showed nothing was
+missing. The lesson generalizes: **diff the durable store, never a derived read column**, and
+treat a changed read-path's output as suspect until the underlying tag bytes are compared.
+The d74209 finding additionally surfaced a genuine design question about exotic effect
+*sharing* across modules (see `plans/plan-effect_sharing_eligibility.txt`); that is the real
+follow-up this investigation enabled.

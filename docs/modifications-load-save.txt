@@ -1,0 +1,109 @@
+SHIP MODIFICATIONS (EXOTICS + UPGRADES) — LOAD / SAVE CODEPATHS
+===============================================================
+Primer for the cross-ship child-module contamination bug. Read this to know
+every code path that reads or writes a ShipModifications object, and the exact
+objects (FleetMemberAPI / ShipVariantAPI) each path keys on.
+
+1. THE DURABLE SOURCE OF TRUTH: VARIANT TAGS
+-------------------------------------------
+A ShipModifications object is serialized to JSON and stored as a variant TAG
+on a ShipVariantAPI / HullVariantSpec object. Reading = decoding that tag;
+writing = attaching that tag.
+
+- Tag format: "$$EXOTICA$$" + JSON  (value of VariantTagProvider.EXOTICA_INDICATOR)
+- Writer:    VariantTagProvider.set()  ->  variant.addTag(tag)          (W1)
+             VariantTagProvider.writeThrough() -> target.addTag(tag)    (W2)
+- Reader:    VariantTagProvider.getFromVariant() -> decode variant.tags
+- CACHE IS ONLY A MIRROR. VariantTagProvider keeps a WeakHashMap<FleetMemberAPI,
+  mutableMapOf<hullVariantId, ShipModifications>> with a 2-in-game-day TTL
+  (measured from last WRITE). Reads that miss the tag fall through to the cache;
+  writes update cache + tags together. The tags are what survives; the cache is
+  purely a perf mirror that must be invalidated on every write.
+
+2. THE PROVIDER CHAIN (ShipModLoader)
+-------------------------------------
+ShipModLoader (singleton instance, all calls @Synchronized) fronts three
+providers, first non-null get() wins, set() fans out to all:
+   providers = [ VariantTagProvider, ZigguratDataProvider, PersistentDataProvider ]
+
+   - VariantTagProvider      : tag-on-variant storage (funget, THE write path)
+   - PersistentDataProvider  : cargo/salvage ship-data storage, keyed by
+                               FleetMemberAPI.getFleetMemberId() string
+   - ZigguratDataProvider    : special-case for the ziggurat hull
+
+3. WRITE SUN PATHS (install / generate / save)
+-----------------------------------------------
+W1  VariantTagProvider.set(member, variant, mods)
+    ... variant.addTag(tag)   -> tag lands DIRECTLY on the passed `variant` object.
+    ALSO runs: invalidateVariantAcrossAll(variantId) (purges every member's cache
+    mirrors of that variantId, fuzzy prefix + exact), removeFromTags(variant),
+    member.fixVariant() when variant === member.variant && source != REFIT.
+
+W2  VariantTagProvider.writeThrough(member, variant, tag)
+    "Rubber-stamps" the same tag onto matching nodes of up to 3 object graphs
+    (deduped by identity):
+      graph[0] = member.variant
+      graph[1] = FleetMemberUtils.findRootVariant(member, variant).first  (root tree)
+      graph[2] = member.checkRefitVariant()  (REFIT display tree)
+    Per graph: findVariantInTree(graph, targetId) matches EXACT hullVariantId
+    first, else FUZZY (same prefix before the last '_suffix').
+
+Write entry points that funnel in here:
+  - Exotica shop install/uninstall (InstallMethod.apply -> ShipModLoader.set)
+  - Exotica panel open seed  (CustomExoticaPanel.init -> eager get() ?: set()
+    with ShipModFactory.generateForFleetMember(member))
+  - ShipModFactory.generateForFleetMember(member[,market]) -> get() ?: new mods
+    + ShipModLoader.set(member, member.variant, mods)
+  - ShipModFactory.generateForChildModules(member) -> per station-module slot:
+    ShipModLoader.get(member, childVariant) ?: ShipModLoader.set(member, childVariant, mods)
+  - upgrade methods (UpgradeMethod chain) -> ShipModLoader.set
+
+4. READ PATH (combat + campaign + refit + tooltip)
+--------------------------------------------------
+  - ExoticaTechHM.addPostDescriptionSection(ship)          -> get(findMemberFromShip(ship), ship.variant)
+  - ShipModLoader.getAllForShipAPI(ship) / getAllForStats  -> findMemberFromShip / findMemberForStats
+  - getWholeShipMods(member, variant)  -> walks root tree + REFIT display tree,
+    collectWholeShipMods recursing station modules, dedup by hullVariantId, union.
+
+5. WHOLE-GRAPH RESEARCH / AGGRETATION (ExoticaTechHM driver)
+-----------------------------------------------------------
+ExoticaTechHM.addToFleetMember(member, variant) is the hullmod driver, NOT the
+mods writer: it decides hullmod presence from consolidateHullmod(mods,
+ShipModLoader.getWholeShipMods(rootMember, rootMember.variant)), then
+install/removes the "exoticatech" hullmod recursively over the root tree and
+the REFIT tree, propagateFromVariantTree, fixVariant, ModuleVariantHierarchy
+cache refresh. It never writes ShipModifications itself.
+
+6. FUZZY IDENTITY RULE (root cause of cross-ship risk)
+------------------------------------------------------
+The twin repro ships share identical variant ID PREFIXES:
+   tbj_overslaught_Start      vs tbj_overslaught_Standard    -> prefix 'tbj_overslaught'
+   tbj_overslaught_left_Start vs tbj_overslaught_left_Standard -> prefix 'tbj_overslaught_left'
+Every fuzzy helper compares stripped prefixes, so it treats the two ships as
+THE SAME SHIP:
+   - VariantTagProvider.findVariantInTree / findFuzzyKey
+   - VariantTagProvider.invalidateVariantAcrossAll (prefix purge)
+   - FleetMemberUtils.findRootVariant (treeFuzzyContains scans member's fleet,
+     THEN "active campaign fleets" for the first station-module tree that fuzzy-
+     contains the target) — @2cfe08a it had NO fm.id/fm.hullId ownership guard
+     and could return the OTHER twin's root tree; HEAD added a guard that skips
+     fm whose id/hullId don't match member.
+   - FleetMemberUtils.findMemberByVariantId / findRootVariantByHullId fall back
+     to scanning all active campaign fleets keyed on hullVariantId alone.
+   - FleetMemberUtils.findModuleMember (used by propagateFromVariantTree).
+
+7. WHAT THE DIAGNOSTIC LOGS WILL PROVE
+--------------------------------------
+All EXOTICA tag writes happen at exactly two statements:
+   W1 VariantTagProvider.set()       -> variant.addTag(tag)
+   W2 VariantTagProvider.writeThrough() -> target.addTag(tag)
+instrumented with System.identityHashCode of every object involved:
+   set(): member.id, shipName, variant.id @identityHash, variant===member.variant,
+          member.variant @identityHash
+   writeThrough(): member.id, variant.id @identityHash; findRootVariant result
+          root.hullVariantId @identityHash + rootMember.id + sameAsMemberVariant;
+          every graph node tagged: node.id @identityHash inside graph.id @identityHash
+If the same variant @identityHash appears under BOTH ships (10564/10a91) -> the
+objects are SHARED between ships (or the graph walk lands on the wrong ship's
+tree) and that's the write-side smoking gun. Absence -> look at the read side
+(cache resolution / findMemberFromShip) instead.

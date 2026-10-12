@@ -1,0 +1,12 @@
+TEST PLAN/SCRIPT
+
+0)
+et_addexotic ShipFishingHookSystem
+et_addexotic SpooledFeeders
+et_addexotic FullMetalSalvo
+
+1) install FullMetalSalvo on root module of multimodule ship, install ShipFishingHookSystem on some child module, install SpooledFeeders on another child module
+2) start simulation
+3) see all of them activate with FullMetalSalvo activating on at least two different modules
+4) start actual combat
+5) see all of them activate with FullMetalSalvo activating on at least two different modules

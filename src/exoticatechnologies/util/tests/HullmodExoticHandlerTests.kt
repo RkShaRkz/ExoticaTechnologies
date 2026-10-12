@@ -10,6 +10,7 @@ import com.fs.starfarer.api.loading.*
 import exoticatechnologies.hullmods.exotics.ExoticHullmod
 import exoticatechnologies.hullmods.exotics.ExoticHullmodLookup
 import exoticatechnologies.hullmods.exotics.HullmodExoticHandler
+import exoticatechnologies.hullmods.exotics.HullmodExoticHandlerWorkMode
 import exoticatechnologies.hullmods.exotics.HullmodExoticKey
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.util.StarsectorAPIInteractor
@@ -264,6 +265,71 @@ class HullmodExoticHandlerTests {
 
         Assert.assertEquals(1, handler.testsOnly_grabAllKeysForParticularFleetMember(member1).size)
         Assert.assertEquals(1, handler.testsOnly_grabAllKeysForParticularFleetMember(member2).size)
+    }
+
+    @Test
+    fun testWorkModeOptional_NoDialog_Empty() {
+        StarsectorAPIInteractor.setWorkingInTestMode(true, false)
+        val handler = HullmodExoticHandler
+
+        // No interaction dialog open, not on any Exotica/Refit screen => no work mode
+        Assert.assertFalse(handler.testsOnly_getWorkModeOptional().isPresent())
+        Assert.assertTrue(handler.testsOnly_getWorkModeOptional().isEmpty())
+    }
+
+    @Test
+    fun testWorkModeOptional_RefitScreen_Lenient() {
+        StarsectorAPIInteractor.setWorkingInTestMode(true, true)
+        val handler = HullmodExoticHandler
+
+        // Refit screen => LENIENT work mode (the whole point of the #39 fix)
+        val workMode = handler.testsOnly_getWorkModeOptional().get()
+        Assert.assertEquals(HullmodExoticHandlerWorkMode.LENIENT, workMode)
+    }
+
+    @Test
+    fun testLenientShouldRemoveChurnedClone() {
+        val handler = HullmodExoticHandler
+        val exotic = createAnnonymousHullmodExotic("test", EXOTIC_JSON, TEST_HULLMOD_ID)
+        val fleetMember = createAnnonymousFleetMemberAPI(TEST_FLEETMEMBER_ID, TEST_FLEETMEMBER_SHIPNAME)
+        val variant = createAnnonymousShipVariantAPI(TEST_HULL_SPEC_HULL_ID)
+
+        // Install once (mock-safe: only contains() is called on the variants)
+        Assert.assertTrue(handler.testsOnly_shouldInstallHullmodExoticToVariant(
+                exotic,
+                fleetMember,
+                variant,
+                Optional.of(listOf(variant))
+        ))
+        Assert.assertTrue(handler.testsOnly_installHullmodExoticToVariant(
+                exotic,
+                fleetMember,
+                variant
+        ))
+
+        // A churned (regenerated) clone - same hullId, fresh instance that no longer reports the hullmod.
+        // This models what the refit screen does to the working trees between install and remove.
+        val churnedClone = object : ShipVariantAPI by createAnnonymousShipVariantAPI(TEST_HULL_SPEC_HULL_ID) {
+            override fun hasHullMod(id: String?): Boolean = false
+        }
+
+        // STRICT: fail-fasts on the missing hullmod -> refuses to remove. This is issue #39.
+        val strictShouldRemove = handler.testsOnly_shouldRemoveHullmodExoticFromVariantForWorkMode(
+                exotic,
+                fleetMember,
+                churnedClone,
+                HullmodExoticHandlerWorkMode.STRICT
+        )
+        // LENIENT: skips the hasHullMod gate and resolves the install bookkeeping by hullId -> removes.
+        val lenientShouldRemove = handler.testsOnly_shouldRemoveHullmodExoticFromVariantForWorkMode(
+                exotic,
+                fleetMember,
+                churnedClone,
+                HullmodExoticHandlerWorkMode.LENIENT
+        )
+
+        Assert.assertFalse(strictShouldRemove)
+        Assert.assertTrue(lenientShouldRemove)
     }
 
     //TODO write tests for flows ...
