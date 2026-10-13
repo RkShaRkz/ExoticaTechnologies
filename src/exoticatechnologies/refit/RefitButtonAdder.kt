@@ -42,7 +42,7 @@ class RefitButtonAdder : EveryFrameScript {
          * screen creates while a station module is selected. It is a stable *root identity marker*,
          * not a variant-instance comparison: FleetMember ids are stable across the
          * stock -> REFIT -> combat clone churn that makes [FleetMemberAPI.variant] instance
-         * equality unreliable (see [FleetMemberUtils.findRootVariantMember]).
+         * equality unreliable (see [FleetMemberUtils.resolveWholeShipRootMember]).
          *
          * Set whenever [member] is a ship root (has a ship name), cleared when the refit screen
          * closes. `null` outside the refit screen.
@@ -119,7 +119,7 @@ class RefitButtonAdder : EveryFrameScript {
                         // A ship root always carries a ship name; transient station-module members
                         // the refit creates while a module tab is selected do not. Cache the last
                         // displayed root so whole-ship flows can anchor on the actual ship being
-                        // refitted (see findRootVariantMember). Unambiguous: the refit displays one
+                        // refitted (see resolveWholeShipRootMember). Unambiguous: the refit displays one
                         // ship at a time.
                         if (member?.shipName != null) {
                             rootMember = member

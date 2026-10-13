@@ -198,73 +198,23 @@ object FleetMemberUtils {
         return findMemberForStats(stats)
     }
 
-    /**
-     * Returns the root variant of the variant tree that [variant] belongs to, resolving via stable
-     * hullVariantId keys only — identity comparisons break after fixVariant churn and refit cloning.
-     *
-     * A variant that owns station modules IS the root of its tree. Otherwise [variant] is a leaf
-     * (child module or single-module ship): we scan the member's own variant tree first, then the
-     * member's fleet, for a root whose station-module tree fuzzy-contains [variant]. Falls back to
-     * [variant] itself when no owner can be found (single-module ship or unreachable tree).
-     *
-     * @param member the [FleetMemberAPI] to anchor the fleet scan on
-     * @param variant the variant whose owning tree root we want
-     * @return the root [ShipVariantAPI] of the tree containing [variant]
-     */
-    @JvmStatic
-    fun findRootVariant(member: FleetMemberAPI, variant: ShipVariantAPI): ShipVariantAPI {
-        // A root owns its station modules; a leaf with modules would itself be a root.
-        if (variant.stationModules.isNotEmpty()) return variant
-        val targetId = variant.hullVariantId
-
-        // The member's own variant is the overwhelmingly common owner.
-        val memberVariant = member.variant
-        if (memberVariant.stationModules.isNotEmpty() && treeFuzzyContains(memberVariant, targetId)) {
-            return memberVariant
-        }
-
-        // Fallback: scan the member's fleet for the owning tree (child FMs have null fleetData, so
-        // also check the active campaign fleets like findRootVariantByHullId does).
-        member.fleetData?.fleet?.let { fleet ->
-            for (fm in fleet.membersWithFightersCopy) {
-                val v = fm.variant
-                if (v.stationModules.isNotEmpty() && treeFuzzyContains(v, targetId)) return v
-            }
-        }
-        for (fleet in activeFleets) {
-            if (fleet == null) continue
-            for (fm in fleet.membersWithFightersCopy) {
-                val v = fm.variant
-                if (v.stationModules.isNotEmpty() && treeFuzzyContains(v, targetId)) return v
-            }
-        }
-        return variant
-    }
-
-    // True when any station-module descendant of [root] fuzzy-matches [targetId] (same prefix before
-    // the last '_suffix' — refit/combat clones differ only there, e.g. 'left_0' vs 'left_Start').
-    private fun treeFuzzyContains(root: ShipVariantAPI, targetId: String): Boolean {
+    // True when any station-module descendant of [root] matches [targetId]: fuzzy (same prefix before
+    // the last '_suffix' — refit/combat clones differ only there, e.g. 'left_0' vs 'left_Start') when
+    // [isFuzzy], otherwise an EXACT hullVariantId match.
+    private fun treeContains(root: ShipVariantAPI, targetId: String, isFuzzy: Boolean): Boolean {
         var found = false
         root.forEachModuleVariant { childV ->
-            if (!found && childV.hullVariantId.fuzzyVariantIdEquals(targetId)) found = true
-        }
-        return found
-    }
-
-    // True when any station-module descendant of [root] has hullVariantId EXACTLY [targetId].
-    private fun treeExactContains(root: ShipVariantAPI, targetId: String): Boolean {
-        var found = false
-        root.forEachModuleVariant { childV ->
-            if (!found && childV.hullVariantId == targetId) found = true
+            val matches = if (isFuzzy) childV.hullVariantId.fuzzyVariantIdEquals(targetId) else childV.hullVariantId == targetId
+            if (!found && matches) found = true
         }
         return found
     }
 
     /**
-     * Resolves the ROOT TREE for a write-through mirror WITHOUT ever crossing ships. Unlike
-     * [findRootVariant] — which fuzzy-scans all active fleets and returns the first fuzzy match,
-     * so identical-hull siblings (a `tbj_overslaught_Start` ship's `left_Start` and another ship's
-     * `left_Standard` both prefix-match `left_`) get clobbered — this only returns a root whose
+     * Resolves the ROOT TREE for a write-through mirror WITHOUT ever crossing ships. A naive fuzzy
+     * scan across all active fleets that returns the first match would let identical-hull siblings
+     * (a `tbj_overslaught_Start` ship's `left_Start` and another ship's `left_Standard` both
+     * prefix-match `left_`) clobber each other — this only returns a root whose
      * station-module tree actually REACHES [variant]
      * (the acting member's own ship):
      *
@@ -290,7 +240,7 @@ object FleetMemberUtils {
 
         val memberVariant = member.variant
         if (memberVariant.stationModules.isNotEmpty()) {
-            if (treeInstanceContains(memberVariant, variant) || treeExactContains(memberVariant, targetId)) {
+            if (treeInstanceContains(memberVariant, variant) || treeContains(memberVariant, targetId, false)) {
                 return memberVariant
             }
         }
@@ -301,7 +251,7 @@ object FleetMemberUtils {
 
         val candidates = matchingRootMembers(member, targetId)
         candidates.firstOrNull { treeInstanceContains(it.variant, variant) }?.let { return it.variant }
-        candidates.firstOrNull { treeExactContains(it.variant, targetId) }?.let { return it.variant }
+        candidates.firstOrNull { treeContains(it.variant, targetId, false) }?.let { return it.variant }
 
         // Same-fleet fuzzy ONLY when unambiguous — two ships in the same fleet must never be
         // resolved by fuzzy first-match (that is the clobbering itself).
@@ -313,6 +263,13 @@ object FleetMemberUtils {
         return null
     }
 
+    /**
+     * Fuzzy variant-id equality used by [treeContains].
+     *
+     * CR on FleetMemberUtils.kt:320 — this logic is DUPLICATED in ExoticaTechHM.fuzzyVariantMatch and
+     * VariantTagProvider.fuzzyVariantIdEquals. Consolidate into one shared util once ExoticaTechHM is
+     * unlocked (see plans/plan-addressing_cr_comments.txt section 5.2).
+     */
     private fun String.fuzzyVariantIdEquals(other: String): Boolean {
         // Strip the last '_suffix' from both and compare the prefixes; ids without an underscore
         // degrade to a plain exact comparison (substringBeforeLast falls back to the whole string).
@@ -357,7 +314,7 @@ object FleetMemberUtils {
      *
      * ShipVariantAPI instances are recreated across the stock → REFIT → combat churn,
      * so `===` on variants is not a dependable identity (see [checkRefitVariant] /
-     * [findRootVariantMember]). Attribution must therefore use stable markers:
+     * [resolveWholeShipRootMember]). Attribution must therefore use stable markers:
      *
      * - **Refit screen**: only one ship is edited at a time. The last root [FleetMemberAPI]
      *   displayed — [RefitButtonAdder.rootMember], cached from the UI — is the unambiguous
@@ -448,45 +405,10 @@ object FleetMemberUtils {
         return rootVariant.stationModules.values.contains(memberVariantId)
     }
 
-    @JvmStatic
-    fun findRootVariantMember(member: FleetMemberAPI): FleetMemberAPI {
-        // A root owns its station modules; nothing to resolve.
-        if (member.variant.stationModules.isNotEmpty()) return member
-
-        val targetId = member.variant.hullVariantId
-        val candidates = matchingRootMembers(member, targetId)
-
-        // 1. Refit screen: the ship being refitted, anchored on the cached root FleetMember id (a
-        //    stable marker, since the refit edits exactly one ship at a time). Resolves even when
-        //    the entering member is a transient station-module member whose variant no candidate
-        //    tree holds (the case that made instance-identity fail in the refit screen).
-        if (runningFromRefitScreen()) {
-            RefitButtonAdder.getRootMember()?.let {
-                return it
-            }
-        }
-
-        // 2. The true owner in a stable (non-refit) graph: its tree holds the member's concrete
-        //    variant instance. This is the only step that disambiguates two identical hulls there.
-        candidates.firstOrNull { treeInstanceContains(it.variant, member.variant) && it.shipName == member.shipName }?.let {
-            return it
-        }
-
-        // 3. Status-quo: first fuzzy match (single ship -> exactly one candidate), else the old
-        //    resolution.
-        candidates.firstOrNull()?.let {
-            return it
-        }
-        val rootVariant = findRootVariant(member, member.variant)
-        if (rootVariant == member.variant) return member
-        val fallback = findModuleMember(rootVariant) ?: member
-        return fallback
-    }
-
     /**
      * All root FMs whose station-module tree fuzzy-contains [childId], across the member's own fleet
-     * and then the active campaign fleets. Unlike [findRootVariant] this does NOT stop at the first
-     * match: for identical hulls several roots can fuzzy-match the same child id, and the tie must be
+     * and then the active campaign fleets. It deliberately does NOT stop at the first match: for
+     * identical hulls several roots can fuzzy-match the same child id, and the tie must be
      * broken higher up (ownership/refit), never by scan order.
      */
     private fun matchingRootMembers(member: FleetMemberAPI, childId: String): List<FleetMemberAPI> {
@@ -494,14 +416,14 @@ object FleetMemberUtils {
         member.fleetData?.fleet?.let { fleet ->
             for (fm in fleet.membersWithFightersCopy) {
                 val v = fm.variant
-                if (v.stationModules.isNotEmpty() && treeFuzzyContains(v, childId)) result.add(fm)
+                if (v.stationModules.isNotEmpty() && treeContains(v, childId, true)) result.add(fm)
             }
         }
         for (fleet in activeFleets) {
             if (fleet == null) continue
             for (fm in fleet.membersWithFightersCopy) {
                 val v = fm.variant
-                if (v.stationModules.isNotEmpty() && treeFuzzyContains(v, childId)) result.add(fm)
+                if (v.stationModules.isNotEmpty() && treeContains(v, childId, true)) result.add(fm)
             }
         }
         return result.toList()
