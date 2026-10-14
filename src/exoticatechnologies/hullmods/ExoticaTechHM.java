@@ -42,24 +42,6 @@ public class ExoticaTechHM extends BaseHullMod {
     private static final Logger log = Logger.getLogger(ExoticaTechHM.class);
     private static final Level MIN_LOG_LEVEL = Level.WARN;
 
-    // refit screen clones variant IDs with numeric suffixes (e.g. "_0" instead of "_Start"),
-    // so exact string comparison between stats variant and member variant can fail.
-    // strip the last "_suffix" from both and compare the prefixes to determine root-variant identity.
-    private static boolean fuzzyVariantMatch(ShipVariantAPI first, ShipVariantAPI second) {
-        // First, get hullVariantIds of these variants
-        String a = first.getHullVariantId();
-        String b = second.getHullVariantId();
-        // Then, strip everything after last '_'
-        int aIdx = a.lastIndexOf('_');
-        int bIdx = b.lastIndexOf('_');
-        // If we managed to strip them both, compare them both without the last _suffix,
-        // otherwise compare them raw as-is
-        if (aIdx > 0 && bIdx > 0) {
-            return a.substring(0, aIdx).contentEquals(b.substring(0, bIdx));
-        }
-        return a.contentEquals(b);
-    }
-
     public static void addToFleetMember(FleetMemberAPI member, ShipVariantAPI variant) {
         if (variant == null) return;
 
@@ -108,7 +90,7 @@ public class ExoticaTechHM extends BaseHullMod {
             ModuleVariantHierarchy.refreshFleetCache(rootMember.getVariant());
             ModuleVariantHierarchy.refreshFleetCache(RefitButtonAdderKt.checkRefitVariant(rootMember));
 
-            // Ensure the refit display variant has the hullmod for highlight to appear.
+            // Ensure the refit display variant has the hullmod for Modification effects to apply.
             ShipVariantAPI refitVariant = RefitButtonAdderKt.checkRefitVariant(member);
             if (!refitVariant.hasHullMod(HULLMOD_ID)) {
                 refitVariant.addPermaMod(HULLMOD_ID);
@@ -552,7 +534,7 @@ public class ExoticaTechHM extends BaseHullMod {
         // variant (e.g. a leaf FM's `.variant` instance that escaped the remove-time strip) live
         // forever. Self-heals here instead: the next ship-creation pass strips it from everywhere.
         if (ShipModificationsKt.isActuallyEmpty(wholeShipsMods)) {
-            if (fuzzyVariantMatch(stats.getVariant(), member.getVariant())) {
+            if (FleetMemberUtils.fuzzyVariantIdEquals(stats.getVariant().getHullVariantId(), member.getVariant().getHullVariantId())) {
                 // this is the root module's own stats variant with no Exotica data — the whole
                 // ship is empty, so strip the hullmod from everywhere (root + children + refit).
                 removeHullmodEverywhere(member);
@@ -561,10 +543,6 @@ public class ExoticaTechHM extends BaseHullMod {
         }
 
         for (Exotic exotic : ExoticsHandler.INSTANCE.getEXOTIC_LIST()) {
-//            if (!mods.hasExotic(exotic)) continue;
-//            if (shouldSkipModification(stats, exotic)) continue;
-//
-//            exotic.applyExoticToStats(id, stats, member, mods, Objects.requireNonNull(mods.getExoticData(exotic)));
             boolean thisModuleOwnsIt = mods != null && mods.hasExotic(exotic);
             boolean presentSomewhereOnShip = false;
             ShipModifications thisExoticasMods = null;
@@ -597,10 +575,6 @@ public class ExoticaTechHM extends BaseHullMod {
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
-//            if (!mods.hasUpgrade(upgrade)) continue;
-//            if (shouldSkipModification(stats, upgrade)) continue;
-//
-//            upgrade.applyUpgradeToStats(stats, member, mods, mods.getUpgrade(upgrade));
             boolean thisModuleOwnsIt = mods != null && mods.hasUpgrade(upgrade);
             boolean presentSomewhereOnShip = false;
             ShipModifications thisUpgradesMods = null;
@@ -648,8 +622,7 @@ public class ExoticaTechHM extends BaseHullMod {
         List<ShipModifications> wholeShipsMods = ShipModLoader.getAllForStats(ship.getMutableStats());
 
         if (mods == null && wholeShipsMods.isEmpty()) {
-            return;   //FIXME obviously, in case of a module that has no exoticas, it can't be shared to...
-            // I believe this new thing fixes the FIXME
+            return;
         }
 
 
@@ -684,8 +657,6 @@ public class ExoticaTechHM extends BaseHullMod {
         }
 
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
-//            if (!mods.hasUpgrade(upgrade)) continue;
-//            if (shouldSkipModification(ship, upgrade)) continue;
             boolean thisModuleOwnsIt = mods != null && mods.hasUpgrade(upgrade);
             boolean presentSomewhereOnShip = false;
             ShipModifications thisUpgradesMods = null;
@@ -710,7 +681,6 @@ public class ExoticaTechHM extends BaseHullMod {
                 throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the upgrade have it... upgrade: " + upgrade);
             }
 
-//            upgrade.applyToShip(member, ship, mods);
             upgrade.applyToShip(member, ship, shipModsToUse);
         }
     }
@@ -760,13 +730,9 @@ public class ExoticaTechHM extends BaseHullMod {
                 throw new IllegalStateException("Somehow, neither this module's ShipModifications nor the ShipMods that have the exotica have it... exotic: " + exotic);
             }
 
-//            exotic.applyToFighters(member, ship, fighter, mods);
             exotic.applyToFighters(member, ship, fighter, shipModsToUse);
         }
         for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
-//            if (!mods.hasUpgrade(upgrade)) continue;
-//            if (shouldSkipModification(ship, upgrade)) continue;
-//            upgrade.applyToFighters(member, ship, fighter, mods);
             boolean thisModuleOwnsIt = mods != null && mods.hasUpgrade(upgrade);
             boolean presentSomewhereOnShip = false;
             ShipModifications thisUpgradesMods = null;

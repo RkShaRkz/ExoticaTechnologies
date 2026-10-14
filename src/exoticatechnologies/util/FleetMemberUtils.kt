@@ -204,7 +204,7 @@ object FleetMemberUtils {
     private fun treeContains(root: ShipVariantAPI, targetId: String, isFuzzy: Boolean): Boolean {
         var found = false
         root.forEachModuleVariant { childV ->
-            val matches = if (isFuzzy) childV.hullVariantId.fuzzyVariantIdEquals(targetId) else childV.hullVariantId == targetId
+            val matches = if (isFuzzy) fuzzyVariantIdEquals(childV.hullVariantId, targetId) else childV.hullVariantId == targetId
             if (!found && matches) found = true
         }
         return found
@@ -264,16 +264,19 @@ object FleetMemberUtils {
     }
 
     /**
-     * Fuzzy variant-id equality used by [treeContains].
+     * Fuzzy variant-id equality: two ids are equal when the prefixes before their last '_suffix'
+     * match (refit/combat clones differ only there, e.g. 'left_0' vs 'left_Start'); ids without an
+     * underscore degrade to a plain exact comparison.
      *
-     * CR on FleetMemberUtils.kt:320 — this logic is DUPLICATED in ExoticaTechHM.fuzzyVariantMatch and
-     * VariantTagProvider.fuzzyVariantIdEquals. Consolidate into one shared util once ExoticaTechHM is
-     * unlocked (see plans/plan-addressing_cr_comments.txt section 5.2).
+     * @param hullVariantId1 the first [ShipVariantAPI.getHullVariantId] to check
+     * @param hullVariantId2 the second [ShipVariantAPI.getHullVariantId] to check
+     * @return whether their substrings before last '_' match
      */
-    private fun String.fuzzyVariantIdEquals(other: String): Boolean {
+    @JvmStatic
+    fun fuzzyVariantIdEquals(hullVariantId1: String, hullVariantId2: String): Boolean {
         // Strip the last '_suffix' from both and compare the prefixes; ids without an underscore
         // degrade to a plain exact comparison (substringBeforeLast falls back to the whole string).
-        return substringBeforeLast("_", this) == other.substringBeforeLast("_", other)
+        return hullVariantId1.substringBeforeLast("_", hullVariantId1) == hullVariantId2.substringBeforeLast("_", hullVariantId2)
     }
 
     /**

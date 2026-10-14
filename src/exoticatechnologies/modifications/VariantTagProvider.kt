@@ -232,23 +232,17 @@ open class VariantTagProvider : ShipModLoader.Provider {
         // — exact-only matching would skip member.variant entirely and the whole-ship read on it
         // would then see nothing. For module ships the root's prefix differs from every child's, so
         // a root fuzzy-match never collides with a child target.
-        if (root.hullVariantId == targetId || fuzzyVariantIdEquals(root.hullVariantId, targetId)) return root
+        if (root.hullVariantId == targetId || FleetMemberUtils.fuzzyVariantIdEquals(root.hullVariantId, targetId)) return root
         var exact: ShipVariantAPI? = null
         var fuzzy: ShipVariantAPI? = null
         root.forEachModuleVariant { childV ->
             when {
                 exact != null -> { /* already found an exact node, keep looking for nothing */ }
                 childV.hullVariantId == targetId -> exact = childV
-                fuzzy == null && fuzzyVariantIdEquals(childV.hullVariantId, targetId) -> fuzzy = childV
+                fuzzy == null && FleetMemberUtils.fuzzyVariantIdEquals(childV.hullVariantId, targetId) -> fuzzy = childV
             }
         }
         return exact ?: fuzzy
-    }
-
-    // Same rule as findFuzzyKey/invalidateVariantAcrossAll: refit/combat clones differ only in
-    // the last '_suffix' ('left_0' vs 'left_Start' vs 'left_Hull'), so compare stripped prefixes.
-    private fun fuzzyVariantIdEquals(a: String, b: String): Boolean {
-        return a.substringBeforeLast("_", a) == b.substringBeforeLast("_", b)
     }
 
     private fun removeFromTags(variant: ShipVariantAPI) {
