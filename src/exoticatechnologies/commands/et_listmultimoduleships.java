@@ -32,40 +32,6 @@ public class et_listmultimoduleships implements BaseCommand {
                 if (variant == null) continue;
                 if (variant.getStationModules() == null || variant.getStationModules().isEmpty()) continue;
 
-                // 1. If variant doesn't have module slots, it's skipped immediately
-                if (variant.getModuleSlots() == null || variant.getModuleSlots().isEmpty()) {
-                    continue;
-                }
-
-                // New additional filter to not let single-module frigates/cruisers with deco "modules" through
-                boolean hasRealActiveModules = false;
-
-                // 2. Run through all weapon slots on the ship variant
-                for (String slotId : variant.getModuleSlots()) {
-                    ShipVariantAPI moduleVariant = variant.getModuleVariant(slotId);
-
-                    // Check if this slot actually has a real module in it
-                    if (moduleVariant != null) {
-                        ShipHullSpecAPI moduleHull = moduleVariant.getHullSpec();
-
-                        if (moduleHull != null) {
-                            List<WeaponSlotAPI> moduleSlots = moduleHull.getAllWeaponSlotsCopy();
-
-                            // 3. Deco filter - any non-decorative module will probably have at least one weapon slot
-                            if (moduleSlots != null && !moduleSlots.isEmpty()) {
-                                hasRealActiveModules = true;
-                                break; // Found one valid module right here
-                            }
-                        }
-                    }
-                }
-
-                // If all slots are empty or contain deco slotless stuff in them (armor modules included) - we skip the ship
-                if (!hasRealActiveModules) {
-                    continue;
-                }
-
-
                 ShipHullSpecAPI hullSpec = variant.getHullSpec();
                 String hullId = hullSpec != null ? hullSpec.getHullId() : "<unknown>";
                 Console.showMessage(String.format("%s -- %s", variant.getHullVariantId(), hullId));
