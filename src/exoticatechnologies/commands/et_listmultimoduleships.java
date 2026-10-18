@@ -3,9 +3,11 @@ package exoticatechnologies.commands;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.combat.ShipHullSpecAPI;
 import com.fs.starfarer.api.combat.ShipVariantAPI;
+import org.jetbrains.annotations.NotNull;
 import org.lazywizard.console.BaseCommand;
 import org.lazywizard.console.CommonStrings;
 import org.lazywizard.console.Console;
+import org.lazywizard.console.commands.AddShip;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -13,7 +15,9 @@ import java.util.List;
 
 public class et_listmultimoduleships implements BaseCommand {
     @Override
-    public CommandResult runCommand(String argsString, CommandContext context) {
+    public CommandResult runCommand(@NotNull String argsString, CommandContext context) {
+        // first, the 'should add ships' argument
+        boolean shouldAddShips = (argsString.length() == 2 && argsString.split(" ")[1].equalsIgnoreCase("true"));
         if (context.isInCampaign() || context.isInMarket()) {
             List<String> variantIds = new ArrayList<String>(Global.getSettings().getAllVariantIds());
             Collections.sort(variantIds);
@@ -28,6 +32,10 @@ public class et_listmultimoduleships implements BaseCommand {
                 ShipHullSpecAPI hullSpec = variant.getHullSpec();
                 String hullId = hullSpec != null ? hullSpec.getHullId() : "<unknown>";
                 Console.showMessage(String.format("%s -- %s", variant.getHullVariantId(), hullId));
+                // if we should add these ships, just run the AddShip with it
+                if (shouldAddShips) {
+                    (new AddShip()).runCommand(hullId, context);
+                }
                 count++;
             }
             Console.showMessage(String.format("Total: %d", count));
