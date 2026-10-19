@@ -112,11 +112,13 @@ class ShipModLoader {
         return result
     }
 
-    // A variant that owns station modules IS the root of its tree. A leaf is either a
-    // single-module ship (no parent -> itself) or a child module -> climb to the root via
-    // stable hullVariantId keys (ModuleVariantHierarchy.findRootVariantId), NOT the identity
-    // map, which breaks after fixVariant churn.
+    // A variant that owns station modules IS the root of its tree. Prefer ship-scoped root first
+    // to avoid cold hierarchy maps for child variants (especially refit clones).
     private fun resolveRootVariant(member: FleetMemberAPI, variant: ShipVariantAPI): ShipVariantAPI {
+        val shipScopedRoot = FleetMemberUtils.findShipScopedRootVariant(member, variant)
+        if (shipScopedRoot != null) {
+            return shipScopedRoot
+        }
         if (variant.stationModules.isNotEmpty()) return variant
         val rootVariantId = ModuleVariantHierarchy.findRootVariantId(variant.hullVariantId) ?: return variant
         return FleetMemberUtils.findRootVariantByHullId(member, rootVariantId) ?: variant

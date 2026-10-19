@@ -48,13 +48,35 @@ public class ExoticaTechHM extends BaseHullMod {
         ShipModifications mods = ShipModFactory.generateForFleetMember(member);
         ShipVariantAPI memberRefitVarient = RefitButtonAdderKt.checkRefitVariant(member);
 
+        // Anchor first: prefer stable root-member attribution (ship-scoped). If successful,
+        // we may still need the root variant id for child-display gate and hierarchy mapping,
+        // but we avoid anchoring to the child when the hierarchy map is cold.
+        FleetMemberAPI resolvedRootMember = FleetMemberUtils.resolveWholeShipRootMember(member);
+        if (resolvedRootMember == null) {
+            resolvedRootMember = member;
+        }
+
         // Root resolution is hoisted ABOVE the apply/remove decision: when this member is the root
         // of a module ship, the hullmod must be decided from the WHOLE ship's modifications, not this
         // member's own (its own variant carries no tags when the exotic lives on a child module).
         // ModuleVariantHierarchy uses stable hullVariantId strings; returns null for root/single-module.
-        String rootVariantId = ModuleVariantHierarchy.findRootVariantId(variant.getHullVariantId());
-        FleetMemberAPI rootMember = member;
-        if (rootVariantId != null) {
+        String rootVariantId = null;
+        if (resolvedRootMember != member) {
+            // We have a true root member from attribution; prefer its hierarchy identity if available
+            rootVariantId = ModuleVariantHierarchy.findRootVariantId(resolvedRootMember.getVariant().getHullVariantId());
+            if (rootVariantId == null) {
+                // Fallback: try variant id of the resolved root
+                rootVariantId = resolvedRootMember.getVariant().getHullVariantId();
+            }
+        } else {
+            rootVariantId = ModuleVariantHierarchy.findRootVariantId(variant.getHullVariantId());
+        }
+        FleetMemberAPI rootMember = resolvedRootMember;
+        if (rootVariantId != null && resolvedRootMember == member) {
+            FleetMemberAPI foundRoot = findMemberByVariantId(member, rootVariantId);
+            if (foundRoot != null) rootMember = foundRoot;
+        } else if (rootVariantId != null && resolvedRootMember != member) {
+            // The hierarchy might know a canonical root id; try to map back to a live member
             FleetMemberAPI foundRoot = findMemberByVariantId(member, rootVariantId);
             if (foundRoot != null) rootMember = foundRoot;
         }
@@ -69,7 +91,8 @@ public class ExoticaTechHM extends BaseHullMod {
         // root; a root member whose exotics live on children now lands here too via wholeShipMods.
         if (consolidateHullmod(mods, wholeShipMods)) {
             // Child display variant needs the hullmod
-            if (rootVariantId != null) {
+            boolean isChild = (rootMember != member) || (rootVariantId != null);
+            if (isChild) {
                 variant.addPermaMod(HULLMOD_ID);
             }
 
@@ -150,7 +173,9 @@ public class ExoticaTechHM extends BaseHullMod {
             for (FleetMemberAPI fm : fleet.getMembersWithFightersCopy()) {
                 if (fm.getVariant() != null && targetVariantId.equals(fm.getVariant().getHullVariantId())) {
                     if (firstMatch == null) firstMatch = fm;
-                    if (variantTreeOwns(fm.getVariant(), member)) return fm;
+                    if (variantTreeOwns(fm.getVariant(), member)) {
+                        return fm;
+                    }
                 }
             }
         }
@@ -160,7 +185,9 @@ public class ExoticaTechHM extends BaseHullMod {
             for (FleetMemberAPI fm : fleet.getMembersWithFightersCopy()) {
                 if (fm.getVariant() != null && targetVariantId.equals(fm.getVariant().getHullVariantId())) {
                     if (firstMatch == null) firstMatch = fm;
-                    if (variantTreeOwns(fm.getVariant(), member)) return fm;
+                    if (variantTreeOwns(fm.getVariant(), member)) {
+                        return fm;
+                    }
                 }
             }
         }
@@ -174,7 +201,9 @@ public class ExoticaTechHM extends BaseHullMod {
     private static boolean variantTreeOwns(ShipVariantAPI root, FleetMemberAPI member) {
         final ShipVariantAPI memberVariant = member.getVariant();
         if (memberVariant == null) return false;
-        if (root == memberVariant) return true;
+        if (root == memberVariant) {
+            return true;
+        }
         final String memberVariantId = memberVariant.getHullVariantId();
         final boolean[] owns = new boolean[]{false};
         ExtensionsKt.forEachModuleVariant(root, new ModuleVariantAction() {
