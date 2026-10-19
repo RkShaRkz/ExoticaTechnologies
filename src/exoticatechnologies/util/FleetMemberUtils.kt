@@ -256,6 +256,10 @@ object FleetMemberUtils {
         // Same-fleet fuzzy ONLY when unambiguous — two ships in the same fleet must never be
         // resolved by fuzzy first-match (that is the clobbering itself).
         member.fleetData?.fleet?.let { fleet ->
+            // sometimes we get weird problems here while loading a game so apply caution
+            // SAFETY NET - MUST check for fleet data first before proceeding further
+            // because fleet.membersWithFightersCopy implicitly queries fleetData
+            if (fleet == null || fleet?.fleetData == null) return@let
             val ownIds = fleet.membersWithFightersCopy.mapNotNull { it.id }.toSet()
             val sameFleet = candidates.filter { it.id in ownIds }
             if (sameFleet.size == 1) return sameFleet[0].variant
@@ -417,13 +421,17 @@ object FleetMemberUtils {
     private fun matchingRootMembers(member: FleetMemberAPI, childId: String): List<FleetMemberAPI> {
         val result = LinkedHashSet<FleetMemberAPI>()
         member.fleetData?.fleet?.let { fleet ->
+            // sometimes we get weird problems here while loading a game so apply caution
+            // SAFETY NET - MUST check for fleet data first before proceeding further
+            // because fleet.membersWithFightersCopy implicitly queries fleetData
+            if (fleet == null || fleet?.fleetData == null) return@let
             for (fm in fleet.membersWithFightersCopy) {
                 val v = fm.variant
                 if (v.stationModules.isNotEmpty() && treeContains(v, childId, true)) result.add(fm)
             }
         }
         for (fleet in activeFleets) {
-            if (fleet == null) continue
+            if (fleet == null || fleet?.fleetData == null) continue
             for (fm in fleet.membersWithFightersCopy) {
                 val v = fm.variant
                 if (v.stationModules.isNotEmpty() && treeContains(v, childId, true)) result.add(fm)
