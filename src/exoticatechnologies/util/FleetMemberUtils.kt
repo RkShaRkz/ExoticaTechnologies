@@ -7,10 +7,10 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import exoticatechnologies.campaign.listeners.CampaignEventListener.Companion.activeFleets
+import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.refit.RefitButtonAdder
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.FleetMemberUtils.findFleetForVariant
-import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 
 object FleetMemberUtils {
     @JvmField
@@ -447,6 +447,62 @@ object FleetMemberUtils {
             if (!found && node === child) found = true
         }
         return found
+    }
+
+    // Finds a FleetMemberAPI whose variant's hullVariantId matches the target, scanning
+    // the member's own fleet first, then falling back to active campaign fleets. When multiple
+    // copies of the same hull are present (identical hullVariantIds tie on id alone), prefers the
+    // root whose station-module tree actually owns the triggering member before falling back to
+    // scan order - otherwise a second twin's whole-ship install can resolve to the first twin's
+    // root and write the hullmod onto the wrong ship's objects.
+    @JvmStatic
+    fun findMemberByVariantId(member: FleetMemberAPI, targetVariantId: String): FleetMemberAPI? {
+        var firstMatch: FleetMemberAPI? = null
+
+        // Try member's own fleet first (works in refit, campaign, and simulation)
+        if (member.fleetData != null && member.fleetData.fleet != null) {
+            val fleet = member.fleetData.fleet
+            for (fm in fleet.membersWithFightersCopy) {
+                if (fm.variant != null && targetVariantId == fm.variant.hullVariantId) {
+                    if (firstMatch == null) firstMatch = fm
+                    if (variantTreeOwns(fm.variant, member)) {
+                        return fm
+                    }
+                }
+            }
+        }
+        // Fallback: check active campaign fleets
+        for (fleet in activeFleets) {
+            if (fleet == null || fleet.fleetData == null) continue
+            for (fm in fleet.membersWithFightersCopy) {
+                if (fm.variant != null && targetVariantId == fm.variant.hullVariantId) {
+                    if (firstMatch == null) firstMatch = fm
+                    if (variantTreeOwns(fm.variant, member)) {
+                        return fm
+                    }
+                }
+            }
+        }
+        return firstMatch
+    }
+
+    // True when [root]'s station-module tree (or root itself) holds the triggering member's variant:
+    // exact object identity first, then hullVariantId equality. Identical hulls differ only by
+    // variant instance (each fleet member owns its clones after refit), so this disambiguates
+    // multiple copies of the same ship during whole-ship resolution.
+    private fun variantTreeOwns(root: ShipVariantAPI, member: FleetMemberAPI): Boolean {
+        val memberVariant = member.variant ?: return false
+        if (root === memberVariant) {
+            return true
+        }
+        val memberVariantId = memberVariant.hullVariantId
+        val owns = booleanArrayOf(false)
+        root.forEachModuleVariant { child ->
+            if (!owns[0] && (child === memberVariant || (memberVariantId != null && memberVariantId == child.hullVariantId))) {
+                owns[0] = true
+            }
+        }
+        return owns[0]
     }
 
 }
