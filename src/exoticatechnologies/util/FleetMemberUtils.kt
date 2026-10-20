@@ -204,7 +204,10 @@ object FleetMemberUtils {
     private fun treeContains(root: ShipVariantAPI, targetId: String, isFuzzy: Boolean): Boolean {
         var found = false
         root.forEachModuleVariant { childV ->
-            val matches = if (isFuzzy) fuzzyVariantIdEquals(childV.hullVariantId, targetId) else childV.hullVariantId == targetId
+            val matches = when (isFuzzy) {
+                true -> fuzzyVariantIdEquals(childV.hullVariantId, targetId)
+                false -> childV.hullVariantId == targetId
+            }.exhaustive
             if (!found && matches) found = true
         }
         return found
