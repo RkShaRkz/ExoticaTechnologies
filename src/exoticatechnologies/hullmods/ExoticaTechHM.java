@@ -119,13 +119,11 @@ public class ExoticaTechHM extends BaseHullMod {
                 refitVariant.addPermaMod(HULLMOD_ID);
             }
             // The variant parameter may also differ from member.getVariant() — backstop it too.
-//            if (variant != refitVariant && variant != member.getVariant() && !variant.hasHullMod(HULLMOD_ID)) {
             if (!variant.hasHullMod(HULLMOD_ID)) {
                 variant.addPermaMod(HULLMOD_ID);
             }
 
             member.updateStats();
-
         } else {
             // consolidateHullmod == false => NO module anywhere in the ship has ANY Modification.
             // Strip the hullmod from the ENTIRE ship (root + all module variants + refit tree),
