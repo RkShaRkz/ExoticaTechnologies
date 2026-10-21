@@ -1,0 +1,100 @@
+ISSUE #39 HULLMOD EXOTICS -> "INSTALL ON WHOLE SHIP" — REVISION 3
+================================================================
+Root anchor is now the correct ship even with two identical multimodule hulls.
+
+Revision 3 changes ONLY THE RESOLUTION in FleetMemberUtils.findRootVariantMember. The
+keeper changes from rev 1 (HullmodExotic.kt member = rootMember, :99) and the
+single-file scope stay exactly the same.
+
+WHY REVISION 2 FAILED
+---------------------
+Rev 2 anchored on RefitButtonAdder.member while runningFromRefitScreen(), but that member is
+the TRANSIENT CHILD FMAPI while a module is being edited (per user verification + the
+getRefitDisplayVariant KDoc at RefitButtonAdder.kt:471-483), so the rev-2 guard's
+refitRoot.variant.stationModules.isNotEmpty() check bailed for the very two-ship case it was
+built for, and the flow silently fell into the original first-match fuzzy scan, which is a
+coin flip between identical hulls.
+
+CORE INSIGHT (applies to every revision)
+----------------------------------------
+findRootVariant / findRootVariantByHullId / ModuleVariantHierarchy all KEY THE MODULE ID
+STRINGS: root.variant.hullVariantId -> child ids. Two copies of the same hull produce
+byte-identical child hullVariantId strings, so any string-keyed scan resolves to whatever
+copy the fleet iteration happens to visit first. No amount of PID-prefix stripping or deeper
+string matching helps; the strings are literally the same.
+
+THE ONLY UNIQUE SIGNAL IS INSTANCE IDENTITY
+-------------------------------------------
+findRootVariantMember is always called with the CONCRETE FAM/FMAPI that entered the flow
+(from hullmod hullmod-installed events, refit dialogs, campaign processing). The tree of the
+true owner instance-contains that member.variant object (===). The sibling identical ship's
+tree holds DIFFERENT variant instances, so it cannot win. This fixes the two-copy tie.
+
+ALGORITHM (ownership-first, all-candidates, 4-step)
+---------------------------------------------------
+1) if member.variant.stationModules.isNotEmpty() -> member          (it is a root)
+2) targetId = member.variant.hullVariantId
+   candidates = ALL root FMs (own fleet then active fleets, no early return)
+               whose stationModules tree fuzzy-contains targetId
+3) resolve:
+   1-OWNER   candidates.first { treeInstanceContains(it.variant, member.variant) }   the ONLY
+             disambiguating step: the true owner, unique across identical hulls.
+   2-REFIT   runningFromRefitScreen() && RefitButtonAdder.member is one of the candidates -> it.
+             Identity comparison only, no extra scan; NO-OP while editing a module, because
+             then RefitButtonAdder.member is the transient child, which never matches a root
+             candidate. Deliberate narrowness: cannot pick a sibling.
+   3-FIRST   candidates.firstOrNull() (status quo for the single-ship case)
+   4-FALLBACK findRootVariant(member, member.variant) -> findModuleMember(root) ?: member
+             (old behavior preserved as the last resort)
+
+NEW HELPERS (private, FleetMemberUtils)
+---------------------------------------
+matchingRootMembers(member, childId): List<FleetMemberAPI>  LinkedHashSet<>, own fleet first
+   then activeFleets; keeps every fuzzy match (NO first-match short-circuit so step 3 can see
+   the full candidate set).
+treeInstanceContains(root, child): Boolean  root.forEachModuleVariant { node === child }.
+   Resolves identity against the CONCRETE variant graph that the tree actually holds (the KDoc
+   on ShipVariantAPI.forEachModuleVariant at Extensions.kt:983-990 documents the walker visits
+   descendant leaves, so a root is by construction not == its own child).
+
+DIAGNOSTICS (WARN-level, added because FleetMemberUtils previously had no logger)
+--------------------------------------------------------------------------------
+findRootVariantMember logs at WARN on entry: member toString + member.id, isChild
+(= shipName.isNullOrEmpty(), the same heuristic HullmodExotic.kt:69 used before rev 2),
+targetId, runningFromRefitScreen(), RefitButtonAdder.member (+ id), and the full candidate id
+list; then logs which step resolved and to which root id. These are NOT production spam (one
+line per whole-ship flow per member) and are the definitive in-game diagnostic: if step 1
+never fires, refit cloning is replacing tree children and the instance test is defeated — the
+parked name/identity comparison becomes the fix.
+
+FILES
+-----
+src/exoticatechnologies/util/FleetMemberUtils.kt:
+  + imports org.apache.log4j.{Level, Logger}
+  + private logger field
+  + findRootVariantMember rewritten (ownership-first, 4-step, WARN diagnostics)
+  + new private helpers matchingRootMembers / treeInstanceContains
+No other source file is touched. Ideas/history in -revision1 (root-anchor origin) and
+-revision2 (superseded refit-authority variant) plan docs; unchanged files remain untouched.
+
+VERIFICATION (user, Windows build, in game)
+-------------------------------------------
+1. Two identical multimodule ships (e.g. two overslaughts), each child with different exotics.
+2. Install an AlphaSubcore on a child of ship A -> ONLY ship A gets it; ship B untouched.
+3. Destroy an exotic from a child of ship B -> ONLY ship B loses it.
+4. Repeat from ship A's child -> ONLY ship A loses it (order swaps prove ownership, not luck).
+5. Logs: for each flow the candidates list contains BOTH ship ids and the resolved root id is
+   the ship whose child was touched; the resolved step should be 1-owner. If 3-first-match
+   fires (single ship case only), that is expected. If 1-owner never fires in game, read the
+   step-2/3 results and report them; clone churn defeats the instance test -> fall back to the
+   parked name comparison.
+
+COMMIT STYLE
+------------
+P2.2 single focused commit; message suggested in the handoff, user commits locally.
+
+PLAN-NOTE
+---------
+Revision docs accumulate; originals are never overwritten. -revision2 remains as the record of
+a tried-and-failed approach (its guard bailed exactly in the two-ship case for which it was
+built).

@@ -1,0 +1,14 @@
+TEST PLAN/SCRIPT
+
+0) Apply the TEST_FullMetalSalvo.txt source changes
+
+1) 
+addship tbj_overslaught_Standard
+addship ed_wurgandal_Standard
+et_addexotic FullMetalSalvo
+et_addexotic FullMetalSalvo
+
+2) install FullMetalSalvo on overslaught from Refit screen
+3) validate that all modules get highlighted and get their stat changes applied (+2000 cargo, +2000 armor)
+4) install FullMetalSalvo on wurgandal from Refit screen
+5) validate that all modules get highlighted and get their stat changes applied

@@ -1,0 +1,106 @@
+# plan-hullmod_exotic_installs_on_whole_ship.txt
+
+## 1. Objective
+`shouldShareEffectToOtherModules(...)` currently drives **two different concerns**:
+
+1. **Install extent** — *which modules get the exotic's hullmod installed on*
+   (`HullmodExotic.onInstall`/`onDestroy`, `HullmodExoticHandler` install flows).
+2. **Effect sharing** — *whether an exotic owned by one module applies exotic-level
+   effects to other modules* (`ExoticaTechHM.shouldSkipModification`, at the
+   `Modification`/`Exotic` level).
+
+This plan splits them. A new `installsOnWholeShip()` on `HullmodExotic` (and the
+same read in `HullmodExoticHandler`) becomes the single source of truth for concern
+#1. `shouldShareEffectToOtherModules(...)` stays on concern #2 only.
+
+After this patch it becomes possible to build a `HullmodExotic` that installs its
+hullmod on **one** module while still sharing exotic-level effects (e.g. a cargo /
+armor buff in `applyToStats`) to **all** modules — because the two flags are no
+longer coupled. (The user will author and test such an exotic themselves; this plan
+delivers the capability only.)
+
+## 2. Change set
+
+### 2.1 `HullmodExotic.kt`
+- Add a new overridable method with KDoc capturing the split:
+  `open fun installsOnWholeShip(): Boolean = false`
+  The KDoc states that this controls *install extent* only, and that
+  `shouldShareEffectToOtherModules(...)` no longer influences where the hullmod is
+  installed (it still controls exotic-level effect sharing).
+- `onInstall`:
+  - `:54` `val shouldShareEffectToOtherModules = shouldShareEffectToOtherModules(null, null)`
+    → `val installsOnWholeShip = installsOnWholeShip()`
+  - `:56` log expression keeps the renamed local (unchanged semantics).
+  - `:60` gate `if (shouldShareEffectToOtherModules)` → `if (installsOnWholeShip)`.
+- `onDestroy`:
+  - `:108` `if (shouldShareEffectToOtherModules(null, null))` → `if (installsOnWholeShip())`.
+- Comment wording-only updates (RULES.md §2 — update, never delete):
+  - Retained block `:61-:65` ("If we should share to other modules ...") →
+    reworded to "install on whole ship" semantics.
+  - Retained block `:109-:113` (same text in `onDestroy`) → same reword.
+  - The `//FIXME` block `:57-:59` (issue #39, child-to-child sharing / root-only
+    lookup) is **not touched** — its subject is the new install-extent flag's
+    future any-module behavior and is a follow-up plan.
+
+### 2.2 `HullmodExoticHandler.kt`
+- `:773` `val shouldShareEffectToOtherModules = hullmodExotic.shouldShareEffectToOtherModules(null, null)`
+  → `val installsOnWholeShip = hullmodExotic.installsOnWholeShip()`
+- `getInitialVariantsListForMember`:
+  - KDoc `:1069-:1076` — reword for the renamed parameter.
+  - Signature `:1077` — param `shouldShareEffectToOtherModules: Boolean`
+    → `installsOnWholeShip: Boolean`.
+  - Body `:1078` — local name updated.
+- Both call sites (`:794`, `:802`) pass the value through unchanged (they are named
+  after the local `:773`).
+
+### 2.3 `AlphaSubcore.kt` + `DaemonCore.kt`
+- Add `override fun installsOnWholeShip() = true` next to the existing sharing
+  overrides (`AlphaSubcore.kt:100` block, `DaemonCore.kt:123` block).
+- **Everything else about these two classes is untouched.** The now-moot
+  `shouldShareEffectToOtherModules(...) = true` /
+  `shouldAffectModulesToShareEffectsToOtherModules() = false` /
+  `shouldAffectModule(...) = false` overrides **stay** — they still govern exotic
+  effect sharing, and the user will experiment with them during testing.
+
+## 3. Behavior preservation (the point)
+- `AlphaSubcore` / `DaemonCore`: `installsOnWholeShip() = true` exactly reproduces
+  today's whole-ship hullmod install. In `CheckAndInstallOnMemberModule` the seeding
+  list (`:802` → `getInitialVariantsListForMember(member, true)` =
+  `getChildModuleVariantList(member)`, plus the root variant) matches today's
+  `shouldShareEffectToOtherModules = true` path; STRICT-mode `expected` list
+  therefore contains every child, so each child still passes `shouldInstall`.
+- Default `false`: hullmod installs on the single member only — the new capability
+  for authors (combined with exotic-level sharing via `shouldShareEffectToOtherModules`).
+- `Exotic.kt` NOTE (`:28-:29`), `Modification`/`Exotic` sharing paths, and
+  `ExoticaTechHM.java` `shouldSkipModification` (`:331`, `:380`) are **unchanged**.
+
+## 4. Not touched
+- issue #39 / child-to-child sharing — the root-only lookup (`only root modules are
+  able to share ... to child modules`) and the FIXME comment become a follow-up
+  revision that can leverage the new flag + the post-rename root-resolution helpers
+  (`ModuleVariantHierarchy.findRootVariantId`, `FleetMemberUtils.findRootVariant`,
+  `findRootVariantByHullId`).
+- No concrete proof-of-concept exotic is added (user authors the cargo/armor exotic
+  during testing).
+- Legacy `logspam.txt` etc. — untouched.
+
+## 5. Validation
+- `grep -rn "shouldShareEffectToOtherModules(null, null)" src/` → empty for the
+  HullmodExotic install/remove paths (`HullmodExotic.kt`, `HullmodExoticHandler.kt`).
+  Remaining `shouldShareEffectToOtherModules` matches are the legitimate
+  exotic-level sharing reads (`AlphaSubcore`/`DaemonCore` overrides, `ExoticaTechHM`,
+  other `Exotic` subclasses).
+- Windows build + in-game (user-held):
+  - `AlphaSubcore` unchanged: hullmod installed on every module; uninstall strips
+    everywhere (symmetric).
+  - `DaemonCore` unchanged: same.
+  - User's experimental single-module HullmodExotic: hullmod on ONE module, shared
+    buff on ALL modules.
+- No automated test changes required — the handler tests use anonymous HullmodExotics
+  and never touch this flag.
+
+## 6. Deliverables
+- New method + migrated call sites in `HullmodExotic.kt`, `HullmodExoticHandler.kt`.
+- `installsOnWholeShip() = true` override on `AlphaSubcore.kt`, `DaemonCore.kt`.
+- This plan doc. Plan closes when: grep clean, Windows build passes, in-game smoke
+  (AlphaSubcore/DaemonCore install/uninstall + user's single-module exotic) intact.

@@ -1,0 +1,32 @@
+TEST PLAN/SCRIPT:
+
+1) addship tbj_overslaught_Standard
+2)
+et_addexotic AlphaSubcore
+et_addexotic AlphaSubcore
+et_addexotic NanotechArmor
+et_addexotic SpooledFeeders
+et_addexotic FullMetalSalvo
+et_addexotic ShipFishingHookSystem
+et_addexotic ShipAttractorSystem
+et_addexotic ShipRepulsorSystem
+
+3) on ship1 install NanotechArmor on left child, SpooledFeeders on right child, ShipAttractorSystem on root module
+4) on ship2 install FullMetalSalvo on left child, ShipFishingHook on right child, ShipRepulsorSystem on root module
+5) install AlphaSubcore on ship1 using the planetside 'exoticatech' menu
+6) install AlphaSubcore on ship2 using the planetside 'exoticatech' menu
+7) uninstall AlphaSubcore from ship1 using the planetside 'exoticatech' menu
+8) validate OP resets on ship1 and didn't reset anywhere on ship2
+9) uninstall AlphaSubcore from ship2 using the planetside 'exoticatech' menu
+10) validate OP resets on ship2 and that ship1 OP remains reset
+11) validate no cross-ship contamination of exotica happened and that ship1 still has NanotechArmor on left child and SpooledFeeders on right, while ship2 should have FullMetalSalvo on left child and ShipFishingHook on right child
+12) install AlphaSubcore on ship1 using the planetside 'exoticatech' menu
+13) validate OP didn't change on ship2
+14) uninstall AlphaSubcore from ship1 using the planetside 'exoticatech' menu
+15) validate OP didn't change on ship2
+16) install AlphaSubcore on ship2 using the planetside 'exoticatech' menu
+17) validate OP didn't change on ship1
+18) uninstall AlphaSubcore from ship2 using the planetside 'exoticatech' menu
+19) validate OP is reset across all modules of ship1 and ship2
+20) validate ship1 has NanotechArmor on left child, SpooledFeeders on right child
+21) validate ship2 has FullMetalSalvo on left child, ShipFishingHook on right child

@@ -1,0 +1,108 @@
+REVISION 11 - WHOLE-SHIP ANCHOR FIX BY UNIQUE ROOT ID (surgical, stash stays stashed)
+====================================================================================
+
+STATUS: DRAFT (plan-mode), all decisions locked via Q&A.
+AUTHOR GUIDANCE SOURCE: committed 2cfe08a + stashed changeset (stash@{0}) + baseline snapshots
+  dumps in /tmp/base_was_*
+ROOT-MEMBER AUTHORITY: RefitButtonAdder.getRootMember() (caches by STABLE FleetMember id, not
+  hullVariantId; verified RefitButtonAdder.kt:50,125,508-529).
+
+----------------------------------------------------------------------------
+0. ROOT CAUSE (confirmed this session)
+----------------------------------------------------------------------------
+Whole-ship flows anchor on the FIRST FMAPI entering HullmodExotic whole-ship flows
+(HullmodExoticHandler.kt:691 install, :900 remove, OP-refresh). That was safe when the
+first FMAPI was always the ROOT (AlphaSubcore was root-only installable). Once children
+became installable, the first FMAPI can be a CHILD module (transient, id reshuffles on every
+query, fleetData unreliable). Current tree then:
+  - resolves owner by fuzzy hullVariantId/prefix matching (findRootVariantMember)
+  - _Start vs _Standard share prefix  -> crosses to ship2's graph -> ship2 ShipModifications
+    objects get stamped into ship1's children (deff0fc3/386aabc4/AU-87-EMP-C in logs)
+  - child's shipName==null -> bail skips OP drop
+  - createTranslationVariant writes announce cross-ship installs (rev-10 writeThrough),
+    and the display mirror (displaying tree) can leak cross-ship.
+
+----------------------------------------------------------------------------
+1. STRATEGY (user-approved)  -- SURGICAL, not wholesale revert
+----------------------------------------------------------------------------
+- DO NOT pop stash; stash@{0} stays stashed AND uncommitted (broken; reference only).
+- Consider 2cfe08a as the semantic baseline: only surgically add a minimal amount of code to
+  achieve wanted functionality. Do NOT reintroduce whichever wider change caused pollution.
+- Anchor every whole-ship flow on the member found by searching fleetData such that its id
+  EQUALS RefitButtonAdder.getRootMember().getId() (exactly one member passes -> no cross-ship).
+- Re-add @identityHashCode write diagnostics in VariantTagProvider (writeThrough/set).
+- ALL diagnostics use logger.error(...) (never logger.info).
+
+----------------------------------------------------------------------------
+2. CHANGE A - ANCHOR RESOLUTION (fixes the broken variant; user-corrected)
+----------------------------------------------------------------------------
+Replace the fuzzy walk with a null-safe owner-root resolver. Correctness rules:
+  - Primary anchor: find the fleetData member whose id == RefitButtonAdder.getRootMember().id.
+    Search the sector's fleetData(s) (safe superset), NOT the child FMAPI's own .fleetData
+    (transient/zero). Exactly one passes -> deterministic, no cross-ship.
+  - If getRootMember() is null (refit closed) -> return null, caller does ZERO whole-ship work
+    (never fall back to firstMember -- a child FMAPI's id reshuffles each query).
+  - If no fleetData member matches -> return null (fail-safe), caller does zero whole-ship work.
+
+Proposed API (FleetMemberUtils.kt):
+    @JvmStatic fun resolveWholeShipRootMember(): FleetMemberAPI? {
+        val refitRoot = RefitButtonAdder.getRootMember() ?: return null
+        val targetId = refitRoot.id
+        // search across the sector's fleets for exactly one member whose id == targetId
+        for (fleet in Global.getSector().allFleets) {
+            val hit = fleet.fleetData.membersWithFightersCopy
+                .asSequence().map { it } // stable id read once
+                .firstOrNull { it.id == targetId }
+            if (hit != null) return hit
+        }
+        return null
+    }
+  NOTE: read .id ONCE into targetId; never re-query a possibly-transient member's id after a
+  graph walk. If RefitButtonAdder caches its own root member instance for the refit session,
+  prefer iterating from that cached root's fleetData before falling back to sector search.
+
+----------------------------------------------------------------------------
+3. CHANGE B - WHOLE-SHIP FLOWS RE-ANCHORED (HullmodExoticHandler.kt)
+----------------------------------------------------------------------------
+- CheckAndInstallOnAllChildModulesVariants(:691) and CheckAndRemoveFromAllChildModulesVariants(:900):
+  resolve root = resolveWholeShipRootMember(); if null -> return early (zero work). Otherwise pass
+  the RESOLVED ROOT variant+member through to the child walk so the walk stays within the anchored
+  ship's OWN variant tree only.
+- OP refresh / writeThrough dest: same root (never the transient child, never fuzzy match).
+- Update createTranslationVariant/writeThrough to refuse cross-ship writes: only write when the
+  write target member is within the anchored root's own graph (id-gated).
+
+----------------------------------------------------------------------------
+4. CHANGE C - DISPLAY MIRROR (user: reuse existing ID gate)
+----------------------------------------------------------------------------
+- Reuse RefitButtonAdder.getRefitDisplayVariant() (already ID-gated, RefitButtonAdder.kt:531):
+  ONLY display-mirror when the incoming member id == cached refit root id. Drop any fuzzy/path-based
+  display mirror switch. Display walks the anchored ship's own graph; no cross-ship mirror.
+
+----------------------------------------------------------------------------
+5. DIAGNOSTICS (all logger.error)
+----------------------------------------------------------------------------
+Re-add to VariantTagProvider (writeThrough/set and owner-resolution):
+  - writeRegistrationExoticTag/install/remove: log @identityHashCode of BOTH the target member's
+    variant AND the edited/display variant so next run shows which object writes land on.
+  - resolution: log whether resolved via refit-root id, fleetData search hit, or null (refit closed).
+  - Use logger.error(...) throughout; no logger.info(...).
+
+----------------------------------------------------------------------------
+6. SCOPE / REVERT POLICY
+----------------------------------------------------------------------------
+- Edit ONLY: FleetMemberUtils.kt (Change A), HullmodExoticHandler.kt (Change B), RefitButtonAdder.kt
+  display gate + RefitButtonAdder.getRootMember caching if needed (Change C), VariantTagProvider.kt
+  (diagnostics), FleetMemberUtils.kt anchor. Stash untouched.
+- Verification: rebuild, deploy, run ship1=_Start install + ship2=_Standard; confirm no
+  cross-ship writes (deff0fc3/386aabc4 never appear on the other ship), OP drop fires now that
+  anchor is root (shipName != null), diagnostics appear via logger.error at @identityHashCode parity.
+- If surgical patch lands badly, fall back: git revert to 2cfe08a baseline and re-apply ONLY
+  Change A+B+C+diagnostics.
+
+----------------------------------------------------------------------------
+7. OPEN ITEMS (none blocking)
+----------------------------------------------------------------------------
+- Confirm exact RefitButtonAdder.getRootMember() caching: is the cached instance itself the live
+  fleet member (preferred source for fleetData) or a refit-screen transient? (Affects whether Change
+  A searches sector fleets or the cached root's own fleetData first.) -> verify at implementation time.

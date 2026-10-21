@@ -1,0 +1,217 @@
+# plan-hullmod_exotic_installs_on_whole_ship-revision10.txt
+
+## 0. Ground rules
+- **Base:** committed HEAD `6f515ee` (rev8/rev9 rework) — whole-ship flows, `HullmodExoticHandler`, `fixVariant` propagation, `removeHullmodEverywhere`, `ModuleVariantHierarchy` **stay**.
+- **Revert = uncommitted files only:** the debug-session edits to `util/Extensions.kt`, `util/FleetMemberUtils.kt`, `modifications/VariantTagProvider.kt`, `modifications/exotics/impl/HullmodExotic.kt`, `hullmods/ExoticaTechHM.java` are stashed; working tree back to HEAD content (verified: `git diff --ignore-cr-at-eol HEAD` empty for all five).
+- **Logs deleted after this doc is committed** — evidence is embedded below. No `plans/evidence/` archive. The 436-file EOL noise is untouched.
+- No CLI toolchain — IntelliJ build + in-game test (user-held).
+
+## 1. Evidence (verbatim — the read-back record)
+
+### 1.1 TEST_PLAN.txt (32 lines, verbatim)
+```
+TEST PLAN/SCRIPT:
+
+1) addship tbj_overslaught_Standard
+2)
+et_addexotic AlphaSubcore
+et_addexotic AlphaSubcore
+et_addexotic NanotechArmor
+et_addexotic SpooledFeeders
+et_addexotic FullMetalSalvo
+et_addexotic ShipFishingHookSystem
+et_addexotic ShipAttractorSystem
+et_addexotic ShipRepulsorSystem
+
+3) on ship1 install NanotechArmor on left child, SpooledFeeders on right child, ShipAttractorSystem on root module
+4) on ship2 install FullMetalSalvo on left child, ShipFishingHook on right child, ShipRepulsorSystem on root module
+5) install AlphaSubcore on ship1 left child
+6) install AlphaSubcore on ship2 right child
+7) uninstall AlphaSubcore from ship1 right child
+8) validate OP resets on ship1 and didn't reset anywhere on ship2
+9) uninstall AlphaSubcore from ship2 left child
+10) validate OP resets on ship2 and that ship1 OP remains reset
+11) validate no cross-ship contamination of exotica happened and that ship1 still has NanotechArmor on left child and SpooledFeeders on right, while ship2 should have FullMetalSalvo on left child and ShipFishingHook on right child
+12) install AlphaSubcore on ship1 right child
+13) validate OP didn't change on ship2
+14) uninstall AlphaSubcore from ship1 left child
+15) validate OP didn't change on ship2
+16) install AlphaSubcore on ship2 right child
+17) validate OP didn't change on ship1
+18) uninstall AlphaSubcore from ship2 left child
+19) validate OP is reset across all modules of ship1 and ship2
+20) validate ship1 has NanotechArmor on left child, SpooledFeeders on right child
+21) validate ship2 has FullMetalSalvo on left child, ShipFishingHook on right child
+```
+
+### 1.2 TEST_RESULTS_LATEST_after_changes.txt (27 lines, verbatim — primary read-back)
+```
+TEST RESULTS for latest changeset:
+
+1) pass
+2) pass
+
+3) pass
+4) pass; no defects detected on either ship1 or ship2
+5) fail, OP did not decrease on ship1 left child (installing child module); zero cross-ship contamination
+6) fail, OP did not decrease on ship2 right child (installing child module); zero cross-ship contamination
+7) fail, OP did not reset on ship1 right child (uninstalling child module) or any other modules; zero cross ship contamination; AlphaSubcore did not actually uninstall (still visible in exoticatech hullmod description)
+8) failed because of 7, but nothing happened on ship2
+9) fail, OP did not reset on ship2 left child (uninstalling child module) or any other modules; zero cross ship contamination; AlphaSubcore did not actually uninstall (still visible in exoticatech hullmod description)
+10) failed becaues of 9, but nothing happened on ship1
+11) passed, ship1 still has it's exoticas on root/child modules; ship2 still has it's exoticas on root/child modules
+12) cannot perform / fail. AlphaSubcore is still installed there
+13) N/A both because i couldn't install it, and because ship2 didn't manage to uninstall it's AlphaSubcore
+14) FAIL, didn't uninstall but also PASS. after changing the screen from Refit to Cargo, i noticed I had 4 AlphaSubcores (instead of only 1 or 2) but after coming back to the ship the OP was properly reset everywhere. hints at missing the "display variants" of modules and uninstalling from them.
+15) PASS (but severely flawed due to previous results and actually not uninstalling from ship2)
+16*) PASS?? after uninstalling from ship2 right child and changing screens to CARGO and coming back to REFIT, i noticed that it was purged from whole ship and OP reset properly.
+17*) PASS
+18*) hold
+16)  FAIL, OP did not decrease on ship2 right child, decreased on other ship2 modules; zero cross-ship contamination
+17) PASS
+18) FAIL but also FAIL if i change the screen away from REFIT and come back to it; AlphaSubcore did not uninstall
+19) partial FAIL. ship1 was reset (but this is flawed since we introduced steps not present in the test plan) but ship2 was not reset at all.
+20) PASS
+21) PASS, but AlphaSubcore was present everywhere
+```
+
+### 1.3 TEST_RESULTS_LATEST.txt (17 lines, verbatim — pre-fix baseline)
+```
+TEST RESULTS for latest changeset:
+
+1) pass
+2) pass
+
+3) pass
+4) pass
+5) defect - OP did not reduce on the left child where it was installed; after changing modules it bled entirely to ship2
+6) fail; alpha subcore was already installed
+7) fail; did not actually uninstall, OP did not reset on ship1; nothing changed on ship2 - it still had lowered OP, alpha subcore didn't uninstall anywhere
+8) fail. both ships didn't reset and had alpha subcore on them
+9) fail, alpha subcore cannot be uninstalled
+10) fail
+11) fail
+
+ship1 had FullMetalSalvo and AlphaSubcore on left child, ShipFishingHookSystem and AlphaSubcore on right child, ShipAttractorSystem and AlphaSubcore on root module.
+ship2 had FullMetalSalvo and AlphaSubcore on left child, ShipFishingHookSystem and AlphaSubcore on right child, ShipRepulsorSystem and AlphaSubcore on root module.
+```
+Pre-fix step 5 was the ORIGINAL disease: "after changing modules it bled entirely to ship2" (cross-ship) — now proven eliminated.
+
+### 1.4 TEST_RESULTS_2cfe08a.txt (11 lines, verbatim)
+```
+TEST RESULTS for commit 2cfe08a:
+
+1) pass
+2) pass
+
+3) pass
+4) pass
+5) skip; AlphaSubcore is not installable on children here
+6) skip; AlphaSubcore is not installable on children here
+7) skipped; didn't install
+8) skipped; didn't install
+```
+
+### 1.5 TEST_RESULTS2_cf472035.txt (13 lines, verbatim)
+```
+TEST RESULTS (after my fix) for commit cf472035 with outstanding changeset:
+
+1) pass
+2) pass
+
+3) pass
+4) pass
+5) defect detected, OP didn't decrease on left child (most likely due to not installing on refit variant?)
+6) defect detected, OP didn't decrease on right child (most likely due to not installing on refit variant?)
+7) defect detected, OP didn't reset anywhere
+8) fail
+9) fail
+10) fail, ship1 isn't reset, it still has AlphaSubcore on all modules; ship2 isn't reset, it still has AlphaSubcoe
+```
+Note: "not installing on refit variant?" — the same hypothesis independently recorded in an earlier session.
+
+### 1.6 logs.txt — verbatim excerpts (decisive sequences)
+Identity legend for this run: ship1 root FM `1091b` = "ISS Polaris Traveller", tree root `tbj_overslaught_Start`; ship2 root FM `13262` = "ISS 10000 Lightyears", tree root `tbj_overslaught_Standard`. Transient refit child FMs: `1363b`, `136fd`, `13b35`, `13df7`, `13ced`, `13841`, `1388e`… (shipName `null`).
+
+(a) Initial single-module writes reach **two** graphs (campaign child + its refit/display clone) because the selected transient child is itself `RefitButtonAdder.member`, so its `checkRefitVariant()` returns the display clone:
+```
+1317220 writeThrough()	findRootVariant -> root: tbj_overslaught_left_Start @163825444, rootMember.id: 1363b, sameAsMemberVariant: true
+1317221 writeThrough()	tagging node tbj_overslaught_left_Start @163825444 inside graph tbj_overslaught_left_Start @163825444
+1317221 writeThrough()	tagging node tbj_overslaught_left_Start @1335605937 inside graph tbj_overslaught_left_Start @1335605937
+```
+
+(b) Ship-1 whole-ship install — root-anchored writes collapse to the **one** campaign root graph; no refit/display graph ever appears as a `graph` (checkRefitVariant(root) == root.variant while a child is selected):
+```
+1470356 writeThrough()	findRootVariant -> root: tbj_overslaught_Start @449153002, rootMember.id: 1091b, sameAsMemberVariant: true
+1470399 writeThrough()	tagging node tbj_overslaught_right_Start @9719740 inside graph tbj_overslaught_Start @449153002
+1562284 writeThrough()	tagging node tbj_overslaught_right_Start @2139410348 inside graph tbj_overslaught_Start @449153002
+1562285 writeThrough()	tagging node tbj_overslaught_right_Start @2139410348 inside graph tbj_overslaught_Start @449153002
+1562291 writeThrough()	tagging node tbj_overslaught_Start @449153002 inside graph tbj_overslaught_Start @449153002
+```
+
+(c) Ship-2 whole-ship install — same collapse:
+```
+1515595 writeThrough()	findRootVariant -> root: tbj_overslaught_Standard @728932568, rootMember.id: 13262, sameAsMemberVariant: true
+1515595 writeThrough()	tagging node tbj_overslaught_left_Standard @1199934217 inside graph tbj_overslaught_Standard @728932568
+1515597 writeThrough()	tagging node tbj_overslaught_Standard @728932568 inside graph tbj_overslaught_Standard @728932568
+1515612 [1] returning it	it.shipName: ISS 10000 Lightyears, member.shipName: null
+```
+
+(d) Zero cross-ship: every `_Start` write is `1091b`-anchored, every `_Standard` write is `13262`-anchored; no `SKIPPING cross-ship mirror` line ever fired; no foreign target tagged.
+
+(e) Transient-child anchor churn (branch [1] returns `RefitButtonAdder.getRootMember()` for every transient child):
+```
+1470453 [1] returning it	it.shipName: ISS Polaris Traveller, member.shipName: null
+1562295-1562335 [1] returning it	it.shipName: ISS Polaris Traveller, member.shipName: null   (repeated ~10x)
+```
+
+### 1.7 logs2.txt — diagnostic sample (older session; the `toString()` logging this plan removes)
+```
+addPostDescriptionSection | member=10a91 variant=tbj_overslaught_Standard mods=... ShipModifications{bandwidth=58.0, exotics=ETExotics{... exoticData={ShipRepulsorSystem=ExoticData@f77d36e3, AlphaSubcore=ExoticData@1eb51e37}}...
+addPostDescriptionSection | member=10a91 variant=tbj_overslaught_left_Standard ... exoticData={FullMetalSalvo=ExoticData@9558dbd5, AlphaSubcore=ExoticData@1eb51e37}}...
+addPostDescriptionSection | member=10a91 variant=tbj_overslaught_right_Standard ... exoticData={SpooledFeeders=ExoticData@b266a2d0, AlphaSubcore=ExoticData@1eb51e37}}...
+```
+AlphaSubcore's `ExoticData@1eb51e37` is the **same instance** across every module — whole-ship tag semantics, shared.
+
+## 2. Root cause
+1. `checkRefitVariant()` returns `RefitButtonAdder.variant` only when `RefitButtonAdder.member == this`, else `this.variant` (RefitButtonAdder.kt:490-495). While a child is edited, the root's call collapses to the campaign root → evidence 1.6(b)/(c).
+2. `writeThrough` mirrors only `member.variant` + resolved root + `member.checkRefitVariant()`; it **never adds `getRefitDisplayVariant()`** (VariantTagProvider.kt:207-219). So the edited ship's live display tree is not re-tagged/applied by root-anchored whole-ship writes.
+3. Strip side **is** display-aware (`removeHullmodEverywhere` strips `getRefitDisplayVariant()`, ExoticaTechHM.java:243-246) — the install/tag side has no counterpart. Every "works only after Refit→Cargo→Refit" = the display tree being re-derived from the (correct) campaign tree on screen switch.
+4. Duplication (4 AlphaSubcores, step 14): clones proliferate via `fixVariant` (ExoticaTechHM.java:105); reads don't dedupe.
+5. Identical-root twins can't be told apart by hullVariantId strings — only FleetMember id can.
+
+## 3. Design (lean, single-shot)
+**Principle:** authoritative writes live on the campaign tree; campaign + refit + **display** graphs are treated symmetrically on install **and** remove; display-tree inclusion is attributed O(1) from refit state (no fleet scan, no fuzzy matching, identical-hull-safe); reads dedupe.
+
+### 3.1 Display-tree gate (replaces Fix 1's string gate — and the reachability idea)
+- refit closed ⇒ `getRefitDisplayVariant()==null` and `getRootMember()==null` are cleared together (RefitButtonAdder.kt:80-89) ⇒ gate no-ops, zero work.
+- refit active ⇒ include the display tree iff `getRootMember()?.id == actorRootId`, where `actorRootId = actor.id` when `actor.shipName != null`, else `getRootMember()?.id` (transient child of the refit ship).
+- Applied identically in `getWholeVariantGraph` step 3 **and** in `writeThrough` mirrors.
+- Why not the membership/hullId-scan idea: a display clone is itself a non-member fake object, so "not a fleet member's variant ⇒ include" would wrongly include ship B's display tree when walking ship A — the exact pre-Fix cross-ship vector. Refit state attributes possession in O(1) with zero compares against other ships.
+
+### 3.2 Symmetric hullmod/listener + stats refresh (covers the OP read path without a diagnostic run)
+On install **and** remove, after tag writes, apply/scrub the exotica hullmod and refresh `statsForOpCosts` across campaign + refit + display graphs — mirroring what remove already does (dual-scrub of `parentFleetMember.stats` + `variant.statsForOpCosts`, HullmodExoticHandler.kt:374-390). This covers every candidate OP read object (display clone / campaign node / stale stats) regardless of which one the refit bar binds to — no extra diagnostic run needed. Also covers the root member's own stats. Implemented as `HullmodExotic.refreshStatsEffectsAcrossShipGraphs(rootMember, apply=…)`, called from `onInstall` (apply=true) and `onDestroy` (apply=false); each graph node is gated on `hasHullMod` before apply/scrub so skipped-install modules are never costed. Idempotent: `AlphaSubcoreHM`/`DaemonCoreHM` guard their listener add, others use fixed-id modifyFlat or BaseHullMod no-ops.
+
+> Explicitly NOT in scope: extending the `exoticatech` HULLMOD onto the display tree (an earlier draft added `installHullmodRecursive(getRefitDisplayVariant())` in `ExoticaTechHM.addToFleetMember`). Reverted as over-extension: `exoticatech` is `affectsOPCosts() == false`, the actual OP reducer `et_alphasubcore`+tags already reach the display tree via `getWholeVariantGraph` step 3, and the exoticatech hullmod on the display tree is already delivered by `fixVariant` clone inheritance + the existing backstops (ExoticaTechHM.java:113-131). The hullmod thing was fixed long ago; this plan touches only the tag/OP economy.
+
+### 3.3 Read dedupe
+`addPostDescriptionSection`, the exotics UI, and `getWholeShipMods` key on `(member.id, hullVariantId)` — composite `"memberId:hullVariantId"` key in `ShipModLoader.collectWholeShipMods` scopes the walk so identical-root twins can never dedupe into each other's mods; kills the 4-copy duplication.
+
+### 3.4 Keep
+- `Flows` bookkeeping (`listOfVariantsWeInstalledOn` remains the uninstall iteration source).
+- Note: HEAD carries NO `sameShip` root-id guards (they lived only in the stashed debug layer); the O(1) display-tree gate (§3.1) subsumes their intended cross-ship attribution, and `FindRootVariantMember`'s resolve fifo is untouched. Nothing to resurrect; debug-layer `sameShip` code stays out.
+
+### 3.5 Drop
+- `findRootVariant` `Pair` return → revert to `ShipVariantAPI` (both consumers use `.first` only). Already satisfied at HEAD.
+- All `diagnosticLog` deletions done (FleetMemberUtils: removed helper + `[1]`/`[2]`/`[3]` call sites + `logger`/imports); `ExoticaTechHM.addPostDescriptionSection` trimmed to drop ONLY `mods.toString()` (member/variant/mods summary kept).
+- Keep **exactly one** `AlphaSubcoreHM` listener attach/detach log (added, DEBUG-flavoured INFO) for the verification run; remove after it passes.
+
+## 4. Execution
+1. Inventory diff; confirm touched set; `git checkout HEAD -- <those>` (done, stashed at stash@{0}); delete `logs.txt`, `logs2.txt`, `TEST_RESULT*` (8 files deleted). Debug-layer leak `AlphaSubcore.kt` (`shouldAffectModule` false→true flips, a non-target file the revert missed) also reverted to HEAD — the plan keeps those `= false` overrides.
+2. This doc saved at `plans/plan-hullmod_exotic_installs_on_whole_ship-revision10.txt`.
+3. Implement 3.1 → 3.2 → 3.3 → 3.4 (no behavior change) → 3.5 (cleanup). All applied; final diff reviewed vs HEAD (6 source files: RefitButtonAdder, Extensions, VariantTagProvider, HullmodExotic, ShipModLoader, FleetMemberUtils; AlphaSubcoreHM; minus the reverted ExoticaTechHM display-tree hunk).
+4. Build in IntelliJ (user).
+5. Run TEST_PLAN verbatim once (user); compare against §1.2. Then the identical-root twin scenario: two ships with the same root hullVariantId; install/uninstall AlphaSubcore on one; expect zero effect on the other and no duplication.
+
+## 5. Acceptance
+All 21 TEST_PLAN steps pass; OP reacts on the edited module **immediately** (no screen switch); uninstall resets immediately; no residual AlphaSubcore in descriptions; no 4-copy duplication at any point; zero cross-ship writes including identical-root twins.

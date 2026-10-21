@@ -1,0 +1,137 @@
+REVISION 18 - DIAGNOSTIC: PINPOINT THE POST-UNINSTALL RE-POUR (no behavior change yet)
+======================================================================================
+
+STATUS: IMPLEMENTED (build-mode). Diagnostic-only revision. Requires a test run with
+  HullmodExoticHandler.MIN_LOG_LEVEL=Level.ALL (the user is lowering it) to collect the
+  evidence, then the ONE confirmed cause is fixed in the following revision.
+BASELINE: revision 17 shipped the screen-aware whole-ship anchor. TEST_RESULTS12 (two
+  identical Overslaughts, ship1=f66e, ship2=10526/fbd5) shows the rev-17 fix WORKED on the
+  planet-side uninstall: the whole-graph strip actually runs (writeThrough base-bandwidth-only
+  across the ship's graph), and it stays on the correct ship. But the uninstall is still negated
+  by an immediate re-pour, so OP never resets across the whole ship.
+
+-----------------------------------------------------------------------
+0. EVIDENCE (TEST_RESULTS12.txt, uninstall span ~3018-3032 for f66e, ~3107 for 10526)
+-----------------------------------------------------------------------
+- 3018941-3019057  CHANGE-A onInstall ZERO storms for f66e+fbd5 while on the refit screen
+                  (refit cache null -> ZERO; pre-existing refit-branch behavior).
+- 3024265         exoticatech shop opens (exotica.ogg).
+- 3026098-3026508 STRIP: writeThrough WITHOUT exotics across f66e's WHOLE graph (root, left,
+                  right, display variants) - the rev-17 whole-ship remove DID run.
+- 3027857         shouldInstallHullmodExoticToVariant WARN "there was no install data for this
+                  key HullmodExoticKey{et_alphasubcore, parentFleetMemberId=f66e}" -> LENIENT
+                  no-data branch seeds + returns true -> writeThrough WITH exotics re-pours
+                  left(83)/right(37)/root(89). Same for 10526 at 3107442.
+
+-----------------------------------------------------------------------
+1. CORRECTED MECHANISM (why the re-pour happens)
+-----------------------------------------------------------------------
+Full call graph of onInstall (exhaustive): the only automatic callers are
+  ExoticaTechHM.applyEffectsBeforeShipCreation:596 -> HullmodExotic.applyExoticToStats:283
+  ExoticaTechHM.applyEffectsAfterShipCreation:683  -> HullmodExotic.applyToShip:293
+Both are gated by shouldSkipModification, which does `if (!presentSomewhereOnShip) skip = true`
+(ExoticaTechHM:415), presentSomewhereOnShip being computed from ShipModLoader.getWholeShipMods
+(:569-577). There is NO other re-applier: installThisHullmodExoticToFleetMembersVariant (the
+only re-putExotic + writeThrough) is only called from onInstall's flow callbacks. The ExoticaTechHM
+"self-heal" (isActuallyEmpty -> removeHullmodEverywhere, :554) only strips the HULLMOD, never
+re-adds exotics, so it is NOT the re-pour.
+
+=> A FULLY evicted exotic cannot re-fire. Therefore the re-pour PROVES the eviction/read is
+   incomplete: the presence-read still sees an exotics-bearing ShipModifications on some node
+   after the strip, so the storm faithfully re-fires and the LENIENT no-data branch merely
+   PERMITS the repaint (remove deleted the bookkeeping, so shouldInstall seeds+returns true).
+   The no-data branch is the enabler, NOT the driver.
+
+-----------------------------------------------------------------------
+2. RETRACTION of the "record the clones in installData" theory (do NOT implement that)
+-----------------------------------------------------------------------
+- VariantTagProvider.set:164-171 -> writeThrough:202-235 already mirrors EVERY write onto all
+  object graphs a later read can walk (member.variant, resolved root, checkRefitVariant, refit
+  display tree), fuzzy-matching the node per graph (findVariantInTree:242-258). So a strip on one
+  recorded variant already propagates base-only to every graph - the tag is graph-synchronized
+  BY CONSTRUCTION.
+- invalidateVariantAcrossAll:339-361 purges the ENTIRE fuzzy id-family (left_Start/left_0/...) from
+  EVERY member's cache on every write, so the read cache (get:91-147) cannot serve a stale sibling
+  on the normal path.
+=> Stripping "clones" from HullmodExotic's callbacks is unnecessary (writeThrough already mirrors)
+   and would split the gatekeeping responsibility the user wants kept in HullmodExoticHandler.
+   Recording clone instances in installData would not change real strip coverage. NOT doing that.
+
+-----------------------------------------------------------------------
+3. NARROWED SUSPECTS (to be separated by the rev-18 diagnostics)
+-----------------------------------------------------------------------
+(S1) Stale cache shadowing a stripped tag: VariantTagProvider.get:118-133 serves a cached
+     exotics-bearing value (exact or fuzzy id-family) for a variant whose TAG no longer has
+     exotics / has no tag, because that graph variantId was never re-cached after the strip.
+     (invalidateVariantAcrossAll only purges; it does not re-seed the new base-only value for
+     every mirrored graph id, and writeThrough adds TAGS to graph nodes but does NOT write cache
+     entries for those graph ids.)
+(S2) Write/read root-instance mismatch: the strip's mirror target is
+     findShipScopedRootVariant(member, variant) (FleetMemberUtils:286 - instance/ownership aware,
+     :292 treeInstanceContains, :302), while the presence-read's root is
+     getWholeShipModsData:103 -> resolveRootVariant:119 -> findRootVariantByHullId:332 (FIRST match
+     by hullVariantId across the fleet, no instance/ownership check, ambiguous for two identical
+     hulls). If the strip mirrors onto tree A but the read walks twin tree B, B's nodes keep the
+     exotic -> present stays true.
+(S3) refit-root vs true-root installData key fragmentation (installs recorded under a refit-root
+     key are not covered by a later planet-side true-root remove). Lower likelihood, noted only.
+
+-----------------------------------------------------------------------
+4. WHAT rev-18 ADDS (diagnostic only - zero behavior change)
+-----------------------------------------------------------------------
+(a) ShipModLoader.getWholeShipModsData -> logWholeShipModsDiag (read side, WHERE):
+    transition-gated (fires on gain / change / clear, not every frame). One line per transition:
+      getWholeShipModsData() DIAG member.id=N
+        root=<hullVariantId>@<identityHashCode> refit=<...>
+        nodes=[<hullVariantId>@<identityHashCode>:[exoticKeys], ...]
+    This is the presence decision's own view: it shows the resolved root INSTANCE the read used
+    and exactly which node still reports an exotic, so (S2) and the retained node are pinned
+    directly. Compare the root @identityHashCode against the existing write-side
+    VariantTagProvider.writeThrough "ANCHOR resolvedRootGraph=..." ERROR line for the same member.
+    A "nodes=[] NO_EXOTICS_ANYWHERE" line marks the full clear; a following re-appearance marks
+    the re-pour.
+
+(b) VariantTagProvider.get -> logStaleCacheShadow (read side, WHY - confirms/refutes S1):
+    log-ONCE, fires ONLY in the real bug: a cache-served value HAS exotics while the variant's
+    actual TAG has none (or no tag). Logs served vs tag exotic keys and EXACT/FUZZY source.
+      get() DIAG STALE_CACHE_SHADOW member.id=... variant=<id>@<hash> source=EXACT|FUZZY(..)
+        servedExotics=[...] tagExotics=[...|NO_TAG]
+
+(c) The write side is ALREADY instrumented: VariantTagProvider.writeThrough logs ANCHOR (member,
+    variant, resolvedRootGraph) and ANCHOR-TARGET (graph -> target node, tag) at ERROR. These
+    show exactly what the strip wrote and to which nodes/roots, for comparison against (a)/(b).
+
+-----------------------------------------------------------------------
+5. HOW TO READ THE NEXT RUN / DECISION TREE
+-----------------------------------------------------------------------
+- (b) STALE_CACHE_SHADOW fires  => cause is (S1): a graph variantId is being served a stale cached
+  exotics value shadowing a stripped/no tag. Fix = make the read prefer the authoritative tag (or
+  re-seed the cache for every mirrored graph id on write) in VariantTagProvider (editable).
+- (b) does NOT fire, but (a) shows a node with an exotic after the strip, and the matching
+  write-side ANCHOR-TARGET shows that node/graph was NOT written (findVariantInTree miss or a graph
+  the strip never reached)  => cause is (S2): write/read root-instance mismatch. Fix = make
+  resolveRootVariant reuse the instance/ownership-aware resolution, or union all candidate roots
+  that carry the tag, in ShipModLoader/FleetMemberUtils (editable).
+- (a) shows the read walking a DIFFERENT root @identityHashCode than the write's ANCHOR
+  resolvedRootGraph for the same member  => same (S2), cross-instance. Same fix.
+- (a) shows a node with an exotic AND the write-side ANCHOR-TARGET DID write base-only to that
+  exact node, and (b) did NOT fire  => the strip wrote correctly and something re-ADDED the exotic
+  afterward; re-examine the write-side ordering and any second writer. (Not expected, but kept as
+  a branch.)
+
+-----------------------------------------------------------------------
+6. FILES TOUCHED (all editable; ExoticaTechHM.java, AlphaSubcore.kt, DaemonCore.kt untouched)
+-----------------------------------------------------------------------
+- src/exoticatechnologies/modifications/ShipModLoader.kt
+    * import AnonymousLogger + org.apache.log4j.Level; private val lastWholeShipDiag.
+    * getWholeShipModsData: build variantsOut, call logWholeShipModsDiag.
+    * collectWholeShipMods: carry variantsOut alongside result (unchanged walk order/logic).
+    * new private logWholeShipModsDiag (transition-gated read-side DIAG above).
+- src/exoticatechnologies/modifications/VariantTagProvider.kt
+    * companion: private var staleShadowLogged (log-once).
+    * get: call logStaleCacheShadow at the EXACT and FUZZY cache-serve returns.
+    * new private logStaleCacheShadow (STALE_CACHE_SHADOW detector above).
+- plans/plan-hullmod_exotic_installs_on_whole_ship-revision18.txt (this file).
+
+NOTE: no local kotlinc - the user rebuilds and reruns; validate with `git diff -w` and the
+  Level.ALL in-game run.

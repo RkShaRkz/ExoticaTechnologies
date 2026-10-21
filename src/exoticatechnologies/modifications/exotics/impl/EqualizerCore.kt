@@ -182,7 +182,9 @@ class EqualizerCore(key: String, settings: JSONObject) : Exotic(key, settings) {
                     val maxRangeRatio = (it.spec.maxRange - getUpperRangeLimit(member, mods, exoticData)) / 100f
                     // Finally, calculate the buff by
                     val buff = rangeDecreaseDamageIncrease * maxRangeRatio.coerceAtLeast(0f)
-                    // Since the 'buff' will only determine the multiplier, e.g. 2.5, and using that with modifyPercent will apply only a 2.5% bonus, we need to scale it up
+                    // Since the 'buff' will contain the percentage-increase, e.g. 100 in the example of a weapon with 1800 range
+                    // which means (1800-800) => 1000, gaining a 10% increase for every 100 range over 800 range, this
+                    // effectively yields a 100% increase in damage
                     damage.modifier.modifyPercent(buffId, buff)
                 }
 

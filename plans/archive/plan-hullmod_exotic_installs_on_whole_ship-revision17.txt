@@ -1,0 +1,121 @@
+REVISION 17 - SCREEN-AWARE WHOLE-SHIP ANCHOR (CROSS-SHIP LEAK + PLANET-SIDE UNINSTALL NO-OP)
+================================================================================================
+
+STATUS: IMPLEMENTED (build-mode). Decisions locked via Q&A.
+BASELINE: revision 16 shipped the symmetric full-graph child flows (install and remove both
+  iterate the FULL recorded variant graph). TEST_RESULTS11 + logs.txt exposed two regressions
+  that share ONE root cause: the whole-ship anchor (resolveWholeShipRootMember) trusted the
+  RefitButtonAdder refit-root cache UNCONDITIONALLY, even on the planet-side exoticatech dialog
+  where runningFromRefitScreen() == false but the refit tab is still "current" so the cache holds
+  the LAST ship refitted (stale) - or nothing (null).
+
+-----------------------------------------------------------------------
+0. EVIDENCE (logs.txt = the real play session; TEST_RESULTS11 has NO remove logs at all)
+-----------------------------------------------------------------------
+- THE PHAETON LEAK (logs.txt:365-381): a fleet-wide applyEffectsBeforeShipCreation re-apply
+  storm (exotica.ogg playing = planet-side exoticatech shop; OP listener attaches for the real
+  ships f66e/11ddd) ran getWholeVariantGraph(member=f672) on the PHAETON, then:
+      shouldInstall... there was no install data for this key
+        HullmodExoticKey{hullmodExoticId=et_alphasubcore, parentFleetMemberId=f672}
+        -> seeds bookkeeping under the Phaeton and returns true (LENIENT no-data branch)
+      writeThrough() ANCHOR member.id = f672 ... phaeton_Standard ... "exotics":{"AlphaSubcore":{...}}
+        -> pours AlphaSubcore onto the Phaeton
+  The flow's parentFleetMember was the Phaeton because onInstall's CHANGE-A anchor
+  (resolveWholeShipRootMember() -> RefitButtonAdder.getRootMember()) resolved to it from the
+  STALE refit cache.
+- THE NO-OP UNINSTALL (logs.txt:169 / 1692 / 1733): onDestroy fired 3 times and EVERY time
+  bailed at the anchor (refit cache null on the planet screen):
+      onDestroy() CHANGE-A resolveWholeShipRootMember() returned null ... ZERO whole-ship work
+  So CheckAndRemove* flows NEVER ran: no hullmod/tag/OP removal on root or other children, and
+  the re-apply storm re-pours the whole set the moment the partial remove is done ("comes back
+  on its own", "planetside uninstall impossible").
+
+-----------------------------------------------------------------------
+1. CHANGE 1 - FleetMemberUtils.resolveWholeShipRootMember(member) BECOMES SCREEN-AWARE
+-----------------------------------------------------------------------
+- src/exoticatechnologies/util/FleetMemberUtils.kt (~:379):
+  - Signature: `resolveWholeShipRootMember(): FleetMemberAPI?` -> `resolveWholeShipRootMember(member: FleetMemberAPI): FleetMemberAPI?`
+  - REFIT BRANCH (runningFromRefitScreen() == true): KEPT verbatim (CHANGE A, plan-rev11) -
+    anchor on the STABLE refit-root FleetMember id found via RefitButtonAdder.getRootMember();
+    return null -> caller MUST do ZERO whole-ship work. This is the ONLY place the refit cache
+    may be trusted; the refit is exactly-one-ship and its root id is stable against the
+    transient child-FM id churn.
+  - NON-REFIT BRANCH (planet-side exoticatech / campaign / simulation): `return member`. The
+    entering member IS the real root FleetMemberAPI the flow was invoked for - the re-apply
+    storm resolves it from stats (findMemberForStats), the exoticatech shop from its selected
+    ship - and its id is stable there. NEVER a cross-fleet fuzzy scan.
+  - The stacked stale doc comment (old fuzzy "Campaign/simulation" + fuzzy fallback paragraphs)
+    is UPDATED to describe the two-branch resolution and WHY the cache must not be consulted
+    outside the refit screen (the planet dialog reports the REFIT tab current while the cache
+    holds the last-refitted ship).
+  - The `//TODO introduce a hint 'fleet' argument ...` placeholder is resolved by this change.
+
+-----------------------------------------------------------------------
+2. CHANGE 2 - HullmodExotic ONINSTALL / ONDESTROY PASS `member` (resolve the same TODO)
+-----------------------------------------------------------------------
+- src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt:
+  - onInstall (~:74-86) and onDestroy (~:139-151): `FleetMemberUtils.resolveWholeShipRootMember()`
+    -> `FleetMemberUtils.resolveWholeShipRootMember(member)`.
+  - Inline CHANGE-A comment blocks UPDATED to the screen-aware behavior (refit branch keeps
+    CHANGE-A semantics; non-refit anchors on the entering member; planet-side uninstall no
+    longer bails at the anchor).
+  - The `//TODO pass the 'member' fleet here as a hint ...` placeholders in both paths are
+    resolved (that hint is exactly the new parameter).
+  - Error-log strings kept byte-identical; they are now only reachable on the refit screen
+    with an uncached/absent refit root.
+- NO locked files touched (ExoticaTechHM.java, AlphaSubcore.kt, DaemonCore.kt).
+
+-----------------------------------------------------------------------
+3. WHY THIS FIXES BOTH SYMPTOMS
+-----------------------------------------------------------------------
+- PLANET-SIDE UNINSTALL: onDestroy no longer returns at a null anchor on the planet screen;
+  CheckAndRemoveFromAllChildModulesVariants iterates rev-16's recorded listOfVariantsWeInstalledOn
+  (the same full graph the install wrote), so hullmod + tag + OP reset across the ROOT and ALL
+  children; the re-apply storm then finds a clean tree (isActuallyEmpty strip) instead of
+  re-pouring the whole set.
+- PHAETON LEAK: the storm's onInstall anchors on the ACTUAL ship being edited (its own campaign
+  tree via getWholeVariantGraph), so the Phaeton no longer appears in any other ship's graph.
+  New pollution stops; the ALREADY-polluted Phaeton in the user's save is out of scope (user
+  will handle it - they confirmed; it is self-healable via the fixed destroy path since install
+  data exists under key (et_alphasubcore, f672)).
+- REFIT SCREEN UNCHANGED: runningFromRefitScreen() == true keeps the exact CHANGE-A path; the
+  refit-screen exoticatech overlay is a custom panel (no interaction dialog) so it stays on the
+  refit branch. Identical-hull twins remain protected (no fuzzy scan anywhere).
+
+-----------------------------------------------------------------------
+4. FILES TOUCHED
+-----------------------------------------------------------------------
+- src/exoticatechnologies/util/FleetMemberUtils.kt
+  - resolveWholeShipRootMember(member): screen-aware two-branch anchor; doc updated.
+- src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt
+  - onInstall / onDestroy: pass `member`; anchor + TODO comments updated.
+- plans/plan-hullmod_exotic_installs_on_whole_ship-revision17.txt: this file.
+
+-----------------------------------------------------------------------
+5. VERIFY (user rebuilds and reruns)
+-----------------------------------------------------------------------
+1. Planet-shop INSTALL of AlphaSubcore on an Overslaught: OP spread across the WHOLE ship;
+   ZERO writeThrough/install data recorded for ANY other fleet ship (esp. no Phaeton).
+2. Planet-shop UNINSTALL from one child module: hullmod + tag + OP reset on the ROOT and ALL
+   other children; exoticatech hullmod persists only if other exotics remain; NO re-pour / auto
+   re-heal afterwards.
+3. Refit-screen regression: install + uninstall still full-graph symmetric (rev-16 behavior),
+   no CHANGE-A ZERO spam for the ship being refitted.
+4. Identical-hull twins (two Phaetons / two Overslaughts): installs never cross-pollute between
+   their graphs.
+5. Phaeton pollution: user scrubs the existing polluted save separately; confirm no re-accumulation.
+
+-----------------------------------------------------------------------
+6. RATIONALE NOTES (session decisions)
+-----------------------------------------------------------------------
+- Why screen-aware instead of fuzzy re-root: the user's Q&A answer for the non-refit anchor was
+  "Anchor on entering member" - minimal change, no cross-fleet fuzzy scan (that scan is exactly
+  the clobber CHANGE-A was built to prevent). The exoticatech-from-refit-module-tab edge can't
+  reach this branch (the refit overlay is not an interaction dialog, so it still uses the refit
+  branch), so no instance-ownership re-root logic was needed.
+- Phaeton cleanup: user decision "dont worry about the phaeton, you fix the root cause and i'll
+  fix this other problem" - the polluted save is out of scope; the plan-revision16 //TODO
+  (graph-enumerated shipModificationMap member-id purge on a surviving uninstall) is retained
+  as-is for future test plans, unchanged by this revision.
+- Kept: CREATE PLAN PRIOR, CHANGE-A refit-branch anchor (SRP), LENIENT no-data branch, runningFrom
+  RefitScreen gating in getWholeVariantGraph, symmetric full-graph flows (rev-16), ET_MODMAP TODO.
