@@ -259,11 +259,7 @@ object FleetMemberUtils {
         // Same-fleet fuzzy ONLY when unambiguous — two ships in the same fleet must never be
         // resolved by fuzzy first-match (that is the clobbering itself).
         member.fleetData?.fleet?.let { fleet ->
-            // sometimes we get weird problems here while loading a game so apply caution
-            // SAFETY NET - MUST check for fleet data first before proceeding further
-            // because fleet.membersWithFightersCopy implicitly queries fleetData
-            if (fleet == null || fleet?.fleetData == null) return@let
-            val ownIds = fleet.membersWithFightersCopy.mapNotNull { it.id }.toSet()
+            val ownIds = fleet.membersWithFightersCopySafe.mapNotNull { it.id }.toSet()
             val sameFleet = candidates.filter { it.id in ownIds }
             if (sameFleet.size == 1) return sameFleet[0].variant
         }
@@ -299,14 +295,13 @@ object FleetMemberUtils {
     @JvmStatic
     fun findRootVariantByHullId(member: FleetMemberAPI, targetVariantId: String): ShipVariantAPI? {
         member.fleetData?.fleet?.let { fleet ->
-            for (fm in fleet.membersWithFightersCopy) {
+            for (fm in fleet.membersWithFightersCopySafe) {
                 val v = fm.checkRefitVariant() ?: continue
                 if (v.hullVariantId == targetVariantId) return v
             }
         }
-        for (fleet in activeFleets) {
-            if (fleet == null) continue
-            for (fm in fleet.membersWithFightersCopy) {
+        for (fleet in activeFleets.filterNotNull()) {
+            for (fm in fleet.membersWithFightersCopySafe) {
                 val v = fm.checkRefitVariant() ?: continue
                 if (v.hullVariantId == targetVariantId) return v
             }
@@ -381,8 +376,8 @@ object FleetMemberUtils {
             val refitRoot = RefitButtonAdder.getRootMember() ?: return null
             val targetId = refitRoot.id
             for (fleet in activeFleets) {
-                if (fleet == null) continue
-                fleet.fleetData?.fleet?.membersWithFightersCopy
+                fleet.membersWithFightersCopySafe
+                        // never remove .filterNotNull()
                         ?.filterNotNull()
                         ?.firstOrNull { it.id == targetId }
                         ?.let { return if (rootCarriesModule(it, member)) it else null }
@@ -424,18 +419,13 @@ object FleetMemberUtils {
     private fun matchingRootMembers(member: FleetMemberAPI, childId: String): List<FleetMemberAPI> {
         val result = LinkedHashSet<FleetMemberAPI>()
         member.fleetData?.fleet?.let { fleet ->
-            // sometimes we get weird problems here while loading a game so apply caution
-            // SAFETY NET - MUST check for fleet data first before proceeding further
-            // because fleet.membersWithFightersCopy implicitly queries fleetData
-            if (fleet == null || fleet?.fleetData == null) return@let
-            for (fm in fleet.membersWithFightersCopy) {
+            for (fm in fleet.membersWithFightersCopySafe) {
                 val v = fm.variant
                 if (v.stationModules.isNotEmpty() && treeContains(v, childId, true)) result.add(fm)
             }
         }
-        for (fleet in activeFleets) {
-            if (fleet == null || fleet?.fleetData == null) continue
-            for (fm in fleet.membersWithFightersCopy) {
+        for (fleet in activeFleets.filterNotNull()) {
+            for (fm in fleet.membersWithFightersCopySafe) {
                 val v = fm.variant
                 if (v.stationModules.isNotEmpty() && treeContains(v, childId, true)) result.add(fm)
             }
@@ -465,7 +455,7 @@ object FleetMemberUtils {
         // Try member's own fleet first (works in refit, campaign, and simulation)
         if (member.fleetData != null && member.fleetData.fleet != null) {
             val fleet = member.fleetData.fleet
-            for (fm in fleet.membersWithFightersCopy) {
+            for (fm in fleet.membersWithFightersCopySafe) {
                 if (fm.variant != null && targetVariantId == fm.variant.hullVariantId) {
                     if (firstMatch == null) firstMatch = fm
                     if (variantTreeOwns(fm.variant, member)) {
@@ -476,8 +466,7 @@ object FleetMemberUtils {
         }
         // Fallback: check active campaign fleets
         for (fleet in activeFleets) {
-            if (fleet == null || fleet.fleetData == null) continue
-            for (fm in fleet.membersWithFightersCopy) {
+            for (fm in fleet.membersWithFightersCopySafe) {
                 if (fm.variant != null && targetVariantId == fm.variant.hullVariantId) {
                     if (firstMatch == null) firstMatch = fm
                     if (variantTreeOwns(fm.variant, member)) {
@@ -531,3 +520,13 @@ fun FleetMemberAPI.propagateFromVariantTree(hullmodId: String) {
 fun FleetMemberAPI.getFleetModuleSafe(): CampaignFleetAPI? {
     return findFleetForVariant(this.variant, this)
 }
+
+val CampaignFleetAPI?.membersWithFightersCopySafe: List<FleetMemberAPI>
+    get() = if (this == null || this?.fleetData == null || this?.fleetData?.fleet == null || this?.fleetData?.fleet?.fleetData == null) {
+        // sometimes we get weird problems here while loading a game so apply caution
+        // SAFETY NET - MUST check for fleet data first before proceeding further
+        // because fleet.membersWithFightersCopy implicitly queries fleetData
+        listOf()
+    } else {
+        this.membersWithFightersCopy
+    }
