@@ -361,11 +361,6 @@ open class HullmodExotic(
             for (graphVariant in memberGraphVariantAPIs) {
                 removeHullmodFromVariant(graphVariant)
 
-                exoticHullmod.removeEffectsBeforeShipCreation(
-                        hullSize = graphVariant.hullSpec.hullSize,
-                        stats = graphVariant.statsForOpCosts,
-                        id = exoticHullmod.hullModId
-                )
                 graphVariant.statsForOpCosts?.let { statsForOpCosts ->
                     exoticHullmod.removeEffectsBeforeShipCreation(
                             hullSize = graphVariant.hullSpec.hullSize,
@@ -380,11 +375,6 @@ open class HullmodExotic(
             for (graphVariant in rootMemberGraphVariantAPIs) {
                 removeHullmodFromVariant(graphVariant)
 
-                exoticHullmod.removeEffectsBeforeShipCreation(
-                        hullSize = graphVariant.hullSpec.hullSize,
-                        stats = graphVariant.statsForOpCosts,
-                        id = exoticHullmod.hullModId
-                )
                 graphVariant.statsForOpCosts?.let { statsForOpCosts ->
                     exoticHullmod.removeEffectsBeforeShipCreation(
                             hullSize = graphVariant.hullSpec.hullSize,
