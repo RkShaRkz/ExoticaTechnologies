@@ -6,6 +6,7 @@ import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
+import com.fs.starfarer.campaign.fleet.FleetData
 import exoticatechnologies.campaign.listeners.CampaignEventListener.Companion.activeFleets
 import exoticatechnologies.modifications.exotics.impl.HullmodExotic
 import exoticatechnologies.refit.RefitButtonAdder
@@ -528,5 +529,23 @@ val CampaignFleetAPI?.membersWithFightersCopySafe: List<FleetMemberAPI>
         // because fleet.membersWithFightersCopy implicitly queries fleetData
         listOf()
     } else {
-        this.membersWithFightersCopy
+        //FIXME the next time it blows up in here, get rid of all this nonsense and just replace it with
+        // something like `return try { ... } catch (NullPointerException npe) { listOf() }`
+        this?.let {
+            // lets try something different now....
+            val realFleetData = it.fleetData as FleetData
+            // if realFleetData.sortedMembersWithoutNullFighters is null - return empty list
+            if (realFleetData.sortedMembers != null) {
+                it.membersWithFightersCopy?.let {
+                    it
+                }
+            } else {
+                // invoking FleetDataAPI or CampaignFleetAPI.membersWithFightersCopy will implicitly invoke
+                // FleetData.sortedMembersWithoutNullWithFighters, and check if it's empty.
+                // If it happens to be null - return an empty list.
+                listOf()
+            }
+            // if 'this' or 'this.membersWithFightersCopy' was null, just return an empty list
+            // because FleetData.sortedMembersWithoutNullWithFighters might still be null ...
+        } ?: listOf()
     }
