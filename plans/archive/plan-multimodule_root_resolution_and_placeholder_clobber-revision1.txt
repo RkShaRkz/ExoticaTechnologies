@@ -1,0 +1,195 @@
+# plan-multimodule_root_resolution_and_placeholder_clobber-revision1.txt
+# Reconsolidation against current code (HEAD 78ee74e) + Phase 0 instrumentation.
+#
+# Revision 1 of plan-multimodule_root_resolution_and_placeholder_clobber.txt (base preserved
+# unchanged). Object unchanged: fix "child-module install shows only on the child / loses the
+# exoticatech hullmod" on multi-module ships. This revision does three things the base could not:
+#   1. corrects every stale line reference to the current (post-CR) code,
+#   2. records the current defect analysis re-verified against that code,
+#   3. adds PHASE 0 — re-add the diagnostic instrumentation so a fresh test run can PINPOINT
+#      which defect (and which call path) actually fires before any fix is written.
+# Fix 1 / Fix 2 are retained but explicitly marked PROPOSED — PENDING LOG EVIDENCE.
+
+## 1. Intent
+Installing a Modification (e.g. FullMetalSalvo) on a CHILD module of a multi-module ship
+(e.g. ork_superdread_main_standard) must apply to the WHOLE ship and the exoticatech hullmod must
+persist across refit. Today it applies to the child only and the module loses the hullmod on
+return to refit. Two independent defects are suspected to cause this; this plan instruments the
+code to prove which fires, then fixes it.
+
+## 2. Context / evidence
+- Prior capture: logs.txt (repo root, 11263 lines). Root FM "ef5f" (ork_superdread_main_standard);
+  module FMs transient with NEW ids each refit (thruster_right 102be->10d87; armor_right
+  10467/10ab8/10d17; armor_left ff3c). The root variant OBJECT is recreated repeatedly (rootGraph
+  hash 1381478428 -> 1586923362 -> 1617417760 -> 1841144749) while the hullVariantId STRING stays
+  constant. The id-vs-object mismatch is the root of both defects.
+- The full prior diagnostic set is recoverable from `git stash@{0}` (93 diagnosticLog sites across
+  6 source files). It is based PRE-CR, so every insertion must be adapted to post-CR APIs:
+    * VariantTagProvider.findVariantInTree used a then-private `fuzzyVariantIdEquals` -> NOW
+      `FleetMemberUtils.fuzzyVariantIdEquals`.
+    * FleetMemberUtils.findShipScopedRootVariant used `treeExactContains` -> NOW
+      `treeContains(root, id, false)`.
+    * ExoticaTechHM.applyEffectsBeforeShipCreation used `fuzzyVariantMatch` -> NOW
+      `FleetMemberUtils.fuzzyVariantIdEquals`.
+- FullMetalSalvo.kt test hacks (cargo/armor bonus, afterimage) are ALREADY committed in HEAD; do
+  not re-add them.
+
+## 3. Scope (revised)
+Touch (this revision):
+- src/exoticatechnologies/util/Extensions.kt                     (Phase 0 helper)
+- src/exoticatechnologies/hullmods/ExoticaTechHM.java            (Phase 0 + Fix 2 later)
+- src/exoticatechnologies/modifications/VariantTagProvider.kt    (Phase 0)
+- src/exoticatechnologies/util/FleetMemberUtils.kt               (Phase 0)
+- src/exoticatechnologies/modifications/ShipModLoader.kt         (Phase 0)
+- src/exoticatechnologies/hullmods/exotics/HullmodExoticHandler.kt (Phase 0)
+Do NOT touch:
+- VariantTagProvider.set/remove/writeThrough semantics (uninstall requires them).
+- ShipModFactory.kt / CustomExoticaPanel.kt (Fix 1) — until Phase 1 logs implicate them.
+- ModuleVariantHierarchy public API (only called, not changed).
+
+## 4. Corrected line references (base -> current)
+| Base reference                              | Current code                                |
+|---------------------------------------------|---------------------------------------------|
+| ExoticaTechHM.java:96-101 (root resolve)    | ExoticaTechHM.java:51-60 (rootVariantId :55)|
+| ExoticaTechHM.java:115 (child display gate) | ExoticaTechHM.java:72                       |
+| ExoticaTechHM.java (whole-ship read)        | ExoticaTechHM.java:64                       |
+| ExoticaTechHM.java:344                      | ExoticaTechHM.java:282                      |
+| ExoticaTechHM.java (apply-effects strip)    | ExoticaTechHM.java:536-541                  |
+| ShipModLoader.resolveRootVariant :128       | ShipModLoader.kt:119-123                    |
+| FleetMemberUtils.resolveWholeShipRootMember :461 | FleetMemberUtils.kt:368-386            |
+| ShipModFactory.kt:25/:37/:43/:55/:85/:93    | unchanged                                   |
+| CustomExoticaPanel.kt:45                    | unchanged                                   |
+| ShipModUIPlugin.kt:84                       | unchanged                                   |
+| HullmodExotic.kt:425/:431                   | unchanged                                   |
+| ModuleVariantHierarchy.findRootVariantId:84 | unchanged                                   |
+
+## 5. Current defect analysis (re-verified against HEAD 78ee74e)
+
+### Defect 1 — content-less (bandwidth-only) writes clobber content tags
+- ShipModFactory.generateForFleetMember (ShipModFactory.kt:26-39) and the market overload
+  (:43-58) build a bandwidth-only ShipModifications and persist it with ShipModLoader.set
+  (:37 / :55) when get(member, member.variant) is null. generateForChildModules (:85-96)
+  persists a per-child placeholder at :93.
+- VariantTagProvider.set (VariantTagProvider.kt:147) always does removeFromTags(variant) +
+  addTag (:157-160) then writeThrough (:169). writeThrough (:200-222) fuzzy-matches EVERY object
+  graph by hullVariantId and blindly removeFromTags + addTag (:215-221), so it can replace a real
+  "$$EXOTICA$$" tag on the matching node of the root graph with a content-less one.
+- A SECOND writer is the outer call at CustomExoticaPanel.kt:45
+  (get(member, variant) ?: set(member, variant, generateForFleetMember(member))): even if the
+  factory stops writing, this outer set re-writes the empty mods.
+- NOT YET ISOLATED: generateForChildModules, InstallMethod, and HullmodExotic's uninstall also
+  set with variant != member.variant. The panel as the sole culprit is unproven.
+
+### Defect 2 — root resolution returns null on the first child install
+- ExoticaTechHM.addToFleetMember (ExoticaTechHM.java:55) uses
+  ModuleVariantHierarchy.findRootVariantId, which reads variantIdToParentId — populated only by
+  mapVariantTree / refreshFleetCache. It is refreshed ONLY in the APPLY branch
+  (ExoticaTechHM.java:90-91), i.e. AFTER the decision — so on the first child install it is cold.
+- ShipModLoader.resolveRootVariant:121 has the SAME map dependency: a getWholeShipMods call with a
+  CHILD variant walks only the child while the map is cold.
+
+## 6. PHASE 0 — instrumentation (THE CURRENT ACTIONABLE STEP)
+Re-add the recovered diagnostic set, adapted to post-CR APIs. All output is emitted at Level.ERROR
+so it surfaces under MIN_LOG_LEVEL=WARN.
+
+### 6.1 Helper (Extensions.kt)
+- Inside `object AnonymousLogger`: `@JvmStatic fun diagnosticLog(msg: String) { log("DIAG: $msg", Level.ERROR) }`.
+- Top-level: `fun diagnosticLog(msg: String)` delegating to AnonymousLogger.
+- Top-level dedupe: `diagnosticSeen` (ConcurrentHashMap-backed set) + `fun diagnosticLogOnce(msg)`.
+- Note: the user's shorthand `logger.e(msg, Level.ERROR)` is NOT valid log4j API and is not used;
+  the proven form is the `log("DIAG: $msg", Level.ERROR)` route (-> logger.error).
+
+### 6.2 ExoticaTechHM.java
+- private `diagnosticLog` wrapper -> AnonymousLogger.diagnosticLog.
+- `describeMods(ShipModifications)` / `describeModsList(List<ShipModifications>)`.
+- Sites: addToFleetMember entry (:64), APPLY (:70), REMOVE (:106); findMemberByVariantId START
+  (:145) / OWN-memberFleet (:153) / OWN-activeFleet (:163) / FALLBACK (:167); variantTreeOwns
+  IDENTITY-OWN (:177) / end (:188); removeHullmodEverywhere (:210) / STRIP-refit (:214) /
+  STRIP-display (:227); advanceInCampaign CHILD-REMOVE (:288) / ROOT-REMOVE (:299);
+  applyEffectsBeforeShipCreation STRIP-EMPTY (:540).
+
+### 6.3 VariantTagProvider.kt
+- private `describeMods(ShipModifications?)`.
+- get: TTL-EVICT (:112), CACHE-FUZZY (:121-125), TAG-READ (:135), NULL (:144).
+- set: entry (:147), TAG-ADDED (:160).
+- remove: entry (:175).
+- writeThrough: entry (:200), per-graph matched (:215-221).
+- findVariantInTree: ROOT-MATCH (:235), child (:238-244), RESULT (:245).
+- invalidateVariantAcrossAll: entry (:320), purged (:333).
+- findFuzzyKey: MATCH / NO-MATCH / NO-CACHE (:344-376).
+- getFromVariant: Once (:387).
+- Adapt: `FleetMemberUtils.fuzzyVariantIdEquals`.
+
+### 6.4 FleetMemberUtils.kt
+- findShipScopedRootVariant: HAS-MODULES (:238), entry (:239), memberVariant (:243-245),
+  refitRoot (:249), candidates (:252), instanceCandidate (:253), exactCandidate (:254),
+  sameFleet (:261), NULL (:263). Adapt: `treeContains(..., false)`.
+- findRootVariantByHullId: -> ownFleet / -> activeFleet / -> NULL (:293-308).
+- resolveWholeShipRootMember: -> self (:369-370), NO-REFIT-ROOT (:374), childModule carries
+  (:381), NOT-IN-ACTIVE-FLEETS (:383), notRefit -> self (:385).
+
+### 6.5 ShipModLoader.kt
+- Add `import exoticatechnologies.util.diagnosticLog` + `diagnosticLogOnce` and a private
+  `describe(ShipModifications)`.
+- getWholeShipModsData START/RESULT (:100-113).
+- resolveRootVariant: HAS-MODULES / NO-HIERARCHY-ROOT / foundRoot (:119-123).
+- collectWholeShipMods: per node (:131-147).
+
+### 6.6 HullmodExoticHandler.kt (~20 sites, verbatim)
+- shouldInstallHullmodExoticToVariant entry/RESULT; installHullmodExoticToVariant
+  ALREADY-INSTALLED / STRICT-EXPECTED / STRICT-NOT-EXPECTED / LENIENT; shouldRemove...
+  entry / STRICT-NO-HULLMOD / NO-INSTALL-DATA / STRICT / LENIENT; removeHullmodExoticFromVariant
+  entry / REMOVED / NOT-IN-INSTALLED-LIST / NO-INSTALL-DATA; start/finishUninstallSequenceForMember;
+  CheckAndInstallOnAllChildModulesVariants (graph + MODULE-DECISION + INSTALLED);
+  CheckAndInstallOnMemberModule (entry + DECISION + INSTALLED);
+  CheckAndRemoveFromAllChildModulesVariants (entry + MODULE-DECISION);
+  CheckAndRemoveFromMemberModule DECISION; getInitialVariantsListForMember.
+- `exoticatechnologies.util.*` is already imported.
+
+## 7. Log signals to look for (Phase 0 -> Phase 1 diagnosis)
+Defect 1 (clobber):
+- `VTP.set ... mods=` EMPTY where an earlier `SML.collectWholeShipMods` shows the same node held
+  content; or `VTP.set TAG-ADDED ... tags=1` immediately followed by a decode of emptiness on a
+  previously-full node.
+- Which member/variant triggered it (CustomExoticaPanel vs generateForChildModules vs uninstall).
+Defect 2 (cold root):
+- `ET.addToFleetMember ... rootVariantId=null` on the first child install.
+- `SML.resolveRootVariant ... NO-HIERARCHY-ROOT -> self` when passed a CHILD variant.
+- `FMU.resolveWholeShipRootMember ... -> self` for a child module (unnamed member outside refit).
+
+## 8. PROPOSED fixes (retained; to be confirmed/refined by Phase 0 logs)
+Fix 1 (approved option (a)) — non-destructive placeholder writes:
+- ShipModFactory: before persisting a placeholder, resolve the root
+  (FleetMemberUtils.resolveWholeShipRootMember, fall back to member) and read the whole ship; only
+  persist when no entry satisfies shouldApplyHullmod().
+- CustomExoticaPanel.kt:45: drop the outer set -> `get(...) ?: generateForFleetMember(...)`.
+- OPEN (user objection): the panel-clobber hypothesis must be validated with a log BEFORE removing
+  the outer set. Phase 0 supplies that evidence.
+Fix 2 — robust root resolution in addToFleetMember:
+- Primary FleetMemberUtils.resolveWholeShipRootMember; guard on `resolved != member`; hierarchy
+  fallback; keep a boolean child-display gate.
+- OPEN (user objection): the base plan's `refreshAllCaches()` fallback walks every active fleet per
+  call (perf), and the `resolved != member` guard sends every non-refit call to the fallback
+  (e.g. CampaignEventListener.kt:491, DerelictsEFScript.java:112). Phase 0 logs should tell us how
+  often the fallback actually fires before any cache walk is added.
+
+## 9. Verification
+- No local compiler: the user rebuilds the JAR (Windows-side).
+- Static: `grep -c diagnosticLog` ~= 90 in src; no `treeExactContains` / `fuzzyVariantMatch` /
+  bare `fuzzyVariantIdEquals` / `Logger.e` introduced; CRLF preserved.
+- Manual test scenario AFTER the rebuilt JAR (handed to the user):
+  1) Load a save with a multi-module ship (ork_superdread, tbj_overslaught, or an IndEvo station).
+  2) Enter refit; install FullMetalSalvo on a CHILD module.
+  3) Observe: does the effect show on the whole ship? does the exoticatech hullmod appear on the
+     root + all modules?
+  4) Confirm refit; re-enter refit; observe whether the hullmod survived.
+  5) Also test: install on the ROOT; install then remove on a child (uninstall path); and a
+     single-module ship (AlphaSubcore) as the control.
+  6) Capture starsector.log (or logs.txt) and hand it back for Phase 1 diagnosis.
+
+## 10. Closure criteria
+- Phase 0 logs pinpoint which defect(s) fire and on which call path.
+- Then Phase 1 fixes are written (as a further revision), verified statically, and re-tested.
+- Child-module install shows on the whole ship; hullmod persists across refit; root install, child
+  uninstall, single-module install all unregressed.
+- Only then strip the temporary diagnostics as a separate pass.

@@ -1,0 +1,33 @@
+# VariantTagProvider Cache Rework — Abstract Plan
+
+## Purpose
+The cache is the per-ship (FleetMemberAPI) store of `ShipModifications` for a ship's root and every module. Its high-level purpose is to avoid re-parsing the JSON Exotica tag on every frame for every ship: parse once per ship, serve cheaply afterward. Both matter — it has to be organized correctly *and* it has to keep the parse off the hot path.
+
+## Core Invariant
+The cache must never cause a ship to read different mods than its current durable tags contain. Since a hit is a plain lookup, this is guaranteed by invalidating on every write — not by checking anything on read. A read returns exactly what the tags say: a present tag with no mods is an empty `ShipModifications`; `null` means no EXOTICA tag at all.
+
+## Design
+1. **Structure — per-ship (FleetMemberAPI), per-module.** The cache holds one entry per (ship, module-variant), covering the root and all children. Module variants are addressable through the ship, so the whole ship's mods are reachable from a single root entry. A hit is a map lookup; the parse happens only on a miss.
+2. **Read path.** Parse once on a miss, store the result, serve it on every subsequent hit. No tag-string memorization, no per-hit re-validation, no recovery logic, no tag mutation. Module clones are served by prefix matching, not by tag comparison. A variant that carries an EXOTICA tag returns exactly what the tag says — empty `ShipModifications` if the tag is empty, never `null`.
+3. **Write path — where correctness lives.** Every install/uninstall invalidates the cached data for that ship across *all* instances and aliases it may be read through. The cache holds the same ship under multiple FleetMemberAPI instances (campaign, combat, modules, refit); a write arriving through one instance must purge the entries under the others too — purged by the written variant's id (exact + prefix), which is stable across instances even when the FleetMemberAPI object is not. Writes are rare, the purge is cheap, and it is the only staleness defense the cache needs.
+4. **Refit-variant mirror rule.** Any operation applied to a `ShipVariantAPI` (write, clear, invalidate) is also applied to its `getRefitVariant()`. They are two views of the same durable state and must never diverge.
+5. **Eviction — for boundedness, not correctness.** Replace the call-count whole-cache clear with deterministic, per-member, age-based eviction (game days from last write). When the game clock is unavailable (main menu), treat entries as expired so the cache stays bounded everywhere — already validated by the flat main-menu cache size. Nothing evicts unrelated members and nothing bulk-fires mid-combat. TTL bounds memory from transient members (menu ships, clones); it does not fix stale data, because stale data is fixed by the write path.
+6. **Unified read path.** Campaign, combat, refit, and fleet UI all use the same cache — no context bypasses it. Live refit edits are covered by write invalidation, so the UI needs no special-casing.
+
+## Hot-Path Constraints
+- A hit costs a map lookup. No JSON, no string building, no string compares.
+- The eviction check is a single cheap numeric comparison.
+- Parsing occurs only on a miss: a ship's first read this session, or after eviction/invalidation.
+
+## Success Criteria
+- Exotics appear in the hullmod description immediately after install.
+- The hullmod applies, with buffs and highlights, in combat — on the root and every module.
+- Eviction is provable in the logs and cache size stays bounded, with no whole-cache clears.
+- No stale or empty data is served after an install/uninstall cycle.
+- Deterministic: same inputs, same results.
+
+## Save Compatibility
+We strive hard not to break existing saves. Save-compatibility decisions belong to the user, not the design doc. A forced save break is acceptable only as the least-acceptable last resort.
+
+## Guardrails
+No read-side recovery machinery, no validation wrapper types, no diagnostic probes. The cache is a lookup that holds a ship's per-module mods; correctness lives in the write path. Implementation detail is deferred until we're back on the `c7c2467fe` baseline and can choose the least invasive change that satisfies the invariant.

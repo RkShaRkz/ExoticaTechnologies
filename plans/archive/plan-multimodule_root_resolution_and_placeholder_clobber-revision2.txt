@@ -1,0 +1,100 @@
+# plan-multimodule_root_resolution_and_placeholder_clobber-revision2.txt
+# Phase 1 implementation record. Base + revision1 preserved unchanged.
+#
+# Revision 1 instrumented the code (Phase 0) and left Fix 1 / Fix 2 marked PROPOSED-PENDING-LOG.
+# This revision records the Phase 1 fix that the evidence actually justified, the deviations from
+# revision1's proposed fixes, and the test evidence that closed the plan.
+
+## 1. Phase 1 diagnosis (what the logs proved)
+The instrumented runs isolated ONE defect:
+- Defect 2 (cold root resolution) FIRED. On the first child-module install,
+  ModuleVariantHierarchy.findRootVariantId returns null (the map is populated only after the APPLY
+  branch's refreshFleetCache), so both call sites fell back to "self":
+    * ExoticaTechHM.addToFleetMember -> rootVariantId=null, rootMember=<child>.
+    * ShipModLoader.resolveRootVariant -> NO-HIERARCHY-ROOT -> self.
+- Defect 1 (bandwidth-only placeholder clobbers a content tag) did NOT reproduce. No
+  "VTP.set ... mods=<empty>"-over-a-full-node, no empty decode on a previously-full node. The
+  panel-clobber hypothesis (CustomExoticaPanel.kt:45) was therefore not actioned.
+
+Counting evidence (DIAG sites, Level.ERROR):
+- logs1 (pre-fix): SHIP-SCOPED 0 ; NO-HIERARCHY-ROOT 350 ; child installs anchored to self.
+- logs2 (fixed, targeted): SHIP-SCOPED 257 ; NO-HIERARCHY-ROOT 0 ; child installs anchored to root.
+- logs3 (fixed, repeat/refit): SHIP-SCOPED 1453 ; NO-HIERARCHY-ROOT 203 (unrelated lookups) ;
+  rootVariantId=null 1 (named single-root ship, correct).
+- logs4 (fixed, broad stress): 21 ships / 23 installs / 17 distinct multi-module hulls all anchored
+  to root ; rootVariantId=null 4 (all named single-root ships) ; no exceptions ; no clobber.
+
+## 2. Phase 1 fix as implemented
+
+### 2.1 ExoticaTechHM.addToFleetMember
+- Anchor first: `FleetMemberAPI resolvedRootMember = FleetMemberUtils.resolveWholeShipRootMember(member);`
+  fall back to `member` when null.
+- Derive `rootVariantId`:
+  - when `resolvedRootMember != member`: `ModuleVariantHierarchy.findRootVariantId(resolvedRootMember.variant.hullVariantId)`,
+    falling back to the resolved root's own `hullVariantId` when the hierarchy is still cold;
+  - else: `ModuleVariantHierarchy.findRootVariantId(variant.hullVariantId)` (original path).
+- `rootMember = resolvedRootMember`; when `rootVariantId != null` also map it back to a live member
+  via `findMemberByVariantId`.
+- Child-display gate: `boolean isChild = (rootMember != member) || (rootVariantId != null);`
+  replaced the old `if (rootVariantId != null)` so the child's display variant still receives the
+  hullmod even when the hierarchy id could not be derived.
+
+### 2.2 ShipModLoader.resolveRootVariant
+- Prefer the ship-scoped resolver first:
+  `val shipScopedRoot = FleetMemberUtils.findShipScopedRootVariant(member, variant)`
+  and return it when non-null.
+- Unchanged fallbacks: variant owns station modules -> self; else
+  `findRootVariantId` -> `findRootVariantByHullId` -> variant.
+
+### 2.3 Tag storage unchanged
+VariantTagProvider.set/remove/writeThrough semantics were NOT touched. Child exotics continue to be
+stored on the child variant nodes; only the whole-ship ANCHOR (which root the propagation/collection
+uses) changed. Uninstall keeps stripping through the unchanged provider path.
+
+## 3. Deviations from revision1
+
+### 3.1 Fix 1 (placeholder clobber) dropped
+Revision1 section 8 Fix 1 (ShipModFactory non-destructive placeholder guards +
+CustomExoticaPanel.kt:45 outer-set removal) was NOT implemented. Defect 1 never reproduced, and the
+user objected to changing the panel without log proof that it was the sole culprit. CustomExoticaPanel.kt:45
+is unchanged.
+
+### 3.2 Fix 2 implemented without refreshAllCaches()
+Revision1 / base proposed a `ModuleVariantHierarchy.refreshAllCaches()` fallback that walks every
+active fleet per call. This was rejected as a perf risk (user objection, revision1 section 8). The
+implemented fallback stays on the cheap, ship-scoped attribution path instead.
+
+### 3.3 ShipModLoader.resolveRootVariant pulled into scope
+The base plan section 5 had marked the ShipModLoader "NO-HIERARCHY-ROOT -> self" path as an open
+follow-up; revision1 section 6.5 only instrumented it. It was brought into scope and fixed with the
+same ship-scoped-first preference, because logs1 showed the whole-ship READ was walking only the
+child while the hierarchy map was cold.
+
+### 3.4 Diagnostics
+`diagnosticLogOnce` / `diagnosticSeen` were added in Phase 0 but never used; the final Phase 0 helper
+set was a single `diagnosticLog` route. This matches revision1 section 6.1 being trimmed to what was
+actually needed. All diagnostics were then removed in a separate cleanup pass, leaving diffs vs HEAD
+that contain only the anchor-first fix.
+
+## 4. Files changed
+- src/exoticatechnologies/hullmods/ExoticaTechHM.java
+- src/exoticatechnologies/modifications/ShipModLoader.kt
+Committed by the user as a650621 ("Fix the 'big problem' when installing Exotics on child modules of
+multimodule ships"), followed by 68aac3c ("Latest JAR"). Extensions.kt, VariantTagProvider.kt,
+FleetMemberUtils.kt, and HullmodExoticHandler.kt carry no net change once diagnostics were stripped.
+FullMetalSalvo.kt test scaffolding is unrelated and was intentionally left untouched.
+
+## 5. Verification
+- No local compiler; the user rebuilt the JAR in the IDE.
+- Manual scenarios (revision1 section 9): child install -> whole ship + hullmod on root/all modules;
+  confirm + re-enter refit -> hullmod persists; root install; child uninstall (exercised in the
+  earlier logs.txt run); single-module control unchanged.
+- Static: no `diagnosticLog` / `diagnosticSeen` / `describeMods` / `DIAG:` references remain in src;
+  braces/parens balance matches HEAD; CRLF preserved.
+
+## 6. Closure criteria (revision1 section 10) - all met
+- Phase 0 logs pinpointed Defect 2 (and exonerated Defect 1).
+- Phase 1 fixes written, statically verified, re-tested.
+- Child install shows on the whole ship; hullmod persists across refit; root install, child
+  uninstall, single-module install unregressed.
+- Temporary diagnostics stripped as a separate pass.

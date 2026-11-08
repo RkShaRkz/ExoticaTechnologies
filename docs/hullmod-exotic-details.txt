@@ -1,0 +1,230 @@
+WHOLE-SHIP EXOTIC HULLMOD (ALPHASUBCORE) — OBJECTIVE + POSTMORTEM
+=================================================================
+Sibling doc to modifications-load-save.txt. This one captures *why* the
+whole-ship ExoticHullmod work exists, what actually went wrong, and the
+post-mortem of revisions 1-13. Read this before touching
+plan-hullmod_exotic_installs_on_whole_ship-revisionN.txt files.
+
+1. WHAT "WHOLE-SHIP EXOTIC HULLMOD" MEANS, AND WHY IT EXISTS
+-------------------------------------------------------------
+An ExoticHullmod (AlphaSubcore, the campaign-only "Alpha Subcore" aura) can
+declare it installs on the WHOLE ship (HullmodExotic.installsOnWholeShip()).
+That single declaration drives two orthogonal behaviors which live apart in
+the codebase:
+
+   - INSTALL EXTENT (HullmodExotic.installThisHullmodExotic...): when you
+     install it on ONE module, the exotic is also poured onto every other
+     module of that ship, and the ExoticaTech OP-cost hullmod is attached to
+     every module tab, so the OP dock across the whole ship reports its cost.
+   - EFFECT SHARING (HullmodExotic.shouldShareEffectToOtherModules) is a
+     separate axis and is NOT what this work is about.
+
+2. OBJECTIVE (the definition of done)
+--------------------------------------
+Given a whole-ship ExoticHullmod (AlphaSubcore) on a multimodule ship:
+
+   a) Installing it on ANY module installs the exotic + the ExoticaTech hullmod
+      on EVERY module of that ship (all tabs show the OP cut).
+   b) Uninstalling it from ANY module removes the exotic, the ExoticaTech
+      hullmod, and the OP cost from EVERY module of that ship.
+   c) Zero cross-ship pollution: nothing about ship A's exotic ever lands on,
+      or is read from, ship B - even when both ships share hullVariantId
+      PREFIXES (the twin-_overslaught repro ships).
+   d) No automatic re-installation: after an uninstall completes, no later
+      stats-pass scan re-applies the exotic.
+
+   Acceptance = TEST_PLAN.txt steps 7-10 (uninstall -> OP resets on all
+   modules, no re-install in the log) and 12-21 (ship switch/return, no
+   cross-ship pollution).
+
+   The ORIGINAL user-facing goal (plan-hullmod_exotic_installs_on_whole_ship
+   .txt) was issue #39: the exotic showed up on the refit bar / OP cost of
+   modules it was never meant to touch, and uninstalling from one module left
+   the OP cut behind on the others. Everything since has been the journey to
+   make that true without letting the "whole ship" span the wrong ship.
+
+3. THE PIPELINE A WHOLE-SHIP EXOTIC LIVES IN
+----------------------------------------------
+   - Where it is WRITTEN:
+       HullmodExotic.onInstall(member) -> updateExoticCountAndOps / installations,
+       pours over getWholeVariantGraph(rootMember) (campaign + refit + display
+       trees) via installHullmodOnVariant + ShipModLoader.set(...).
+   - Where it is READ / RE-APPLIED (the re-sync driver):
+       ExoticaTechHM.applyEffectsBeforeShipCreation scan (ExoticaTechHM.java)
+       runs per stats pass; it calls ShipModLoader.getWholeShipMods(rootMember,
+       rootMember.variant); if ANY ShipModifications hasExotic -> applyExoticToStats
+       -> HullmodExotic.onInstall -> whole-ship (re)install.
+       shouldInstallHullmodExoticToVariant (HullmodExoticHandler.kt:48-127) has a
+       no-data branch that returns TRUE (LENIENT design), so a blank read is not
+       an obstacle to the reinstall.
+   - Where it is REMOVED:
+       HullmodExotic.onDestroy flow -> Flows.CheckAndRemoveFromAllChildModulesVariants
+       + Flows.CheckAndRemoveFromMemberModule -> the callbacks call
+       unapplyExoticHullmodAndRemoveExoticaAndHullmod (HullmodExotic.kt:376-398):
+       removeExotic() on the mods object + ShipModLoader.set(clean). THEN the
+       rev-13 purge / strip / refresh tail ran.
+
+4. POSTMORTEM OF REVISIONS 1-13 (the journey)
+---------------------------------------------
+   r1  Anchor the whole-ship install on the ROOT module. Root cause of the
+       original bug beats everything: iterating "module slots" instead of the
+       actual installed-on variants.
+   r2-r4  Stable refit-root marker + whole-ship write-through across graphs;
+       r4 crashed the refit screen (SOE) - graph walk hit a shared object graph;
+       r5 fixed it. Lesson: variant trees for campaign/refit/display must be
+       walked, not blindly merged.
+   r6  Per-stripped-variant unapply walk. r7 dual-stat OP scrub (parent member
+       stats + per-variant statsForOpCosts).
+   r8  moduleMap sole-owner guard so two members can't both claim a variant.
+   r9  Converged the flows into a STRICT/LENIENT "work mode" pair +
+       getWholeVariantGraph as the single graph abstraction. This is the
+       revision that made ship A stop polluting ship B for the first time.
+       ("We had this working 'mostly fine' before we got rid of cross-ship
+       pollution.")
+   r10 Baseline revert / cleanup (the cross-ship fix stayed).
+   r11 CHANGE A: anchor whole-ship work on the STABLE refit-root member id via
+       FleetMemberUtils.resolveWholeShipRootMember(), instead of the transient
+       child FM whose id reshuffles every query (that reshuffle was the vector
+       that re-keyed data onto the OTHER ship). Cross-ship pollution stayed
+       dead after this.
+   r12 Clone-tree pour / strip / refresh: strip permaMods from refit+display
+       clones and refresh OP stats so the refit bar reacts immediately.
+       TEST_RESULTS7: install side clean.
+   r13 Uninstall data purge (removeExoticDataAcrossShipGraphs) - the attempt
+       that FAILED (see section 5).
+
+5. WHY REVISION 13 FAILED - AND THE REAL ROOT CAUSE
+----------------------------------------------------
+   THE SYMPTOM (TEST_RESULTS8, ships 1 and 2):
+     - Uninstall runs and strips everything reachable; the rev-13 purge
+       log-PROVES hadExotic=false on every variant it enumerated (TEST_RESULTS8
+       ~lines 23013-23020 / ship2 ~36140+; timestamps 2012692-2012703,
+       ship2 2072358).
+     - ~1.6s AFTER the uninstall completes, the whole-ship scanner's per-stats
+       pass re-applies the exotic (ship1 2014295-2014333, ~lines 23025-23099;
+       ship2 2073866+). The shouldInstall no-data warn fires (lines 23031,
+       48711), then onInstall re-pours the full graph.
+     - The reinstall's graph contains BRAND-NEW variant instances the uninstall
+       never touched: ship1 campaign-right 1833279918 -> 1654791914, display
+       right 1740797099 -> 614776877; ship2 left module -> 761842015. Born
+       between the uninstall and the re-scan, carrying the exotic.
+
+   WHAT "REMOVE" IS vs WHAT THE UNINSTALL DID:
+     - Removing the exotic from the ship means calling ShipModLoader.remove
+       (ShipModLoader.kt:171-175 -> removeData :35-37). That alone walks ALL
+       providers and does the three things the actual uninstall never did:
+         1. VariantTagProvider.remove -> writeThrough(null) strips the tag and
+            its mirrors on every graph + invalidateVariantAcrossAll drops the
+            exotic from EVERY member's weak cache.
+         2. PersistentDataProvider.remove -> deletes
+            shipModificationMap[member.id], the ET_MODMAP entry keyed by the
+            STABLE fleet-member id. This is the slice that survives saves,
+            member re-instantiation, and refit regeneration.
+         3. ZigguratDataProvider.remove (no-op for normal hulls).
+     - The uninstall instead only called ShipModLoader.set(clean) on the
+       instances alive during onDestroy - overwrite, never remove - and the
+       rev-13 purge GATED its write on (removed == true), so on any node that
+       already looked clean at that instant it wrote NOTHING (certified no-op).
+       The exotic survived in the store keyed by member.id + in tag mirrors a
+       regenerated clone reads; the clone rehydrated it; the scan reinstalled.
+
+   WHY THE onRemoveFromChildModuleCallback ANGLE DOESN'T FIX IT:
+     CheckAndRemoveFromAllChildModulesVariants iterates
+     currentInstallData.listOfVariantsWeInstalledOn (HullmodExoticHandler.kt
+     :922-976) - the variants that existed at uninstall time. The re-installing
+     variants (1654791914 / 614776877 / 761842015) are CREATED ~1.6s later;
+     a callback can never fire for objects that don't exist yet, so callback
+     coverage is structurally unable to purge data that outlives the instance.
+     The data purge is the only path that works: kill the member-id store + all
+     mirrors/caches, and no future clone can rehydrate the exotic.
+
+   ROOT CAUSE (one line):
+     The whole-ship uninstall overwrote the exotic's tags on the instances that
+     happened to exist, but never REMOVED the exotic from the underlying
+     ShipModifications stores (ET_MODMAP by member.id + the variant-tag/cache
+     mirrors across every member), so a regenerated module clone rehydrated it
+     and the per-stats-pass scanner reinstalled it. It was never really
+     actually uninstalled from the underlying ExoticData.
+
+6. REVISION 14 FIX (as implemented)
+------------------------------------
+   Rewrite removeExoticDataAcrossShipGraphs (HullmodExotic.kt:219-246) to do,
+   for EVERY variant in getWholeVariantGraph(rootMember), unconditionally:
+      1. mods = ShipModLoader.get(rootMember, variant)   (current data, if any)
+      2. mods?.removeExotic(this)                        (drop the exotic)
+      3. ShipModLoader.remove(rootMember, variant)       (THE purge: ET_MODMAP
+                                                          + all tag mirrors +
+                                                          all member caches)
+      4. if (mods != null) ShipModLoader.set(rootMember, variant, mods)
+                                                         (clean placeholder so
+                                                          reads stay present)
+   The hadExotic/removed gate and its DIAG screams are deleted (the gate is
+   what made rev-13 a no-op). CHANGE A anchor, the four remove-flows,
+   stripClonePermaMods, the refit/display refresh, and the applyExoticToStats
+   (false) tail all stay.
+
+   WHY IT STOPS THE REINSTALL: with ET_MODMAP + every tag/cache mirror gone,
+   no post-uninstall clone can rehydrate the exotic, the scanner reads clean
+   placeholders, hasExotic is false, onInstall never fires.
+
+7. OPEN THREADS / DELIBERATE LATITUDE
+--------------------------------------
+   - The exact engine object a regenerated clone is cloned from was never
+     proven with a diagnostic run (further tail-chasing was explicitly
+     forbidden). The fix works around it by removing the underlying data
+     wholesale rather than chasing the clone source.
+   - All diagnostics dumped to the console via AnonymousLogger(Level.INFO)
+     with DIAG markers are consumables for a test run; strip them when they
+     stop earning their noise.
+
+8. TEST_RESULTS9 POSTMORTEM + REVISION 15
+------------------------------------------
+   TEST_RESULTS9.txt (one continuous session, timestamps 890636-1108692; the
+   four "// install/uninstall" annotations sit at unreliable boundaries and
+   overlap, so chronology was reconstructed from timestamps, not segment
+   markers) verifies the REMOVE side end-to-end and pinpoints why the test
+   still fails:
+
+   - Both whole-ship uninstalls worked: Change-A + rev-14 purge stripped every
+     graph variant clean (Start ship at ts 999335-999382, Standard at
+     1090289-1090300): tags to bandwidth-only, hullmod removed, stats scrubbed.
+   - The failure is a reinstall ~1.1-6s AFTER the uninstall that pours the
+     exotic back onto freshly regenerated clones. Signature (identical on both
+     ships): getWholeVariantGraph -> shouldInstall "there was no install data"
+     (WARN) -> lenient branch RECREATES the key -> installHullmodOnVariant
+     pours. The targets' hullModsBefore list does NOT contain et_alphasubcore,
+     there is NO resurrection writeThrough (ANCHOR) in the gap, and no
+     CHANGE-A error. Therefore the trigger is an in-memory per-ship decision
+     (data stores are clean), NOT the tag/ET_MODMAP/cache layer. The flows
+     only run from a refit/ExoticaTech screen ("Illegal state detected...")
+     never fires once in the whole log), so the reinstall fingerprints
+     ExoticaTechHM per-member exotic bookkeeping re-asserting the exotic when
+     the refit screen rebuilds the working copy. ExoticaTechHM is locked by
+     user decision, so this path is NOT fixed by rev-15.
+   - PROVEN data-layer hole (independently closed by rev-15): a writeThrough
+     at ts 957759 writes the full exotic tag keyed on MEMBER 12b80 (a child
+     module FM) 50ms BEFORE its shouldInstall - i.e. a module-scoped read
+     resurrected the exotic from shipModificationMap["12b80"] via
+     PersistentDataProvider.get -> super.set. rev-14's purge only removed
+     shipModificationMap[rootMember.id]; entries keyed by child/transient
+     member ids (12a56, 12b80, 12cb6, 12df0) survive and re-dirty a tag on any
+     module-scoped read.
+
+   REVISION 15 FIX (as implemented, HullmodExotic.kt removeExoticDataAcross-
+   ShipGraphs): after the rev-14 per-variant purge, enumerate THIS ship's
+   member ids from the whole graph (rootMember.id + FleetMemberUtils.
+   findModuleMember(variant) for every getWholeVariantGraph variant - resolves
+   child module FMs and refit/display transients by exact stats identity, so
+   the twin's fuzzy-start/_Standard collision cannot bleed across ships), then
+   for each id whose stored ShipModifications hasExotic(this), removeExotic
+   and rewrite shipModificationMap[id] if it still hasAnyModifications, else
+   remove the entry. Keeps other co-installed exotics and bandwidth of the
+   same member; removes ONLY this exotic's data.
+
+   EXPECTED OUTCOME: the PROVEN ET_MODMAP child-keyed resurrection is closed.
+   The observed 1000478/1091986-class reinstall is NOT data-driven and is
+   expected to persist; the next pass needs the ExoticaTechHM bookkeeping
+   scrub or a stack-trace probe (deferred per user decision).
+   Also noted: MIN_LOG_LEVEL = Level.WARN suppressed the flow INFO logs; the
+   rev-14 removed purge DIAG makes purge execution non-auditable (re-enable
+   one line before future diagnostics).

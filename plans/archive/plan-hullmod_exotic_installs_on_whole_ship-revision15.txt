@@ -1,0 +1,99 @@
+REVISION 15 - ET_MODMAP CHILD-KEYED RESERVOIR PURGE
+===================================================
+
+STATUS: IMPLEMENTED (build-mode). Decisions locked via Q&A.
+BASELINE: revision 14 IMPLEMENTED (TEST_RESULTS9 verified the remove-side runs cleanly: both
+  whole-ship uninstalls stripped every graph variant). Test STILL FAILS via a reinstall that is
+  NOT data-driven. Revision 15 closes the one PROVEN data-layer hole left open by rev-14 and
+  ships it; the ExoticaTechHM-bookkeeping reinstall trigger is explicitly out of scope (user
+  decision).
+
+-----------------------------------------------------------------------
+0. TEST_RESULTS9 FINDINGS (one continuous log, ts 890636-1108692)
+-----------------------------------------------------------------------
+- REMOVE SIDE WORKS: Start whole-ship uninstall (ts 999335-999382) and Standard whole-ship
+  uninstall (1090289-1090300) stripped tags to bandwidth-only, removed hullmod + stats on every
+  graph variant. Annotations at lines 4/6474/14524/34755 sit on unreliable boundaries (log is a
+  single sequence, not 4 segments); chronology rebuilt from timestamps.
+- THE FAILURE IS A REINSTALL (~1.1-6s after the uninstall, ts 1000478 and 1091986), identical
+  fingerprint on both ships: getWholeVariantGraph -> shouldInstall WARN "there was no install
+  data for this key HullmodExoticKey{...}" -> lenient branch recreates the key -> installHull-
+  modOnVariant pours onto freshly regenerated clones whose hullModsBefore did NOT contain the
+  exotic/tag. NO resurrection writeThrough (ANCHOR) in the gap, no CHANGE-A error, and the data
+  stores are clean -> the trigger is an in-memory per-ship decision, fingerprinted to
+  ExoticaTechHM.java per-member bookkeeping re-asserting the exotic when the refit screen
+  rebuilds. NOT touched (locked files). Expected to persist after rev-15.
+- PROVEN DATA-LAYER HOLE (this revision's target): at ts 957759 a writeThrough wrote the FULL
+  exotic tag keyed on MEMBER 12b80 (a child module FM, variant right display@230593366) 50ms
+  BEFORE that member's shouldInstall at 957818. That is a PersistentDataProvider.get()
+  resurrection: shipModificationMap["12b80"] survived rev-14's purge (which only removed
+  shipModificationMap[rootMember.id]) and re-dirtied a tag on any module-scoped read.
+
+-----------------------------------------------------------------------
+1. STRATEGY (user-confirmed via Q&A)
+-----------------------------------------------------------------------
+- ONE fix: on whole-ship uninstall, enumerate THIS ship's member ids FROM THE GRAPH
+  (rootMember.id + FleetMemberUtils.findModuleMember(variant) per getWholeVariantGraph variant)
+  and purge this exotic from shipModificationMap under every such id.
+- Semantics choice (user-selected): "Enumerate member ids from the graph" over reverse-resolving
+  map keys. findModuleMember resolves child FMs + refit/display transients via exact stats
+  identity, so the other ship's identical-but-different instance cannot bleed across (the
+  twin's member ids are never enumerated for this ship).
+- Scope choice (user-selected): "Only ship the ET_MODMAP purge" - do NOT touch ExoticaTechHM,
+  do NOT add a probe.
+- Explicitly NOT touched (prior rejections stand): shouldInstallHullmodExoticToVariant (no
+  presence-guard; LENIENT design must pass), AlphaSubcore, DaemonCore, ExoticaTechHM.java,
+  handler Flows, further diagnostic tail-chasing.
+
+-----------------------------------------------------------------------
+2. CHANGE 1 - ET_MODMAP PURGE UNDER GRAPH-ENUMERATED MEMBER IDS (HullmodExotic.kt)
+-----------------------------------------------------------------------
+- removeExoticDataAcrossShipGraphs (HullmodExotic.kt:220-246), AFTER the rev-14 per-variant
+  remove-then-set loop, now does:
+    1) val wholeGraphVariants = getWholeVariantGraph(rootMember)   (cached once)
+    2) memberIds = LinkedHashSet seeded with rootMember.id; for each graph variant,
+       FleetMemberUtils.findModuleMember(variant)?.let { memberIds.add(it.id) }
+    3) for each memberId: val stored = PersistentDataProvider.inst.getFromId(memberId)
+       ?: continue; if (stored.removeExotic(this)) {
+            if (stored.hasAnyModifications()) shipModificationMap[memberId] = stored
+            else shipModificationMap.remove(memberId) }
+- Direct map writes (bypass PersistentDataProvider.set(), which throws) are the established
+  legitimate write path (same map the provider reads). removeExotic on a member that never had
+  the exotic is a no-op. Other co-installed exotics and bandwidth of the same member survive
+  (hasAnyModifications gate).
+- Added import: exoticatechnologies.modifications.PersistentDataProvider. NO new comments; no
+  elvis/!!; existing CHANGE A anchor, four remove-flows, stripClonePermaMods,
+  refreshStatsEffectsAcrossShipGraphs(apply=false): unchanged.
+
+-----------------------------------------------------------------------
+3. FILES TOUCHED
+-----------------------------------------------------------------------
+- src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt
+  - import PersistentDataProvider.
+  - removeExoticDataAcrossShipGraphs (HullmodExotic.kt:220-246): appended the member-id
+    enumeration + shipModificationMap scrub.
+- docs/hullmod-exotic-details.txt: NEW section 8 (TEST_RESULTS9 postmortem + rev-15).
+- plans/plan-hullmod_exotic_installs_on_whole_ship-revision15.txt: this file.
+
+-----------------------------------------------------------------------
+4. VERIFY (user rebuilds and reruns)
+-----------------------------------------------------------------------
+- TEST_PLAN 7-10: uninstall -> OP resets on EVERY module. CRITICAL: watch (a) NO resurrection
+  writeThrough (ANCHOR) keyed on child member ids after uninstall, (b) the 1000478/1091986
+  reinstall fingerprint - EXPECTED TO REPRODUCE (ExoticaTechHM bookkeeping, out of scope here).
+- TEST_PLAN 12-21: ship switch + return; the OTHER ship (same variant, _Standard) must NOT lose
+  its exotic (graph-enumeration must not collide across ships).
+- Regression: re-install after uninstall still works; other ships' exotics untouched.
+
+-----------------------------------------------------------------------
+5. RATIONALE NOTES (session decisions)
+-----------------------------------------------------------------------
+- Why graph-enumeration over reverse-resolution: reverse-resolving every map key walks the whole
+  sector and can attribute the twin's entries to this ship; graph enumeration only visits ids
+  that provably belong to this ship.
+- Why the 1000478-class reinstall is NOT fixed here: no data survives to rehydrate it, yet it
+  re-triggers -> it is a live object-level decision inside ExoticaTechHM (locked file). The next
+  pass on that thread needs either the ExoticaTechHM per-member list scrubbed on uninstall or a
+  stack-trace probe to identify the caller.
+- Kept: rev-14 remove-then-set purge, CHANGE A (stable refit-root anchor), rev-12 pour/strip/
+  refresh. Those were requirements this revision builds on, not part of this defect.

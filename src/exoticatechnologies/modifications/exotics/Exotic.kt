@@ -6,6 +6,7 @@ import com.fs.starfarer.api.campaign.SpecialItemData
 import com.fs.starfarer.api.campaign.econ.MarketAPI
 import com.fs.starfarer.api.combat.MutableShipStatsAPI
 import com.fs.starfarer.api.combat.ShipAPI
+import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
@@ -57,6 +58,7 @@ abstract class Exotic(key: String, settings: JSONObject) : Modification(key, set
 
     open fun onInstall(member: FleetMemberAPI) {}
     open fun onDestroy(member: FleetMemberAPI) {}
+    open fun onPostDestroy(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {}
     open fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
         return false
     }

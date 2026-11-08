@@ -1,0 +1,76 @@
+# Completed Plan: plan-addressing_cr_comments-completed.txt
+
+## Intent
+Clear the outstanding code-review comments left by RkShaRkz on PR #73 ("Attempt at fixing
+the 'fix-rework' by also applying the main idea to everything", fix-rework2 -> fix-rework) so
+the branch is merge-ready. Also fold in the dead-code cleanup that surfaced from review
+comment #691 (findRootVariantMember vs resolveWholeShipRootMember). No behavior change was
+intended beyond dead-code removal, one comment rewording, and de-duplicating three copies of
+a fuzzy variant-id comparison into one shared helper.
+
+## Scope
+Comment-addressing touched: FleetMemberUtils.kt, VariantTagProvider.kt, RefitButtonAdder.kt
+(KDoc only) and ExoticaTechHM.java (unlocked by the user mid-plan specifically for items 5.2
+/ 5.2.2 / 5.2.3). Systems unaffected: VariantTagProvider set/remove/writeThrough semantics,
+ModuleVariantHierarchy public API, and the whole-ship read/write pipeline. The change set is
+purely deletion, symbol consolidation, and one comment rewrite.
+
+## Evolution
+- Implemented revision: plan-addressing_cr_comments-revision1.txt
+- General idea followed from: plan-addressing_cr_comments.txt (base)
+- Borrowed elements from: none (no sibling revisions)
+
+The base listed the outstanding comments with ExoticaTechHM.java marked LOCKED (items 5.2 /
+5.2.2 / 5.2.3 BLOCKED). The user later unlocked the file; revision1 recorded that unlock, the
+completion of those three items, and the confirmation of the previously-done 5.1 / 5.2b /
+5.3 / 5.4. The base file was preserved unchanged as a draft once revision1 was introduced.
+The revision was accepted and committed by the user after manual in-game testing.
+
+## Outcome
+All in-scope review items are resolved:
+- 5.1 - Deleted the dead `findRootVariantMember` and its now-orphaned `findRootVariant`; kept
+  `findModuleMember` / `matchingRootMembers` / `treeInstanceContains`; repointed the stale
+  KDoc `[findRootVariantMember]` references to `resolveWholeShipRootMember`.
+- 5.2 - Consolidated the three duplicate fuzzy variant-id comparisons
+  (ExoticaTechHM.fuzzyVariantMatch, VariantTagProvider.fuzzyVariantIdEquals, and the
+  FleetMemberUtils `String.fuzzyVariantIdEquals` extension) into a single canonical
+  `FleetMemberUtils.fuzzyVariantIdEquals(a, b)`; updated all call sites.
+- 5.2b - The cross-reference warning note became unnecessary and was superseded by the
+  canonical helper's KDoc.
+- 5.2.2 - Reworded the ExoticaTechHM comment "highlight to appear" to "Modification effects
+  to apply".
+- 5.2.3 - Deleted seven dead/commented-out blocks (the two commented-out apply loops, the
+  FIXME plus its stray follow-up comment, and the four commented-out apply/skip statements).
+- 5.3 - Merged `treeFuzzyContains` / `treeExactContains` into one
+  `treeContains(root, id, isFuzzy)` with an `isFuzzy` flag.
+- 5.4 - Confirmed the already-addressed items (`when(workMode)`, restored
+  `runningFromExoticaTechnologiesScreen()`, DaemonCore sharing overrides).
+Static verification: no live references remain to any removed symbol; the renamed symbols
+resolve. The user then rebuilt the JAR, ran the manual scenarios, reported everything good,
+and committed (78ee74e "Addressing leftover CR comments").
+
+## Deviations
+- The canonical fuzzy helper was placed in the existing `FleetMemberUtils` object rather than
+  a new `ShipVariantUtils` / `Utilities` type, to avoid introducing a new file/API for a
+  three-line function; this still satisfies the "one shared util" requirement.
+- ExoticaTechHM.java line numbers shifted after the fuzzy helper and the seven dead blocks were
+  removed, so the wording fix landed at :93 rather than the base's :111; the content match, not
+  the line number, was authoritative.
+- Process deviation (recorded for transparency): the base plan file was first edited in place
+  to record status, which violated RULES.md section 5 ("Never overwrite an existing plan
+  file"). The base was then restored verbatim from its original content and the status changes
+  were moved into plan-addressing_cr_comments-revision1.txt. The final record is compliant.
+
+## Clarifying Implementation Details
+- The canonical `fuzzyVariantIdEquals` uses Kotlin `substringBeforeLast("_")` on both ids,
+  which is equivalent to the old Java `lastIndexOf('_')` comparison for real hullVariantIds
+  (ids without an underscore degrade to an exact comparison).
+- The merge of `treeContains` keeps the two call modes explicit: exact (`isFuzzy == false`)
+  for disambiguation and fuzzy (`isFuzzy == true`) for prefix matching.
+
+## Reflection
+The review items were all hygiene: dead code, a duplicated helper, and a misleading comment.
+Consolidating the three fuzzy comparisons closes a real maintenance hazard (three copies of a
+subtle prefix rule), and the CR #691 dead-resolver cleanup removed misleading API surface. The
+lesson recorded here is procedural: plan status belongs in a new revision file, never in the
+base plan.

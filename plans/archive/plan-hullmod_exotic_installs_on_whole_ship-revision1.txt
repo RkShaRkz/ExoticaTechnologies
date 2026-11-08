@@ -1,0 +1,135 @@
+# plan-hullmod_exotic_installs_on_whole_ship-revision1.txt
+
+Follow-up to `plan-hullmod_exotic_installs_on_whole_ship.txt`. This is a NEW
+plan file (the `-revision1` naming per repo convention); the original plan doc is
+never overwritten.
+
+## 1. Objective
+`HullmodExotic.onInstall` / `onDestroy` (and, via them, the whole-ship install
+flows) currently use whatever `FleetMemberAPI` enters them as the anchor for the
+whole-ship install bookkeeping. When that member is a **child** module rather than
+the ship's **root**, the whole-ship semantics silently break:
+
+- `getChildModuleVariantList(child)` returns `[]` (`Extensions.kt:985-994`) → sibling
+  modules are never discovered, so the "install on all modules" step is skipped.
+- `HullmodExoticKey(hullmodExotic, parentFleetMemberId)` (`HullmodExoticHandler.kt:876`)
+  anchors the handler's `lookupMap` `InstallData` on the *child* member's id. A later
+  removal that enters from the root (shop / refit destroy, `removeHullmodExoticFromFleetMember`)
+  looks up by the root id → key mismatch → nothing is cleaned up.
+- `isUnderExoticLimit`, the `shipName == null` sanity check, `getCorrectMods`, and the
+  `installThisHullmodExoticToFleetMembersVariant` / `unapplyExoticHullmodAndRemoveExoticaAndHullmod`
+  callbacks are all keyed off the entry member.
+
+This is the "other part" of the decoupling plan and resolves the FIXME at
+`HullmodExotic.kt:70-72` / the related comments at `:74-78` and `:121-126`
+(issue #39: "only root modules are able to share effects to all other (child) modules").
+
+This is reachable in-game today: `ALLOW_INTERACTION_OUTSIDE_EXOTICA_OR_REFIT = true`
+(`HullmodExoticHandler.kt:25`) means the flows run in STRICT mode even off-screen —
+e.g. the `applyExoticToStats → onInstall(member)` ship-creation path processes every
+module's stats and feeds child members into whole-ship flows.
+
+The fix: **anchor whole-ship installs on the ship's root member**, resolving it from
+whatever member enters `onInstall` / `onDestroy`. Child entries then converge on the
+same root-anchored key the root entries use.
+
+## 2. Change set
+
+### 2.1 `FleetMemberUtils.kt`
+Add one small helper that reuses the existing root-resolution machinery (no new
+matching logic):
+
+- `findRootVariant(member, member.variant)` (`FleetMemberUtils.kt:213`) already
+  returns the variant directly when it owns station modules (the root), otherwise
+  scans the member's variant tree then the fleet for the owning tree (fuzzy id match,
+  refit/combat-clone safe), and falls back to `variant` itself for single-module
+  ships / unreachable trees.
+- `findModuleMember(rootVariant)` (`FleetMemberUtils.kt:194`) maps the root variant
+  back to its `FleetMemberAPI`, falling back to null when unreachable (e.g. cold
+  `statsForOpCosts`).
+
+```kotlin
+/**
+ * Resolves the root [FleetMemberAPI] of the module tree containing [member], used by
+ * whole-ship (`installsOnWholeShip()`) install/remove flows so that bookkeeping always
+ * anchors on the ship's root member regardless of which member entered the flow.
+ * Returns [member] itself for single-module ships or when the root member cannot be
+ * reached, preserving today's behavior in those cases.
+ */
+@JvmStatic
+fun findRootVariantMember(member: FleetMemberAPI): FleetMemberAPI {
+    val rootVariant = findRootVariant(member, member.variant)
+    if (rootVariant == member.variant) return member
+    return findModuleMember(rootVariant) ?: member
+}
+```
+
+### 2.2 `HullmodExotic.kt`
+- `onInstall` (`:66`): after `val installsOnWholeShip = installsOnWholeShip()`,
+  compute `val rootMember = if (installsOnWholeShip) FleetMemberUtils.findRootVariantMember(member) else member`.
+  Thread `rootMember` through:
+  - `CheckAndInstallOnAllChildModulesVariants(fleetMember = rootMember, fleetMemberVariant = rootMember.variant, ...)`
+  - `CheckAndInstallOnMemberModule(member = rootMember, memberVariant = rootMember.variant, ...)`
+  - both callbacks' `installThisHullmodExoticToFleetMembersVariant(rootMember, ...)`
+  - the `:68` `isChildModule` log expression keeps reading the original `member`
+    (which member entered the flow is the interesting log fact).
+- `onDestroy` (`:120`): same `rootMember` resolution when `installsOnWholeShip()`.
+  Thread it through all three flow invocations (`CheckAndRemoveFromAllChildModulesVariants`,
+  `CheckAndRemoveFromMemberModule` × 2 — the second one is the
+  `runningFromRefitScreen()` refit-variant pass) and both callbacks'
+  `unapplyExoticHullmodAndRemoveExoticaAndHullmod(rootMember, ...)`.
+- Reword the FIXME block (`:70-72`) and the two comment blocks (`:74-78`, `:121-126`)
+  to describe the new root-anchored behavior — RULES.md §2: update, never delete.
+
+### 2.3 `HullmodExoticHandler.kt`
+KDoc-only, no behavior change. Append one sentence to the KDoc of the four flows
+(`CheckAndInstallOnAllChildModulesVariants` `:640-653`, `CheckAndInstallOnMemberModule`
+`:735-748`, `CheckAndRemoveFromAllChildModulesVariants` `:840-852`,
+`CheckAndRemoveFromMemberModule` `:933-946`): callers satisfy the documented
+"root module" contract via `FleetMemberUtils.findRootVariantMember`.
+
+## 3. Behavior preservation (the point)
+- `installsOnWholeShip() == false`: `rootMember` is never computed; `member` flows
+  through exactly as today — zero change.
+- Single-module ships and root entries: `findRootVariant(member, member.variant)`
+  returns `member.variant` → `rootMember == member` → identical to today.
+- Child entries: flows now behave as if the root entered — children discovered,
+  one root-anchored `InstallData` key per ship, symmetric removal.
+- Handler internals (`shouldInstallHullmodExoticToVariant` / `install...ToVariant` /
+  `shouldRemove...FromVariant` / `remove...FromVariant`, STRICT vs LENIENT,
+  `getInitialVariantsListForMember`, `getChildModuleVariantList`) are **unchanged**:
+  they already document and assume the root-module contract, which this change now
+  satisfies at the single chokepoint (`HullmodExotic`).
+
+## 4. Not touched
+- Unrelated install/effect-sharing behavior (the `Modification`/`Exotic` level from
+  the original plan).
+- `AlphaSubcore.kt` / `DaemonCore.kt` (already `installsOnWholeShip() = true`).
+- `ExoticaTechHM.java` / `ExoticsHandler` / `ShipModifications` stats paths.
+- `ModuleVariantHierarchy` / `findRootVariantByHullId` — left in place; the new
+  helper reuses `findRootVariant` + `findModuleMember` instead.
+
+## 5. Validation
+- No automated tests: the existing handler test stubs are `object : FleetMemberAPI`
+  with near-every-method `TODO` and cannot represent a real Starsector module tree;
+  a unit test for `findRootVariantMember` would only prove the mock behaves as we
+  told it, not that it matches in-game behavior. Real gameplay testing is the
+  verification (user-held on Windows).
+- Grep: flows' only production callers are `HullmodExotic.kt`
+  (`CheckAndInstallOnAllChildModulesVariants|CheckAndInstallOnMemberModule|CheckAndRemoveFromAllChildModulesVariants|CheckAndRemoveFromMemberModule`
+  → only `HullmodExotic.kt` + the handler itself; `removeHullmodExoticFromFleetMember`
+  additionally in `HullmodExoticHandlerTests.kt`).
+- Diff hygiene: only `FleetMemberUtils.kt`, `HullmodExotic.kt`,
+  `HullmodExoticHandler.kt` carry non-CRLF diffs
+  (`git -c core.autocrlf=false diff -w --stat`).
+- Windows build + in-game (user-held): AlphaSubcore / DaemonCore install/uninstall
+  still symmetric and whole-ship; a child-module-anchored whole-ship install (if the
+  user can trigger one via stats-path or a chip on a module) converges on the root key.
+
+## 6. Deliverables
+- `FleetMemberUtils.findRootVariantMember`.
+- Root-anchored call sites + reworded comments in `HullmodExotic.kt`.
+- KDoc contract sentence on the four handler flows.
+- This plan doc. Plan closes when: grep clean, diff hygiene clean, Windows build
+  passes, in-game smoke (AlphaSubcore/DaemonCore whole-ship install/uninstall)
+  intact.

@@ -1,0 +1,93 @@
+ISSUE #39 HULLMOD EXOTICS -> "INSTALL ON WHOLE SHIP" - REVISION 8 (MODULE MAP SOLE-OWNER GUARD)
+==============================================================================================
+Revision 7 (dual-stat scrub + twin-safe ExoticaTechHM root resolution) did NOT fix the sticky OP:
+on the tester's machine the problem is STILL PRESENT, and it always fires on the FIRST ship
+(tbj_overslaught_Start, the one spawned at game start) and NEVER on the second
+(tbj_overslaught_Standard, granted via console). The stuck OP shows on the specific child/root
+module that initiated the uninstall, and all three modules reproduce.
+
+Revision docs accumulate; originals are never overwritten. -revision7 was the dual-stats removal
+scrub + variantTreeOwns root resolution, -revision6 the per-stripped-variant unapply walk,
+-revision5 the updateStats (StackOverflowError) fix. This revision fixes the stats->FleetMember
+resolution fast path.
+
+WHY REVISION 7 LEFT STALE OP (investigation)
+--------------------------------------------
+The overslaught is a multi-module ship, and BOTH twins carry identical module hull variant ids:
+'Start' and 'Standard' both reduce to 'tbj_overslaught' once the last _suffix is stripped
+(fuzzyVariantMatch, ExoticaTechHM.java:48-61 / fuzzyVariantIdEquals, FleetMemberUtils.kt:256-260),
+so the two roots' station modules SHARE every module id.
+
+The module->root fast path, FleetMemberUtils.moduleMap (FleetMemberUtils.kt:18), is a global
+HashMap<hullVariantId, FleetMemberAPI>. It is cleared and repopulated on EVERY modular root's
+applyEffectsBeforeShipCreation (ExoticaTechHM.java:528-536) and consulted FIRST by
+findMemberForStats before identity-based resolution. With two twins, whichever root's stats pass
+ran LAST writes the shared module ids, so a module's statsForOpCosts can resolve to the OTHER
+twin's root member. The removal listener then scrubs the wrong ship's stats; the module that
+initiated the uninstall keeps its OP cut. Rev-7 scrubbed both stats objects per variant but still
+resolved WHICH member armed/scrubbed via the same wrong fast path for the very stats subset that
+no identity-carrier can disambiguate (synthetic statsForOpCosts from propagateFromVariantTree have
+no entity and no fleetMember).
+
+FIX - FLEETMEMBERUTILS SOLE-OWNER GUARD (plan A; option B - multimap - deferred)
+--------------------------------------------------------------------------------
+The moduleMap stays the fast path ONLY while it is trustworthy. A new per-id owner registry makes
+that decidable:
+
+- add private moduleOwnerIds: MutableMap<String, MutableSet<String>> tracking which member ids
+  have registered each module hullVariantId since the last clear.
+- add @JvmStatic clearModuleMap() (clears map AND registry) and
+  @JvmStatic registerModuleOwner(moduleVariantId, member) (last-writer-wins map entry + owner
+  registry add). All write sites move to these helpers.
+- add private isSoleModuleOwner(moduleVariantId) == (owner set size == 1).
+- findMemberForStats order: identity-carriers FIRST (stats.entity as ShipAPI parentStation climb ->
+  findMemberFromShip/fleetMember), then stats.fleetMember, then moduleMap[id] ONLY when
+  isSoleModuleOwner(id), else the existing activeFleets + searchFleetForStats loop (which
+  disambiguates by statsForOpCosts === stats object identity - NOT variant identity; no '==='
+  variant comparisons anywhere).
+- findMemberFromShip no longer consults moduleMap at all (parentStation climb, fleetMember, then
+  findMemberForStats).
+- findFleetForVariant guards its moduleMap hit with isSoleModuleOwner.
+- MRU write-back of slow-loop results into moduleMap was considered and REJECTED (user choice):
+  in the twin case the id stays non-sole regardless, so a write-back can never make collision reads
+  fast; the map self-heats on every modular-root stats pass anyway.
+
+FILES
+-----
+src/exoticatechnologies/util/FleetMemberUtils.kt: moduleOwnerIds registry, clearModuleMap(),
+  registerModuleOwner(), isSoleModuleOwner(), findMemberFromShip simplified, findMemberForStats
+  reordered with sole-owner-guarded map read, findFleetForVariant guarded. Original root-member
+  resolution comment preserved verbatim.
+src/exoticatechnologies/hullmods/ExoticaTechHM.java: applyEffectsBeforeShipCreation station-modules
+  pass calls clearModuleMap() + registerModuleOwner(module.getHullVariantId(), member) in place of
+  moduleMap.clear()/put().
+src/exoticatechnologies/ETModPlugin.java: onGameLoad clear -> FleetMemberUtils.clearModuleMap().
+src/exoticatechnologies/campaign/listeners/CampaignEventListener.kt: refit-close clear ->
+  FleetMemberUtils.clearModuleMap() (moduleMap.isNotEmpty() check for runWhilePaused unchanged).
+No updateStats reintroduced anywhere (rev-5 SOE guard intact).
+
+VERIFICATION (user, Windows build, in game)
+-------------------------------------------
+1. Start overslaught (ship A) + console-grant Standard (ship B). Install AlphaSubcore on both.
+2. Uninstall from each of A's three modules one at a time -> that module must revert to full OP.
+3. Uninstall from B -> B reverts everywhere. Exactly 2 AlphaSubcores stay in inventory.
+4. Repeat the whole sequence in the OPPOSITE order (uninstall B first) -> still reverts first-ship.
+5. Single-ship regression: lone Start and lone Standard install/uninstall still reduces/reverts OP.
+6. One exotic remains somewhere while uninstalling a different one: no exception, no
+   StackOverflowError, still reverts.
+
+COMMIT STYLE
+------------
+Single focused commit, message suggested at handoff, user commits locally.
+
+PLAN-NOTE
+---------
+Revision docs accumulate; originals are never overwritten. -revision8 documented here;
+-revision7 is the dual-stats scrub + variantTreeOwns, -revision6 the per-stripped-variant unapply
+walk, -revision5 the updateStats/SOE fix. If sticky OP survives this round, escalate to the agreed
+logger instrumentation (findMemberForStats resolution with member.id + stats identityHashCode +
+module variant id at AlphaSubcoreHM.apply/removeEffects, stripHullmodAndUnapply, and
+RefitButtonAdder identities) to pin the surviving stats object and its resolving member. Secondary
+collision suspects if the map is no longer the culprit: VariantTagProvider's [member][hullVariantId]
+cache (VariantTagProvider.kt:~156) and the fuzzyVariantIdEquals users (WriteThrough.findVariantInTree,
+findFuzzyKey, invalidateVariantAcrossAll, removeHullmodEverywhere self-heal at ExoticaTechHM.java:555).

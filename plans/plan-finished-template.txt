@@ -1,0 +1,36 @@
+# Completed Plan: plan-<feature_name>-completed.txt
+
+## Intent
+Summarize the original purpose of the plan.  
+What problem was it meant to solve?  
+What was the big-picture goal?
+
+## Scope
+Describe the boundaries of the plan.  
+Which systems, modules, or features were affected?
+
+## Evolution
+- Implemented revision: plan-<feature_name>-revisionN.txt
+- Borrowed elements from: plan-<feature_name>-revisionM.txt, plan-<feature_name>-revisionK.txt
+- General idea followed from: plan-<feature_name>.txt
+
+Explain how the final construction was assembled from earlier revisions.  
+Note which pieces were kept, which were discarded, and why.
+
+## Outcome
+Describe what was actually implemented.  
+Focus on the design-level result, not just code changes.
+
+## Deviations
+Highlight any differences between the final implementation and the latest revision.  
+Explain *why* these deviations happened (constraints, discoveries, better approaches).
+
+## Clarifying Implementation Details
+Include technical specifics **only if they bring clarity** to understanding the plan.  
+- Avoid trivial changes unless they were critical.  
+- Document non-trivial changes with the real rationale behind them.
+
+## Reflection
+Summarize why this plan made sense in hindsight.  
+What lessons were learned?  
+How does it fit into the larger project?

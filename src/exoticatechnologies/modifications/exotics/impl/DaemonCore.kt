@@ -120,13 +120,15 @@ class DaemonCore(key: String, settingsObj: JSONObject) :
         return 60f * (exoticData?.type?.getPositiveMult(member, mods) ?: 1f)
     }
 
-    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
+    override fun installsOnWholeShip() = true
+
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = false
 
     override fun shouldAffectModulesToShareEffectsToOtherModules() = false
 
-    override fun shouldAffectModule(moduleStats: MutableShipStatsAPI) = false
+    override fun shouldAffectModule(moduleStats: MutableShipStatsAPI) = true
 
-    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
+    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = true
 
     inner class DaemonCoreDamageTakenListener(val member: FleetMemberAPI, val mods: ShipModifications, val exoticData: ExoticData) : DamageTakenModifier {
         override fun modifyDamageTaken(

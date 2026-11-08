@@ -26,6 +26,9 @@ open class DestroyMethod : ExoticMethod {
         ShipModLoader.set(member, variant, mods)
         ExoticaTechHM.addToFleetMember(member, variant)
 
+        // And fire the onPostDestroy
+        exotic.onPostDestroy(member, variant, mods)
+
         return StringUtils.getString("ExoticsDialog", "ExoticDestroyed")
     }
 

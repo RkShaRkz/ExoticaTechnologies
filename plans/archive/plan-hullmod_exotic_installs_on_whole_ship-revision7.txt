@@ -1,0 +1,94 @@
+ISSUE #39 HULLMOD EXOTICS -> "INSTALL ON WHOLE SHIP" — REVISION 7 (TWIN-SHIP OP RESET)
+======================================================================================
+Whole-ship removal leaves reduced OP on the FIRST uninstalled ship when multiple copies of the
+same hull exist. Revision 7 (a) scrubs the OP-cost listener from BOTH stats objects that can
+carry it on every removal path, (b) scrubs the live refit-display member's stats at the end of
+whole-ship removal, and (c) disambiguates identical hulls during ExoticaTechHM whole-ship
+install resolution so a second twin's install can no longer take the first twin's root.
+
+Revision docs accumulate; originals are never overwritten. -revision6 was the per-stripped-variant
+unapply walk; -revision5 the updateStats (StackOverflowError) fix. This revision only extends the
+REMOVE side + twin resolution.
+
+WHY REVISION 6 LEFT STALE OP (user-given scenario + code)
+---------------------------------------------------------
+User: "this issue only happens when i have multiple copies of the same ship, and i install on
+first, install on second, uninstall from first, uninstall from second. regardless of the module
+i try uninstalling from, the first ship's module from which i tried uninstalling will always not
+reset OP properly."
+
+The AlphaSubcore OP cut is a LISTENER on a stats object, not a stat modifier:
+- AlphaSubcoreHM.applyEffectsBeforeShipCreation does stats.addListener(AlphaSubcoreOPCostListener)
+  (AlphaSubcoreHM.kt:35-48); removeEffectsBeforeShipCreation does stats.removeListenerOfClass(...).
+- Every removal site scrubbed exactly ONE stats object via getNonNullStatsToUse
+  (variant.statsForOpCosts ?: member.stats). That single-pick silently misses the listener when
+  it lives on the OTHER object. Identical hulls share hullVariantIds, so the object the refit OP
+  panel reads (and which copy of the ship it belongs to) need not be the one the install
+  bookkeeping recorded - hence "first ship sticks, second ship is fine".
+- ExoticaTechHM.findMemberByVariantId (ExoticaTechHM.java:158-178) scanned the fleet by
+  hullVariantId and took the FIRST match, so a second twin's whole-ship install could resolve the
+  WRONG twin's root and write hullmods/listeners onto the first ship's objects.
+
+FIX PART 1 - SCRUB BOTH STATS OBJECTS ON EVERY REMOVAL PATH
+-----------------------------------------------------------
+New helper in HullmodExotic.kt, used instead of the single getNonNullStatsToUse pick:
+  unapplyExoticHullmodFromVariantOnAllStats(member, variant) ->
+      unapplyExoticHullmodFromVariant(variant, member.stats)
+      variant.statsForOpCosts?.let { unapplyExoticHullmodFromVariant(variant, it) }
+- Wired into stripHullmodAndUnapply (HullmodExotic.kt:226-229) and
+  unapplyExoticHullmodAndRemoveExoticaAndHullmod (HullmodExotic.kt:377-381).
+- HullmodExoticHandler.removeHullmodExoticFromVariant (HullmodExoticHandler.kt:364-380) and
+  removeHullmodExoticFromFleetMember (:463-471) now both removeEffects from
+  parentFleetMember/fleetMember.stats AND variant.statsForOpCosts.
+- Safe: removeEffectsBeforeShipCreation unmodifies id-keyed stat modifiers and
+  removeListenerOfClass is a no-op on stats that never had the listener. No updateStats.
+
+FIX PART 2 - SCRUB THE LIVE REFIT-DISPLAY MEMBER'S STATS (HullmodExotic.kt)
+---------------------------------------------------------------------------
+At the end of the whole-ship onDestroy branch, after stripHullmodThroughoutShip, scrub the stats
+of whatever the refit is currently rendering (RefitButtonAdder.member) via
+unapplyExoticHullmodFromVariant(displayedMember.checkRefitVariant(), displayedMember.stats).
+The refit keeps exactly one live member entry for the rendered ship/module - that object's stats
+is what the OP panel reads, is not necessarily any graph the strip walks, and is fleetData-free
+(a live object ref). Null-safe under runningFromRefitScreen().
+
+FIX PART 3 - TWIN-SAFE ExoticaTechHM ROOT RESOLUTION (ExoticaTechHM.java)
+-------------------------------------------------------------------------
+findMemberByVariantId now returns the first-id-match only as a fallback: it first prefers a root
+whose station-module tree actually OWNS the triggering member (new variantTreeOwns helper: exact
+object identity, then hullVariantId equality on descendants). A second twin's install now resolves
+to the twin's own root, so no cross-ship hullmod/listener writes from ExoticaTechHM.
+
+FILES
+-----
+src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt: +RefitButtonAdder import,
+  unapplyExoticHullmodFromVariantOnAllStats helper (+KDoc), two call sites switched to it, live
+  display-member scrub in onDestroy.
+src/exoticatechnologies/hullmods/exotics/HullmodExoticHandler.kt: dual-stat removeEffects in
+  removeHullmodExoticFromVariant and removeHullmodExoticFromFleetMember.
+src/exoticatechnologies/hullmods/ExoticaTechHM.java: findMemberByVariantId ownership-first +
+  variantTreeOwns helper.
+No updateStats reintroduced anywhere (rev-5 SOE guard intact).
+
+VERIFICATION (user, Windows build, in game)
+-------------------------------------------
+1. Two identical multimodule ships (two overslaughts). Install AlphaSubcore on A (refit), install
+   AlphaSubcore on B, uninstall from A's module X -> X reverts to full OP.
+2. Uninstall from B -> B reverts everywhere. Exactly 2 AlphaSubcores stay in inventory.
+3. Run the SAME sequence in the OPPOSITE order (B first) -> whichever ship is uninstalled FIRST
+   must revert, proving resolution no longer depends on fleet scan order.
+4. Single-ship + Start/Standard mixed regression: install/uninstall still reduces/reverts OP.
+5. One exotic remains somewhere on the ship while uninstalling a different one: no exception, no
+   StackOverflowError, still reverts.
+
+COMMIT STYLE
+------------
+Single focused commit, message suggested at handoff, user commits locally.
+
+PLAN-NOTE
+---------
+Revision docs accumulate; originals are never overwritten. -revision7 documented here;
+-revision6 is the per-stripped-variant unapply walk, -revision5 the updateStats/SOE fix,
+-revision4 the SOE crash record. If the twin scenario still leaves sticky OP after this round,
+the agreed next step is logger instrumentation (AlphaSubcoreHM.apply/removeEffects +
+stripHullmodAndUnapply + RefitButtonAdder identities) to pin the surviving object.
