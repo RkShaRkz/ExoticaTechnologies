@@ -212,8 +212,14 @@ open class VariantTagProvider : ShipModLoader.Provider {
             if (graphs.none { it === displayVariant }) graphs.add(displayVariant)
         }
 
+        // A hullVariantId is not unique inside a ship (one module variant can sit in several slots), so
+        // the written module is located by its slot path, taken in the first graph that holds this
+        // exact instance, and every other graph is written at the same slot (#76, F2).
+        val reference = graphs.firstOrNull { slotPathTo(it, variant) != null }
+        val path = reference?.let { slotPathTo(it, variant) }
+
         for (graph in graphs) {
-            val target = findVariantInTree(graph, targetId) ?: continue
+            val target = findTargetInGraph(graph, variant, targetId, reference, path) ?: continue
             removeFromTags(target)
             if (tag != null) {
                 target.addTag(tag)
@@ -222,9 +228,101 @@ open class VariantTagProvider : ShipModLoader.Provider {
     }
 
     /**
+     * The node of [graph] that stands for [variant]: the instance itself; else the node at the same
+     * slot path when [graph] is a copy of [reference]'s ship, contains it, or is part of it; else the
+     * only node carrying [targetId] ([findVariantInTree]).
+     */
+    private fun findTargetInGraph(
+        graph: ShipVariantAPI,
+        variant: ShipVariantAPI,
+        targetId: String,
+        reference: ShipVariantAPI?,
+        path: List<String>?
+    ): ShipVariantAPI? {
+        if (slotPathTo(graph, variant) != null) return variant
+        if (reference != null && path != null) {
+            val aligned = followAligned(graph, reference, path)
+            if (aligned != null && (aligned.hullVariantId == targetId || FleetMemberUtils.fuzzyVariantIdEquals(aligned.hullVariantId, targetId))) {
+                return aligned
+            }
+        }
+        return findVariantInTree(graph, targetId)
+    }
+
+    /** Follows [path] (taken in [reference]) inside [graph], when the two can be lined up unambiguously. */
+    private fun followAligned(graph: ShipVariantAPI, reference: ShipVariantAPI, path: List<String>): ShipVariantAPI? {
+        if (isSameShip(graph, reference)) return followSlotPath(graph, path)
+        // graph contains reference's ship exactly once
+        val anchors = nodesWithId(graph, reference.hullVariantId)
+        if (anchors.size == 1) return followSlotPath(anchors[0], path)
+        // graph is one part of reference's ship, found exactly once
+        val graphRootPaths = slotPathsWithId(reference, graph.hullVariantId, emptyList())
+        if (graphRootPaths.size == 1) {
+            val prefix = graphRootPaths[0]
+            if (path.size >= prefix.size && path.subList(0, prefix.size) == prefix) {
+                return followSlotPath(graph, path.subList(prefix.size, path.size))
+            }
+        }
+        return null
+    }
+
+    /**
+     * Copies of one ship (fleet, refit, display): the same id, or the same id up to the last '_suffix'
+     * with the same, non-empty module slots. Leaf modules never match by suffix alone.
+     */
+    private fun isSameShip(a: ShipVariantAPI, b: ShipVariantAPI): Boolean {
+        if (a.hullVariantId == b.hullVariantId) return true
+        val slots = a.stationModules.keys
+        return slots.isNotEmpty() && slots == b.stationModules.keys
+                && FleetMemberUtils.fuzzyVariantIdEquals(a.hullVariantId, b.hullVariantId)
+    }
+
+    /** Slot path from [root] to that exact [target] instance (empty for root itself), or null when absent. */
+    private fun slotPathTo(root: ShipVariantAPI, target: ShipVariantAPI): List<String>? {
+        if (root === target) return emptyList()
+        for (slot in root.stationModules.keys) {
+            val child = root.getModuleVariant(slot) ?: continue
+            val below = slotPathTo(child, target) ?: continue
+            return listOf(slot) + below
+        }
+        return null
+    }
+
+    private fun followSlotPath(root: ShipVariantAPI, path: List<String>): ShipVariantAPI? {
+        var node = root
+        for (slot in path) {
+            if (!node.stationModules.containsKey(slot)) return null
+            node = node.getModuleVariant(slot) ?: return null
+        }
+        return node
+    }
+
+    /** Nodes of [root]'s tree, root included, whose hullVariantId is [id]. */
+    private fun nodesWithId(root: ShipVariantAPI, id: String): List<ShipVariantAPI> {
+        val found = ArrayList<ShipVariantAPI>()
+        if (root.hullVariantId == id) found.add(root)
+        root.forEachModuleVariant { childV ->
+            if (childV.hullVariantId == id) found.add(childV)
+        }
+        return found
+    }
+
+    private fun slotPathsWithId(root: ShipVariantAPI, id: String, path: List<String>): List<List<String>> {
+        val found = ArrayList<List<String>>()
+        if (root.hullVariantId == id) found.add(path)
+        for (slot in root.stationModules.keys) {
+            val child = root.getModuleVariant(slot) ?: continue
+            found.addAll(slotPathsWithId(child, id, path + slot))
+        }
+        return found
+    }
+
+    /**
      * Finds the node in [root]'s variant tree corresponding to [targetId]: an exact hullVariantId
      * match first, then a fuzzy match (same prefix before the last '_suffix'). Returns null when
-     * the tree has no such node (e.g. a child variant whose tree is unreachable from [root]).
+     * the tree has no such node (e.g. a child variant whose tree is unreachable from [root]), or
+     * when several children match: those are identical modules, and writing the first of them
+     * would overwrite a module that was not the target (#76, F2).
      */
     private fun findVariantInTree(root: ShipVariantAPI, targetId: String): ShipVariantAPI? {
         // The root IS fuzzy-matched too: for a single-module ship the whole tree is just the root,
@@ -233,16 +331,16 @@ open class VariantTagProvider : ShipModLoader.Provider {
         // would then see nothing. For module ships the root's prefix differs from every child's, so
         // a root fuzzy-match never collides with a child target.
         if (root.hullVariantId == targetId || FleetMemberUtils.fuzzyVariantIdEquals(root.hullVariantId, targetId)) return root
-        var exact: ShipVariantAPI? = null
-        var fuzzy: ShipVariantAPI? = null
+        val exact = ArrayList<ShipVariantAPI>()
+        val fuzzy = ArrayList<ShipVariantAPI>()
         root.forEachModuleVariant { childV ->
             when {
-                exact != null -> { /* already found an exact node, keep looking for nothing */ }
-                childV.hullVariantId == targetId -> exact = childV
-                fuzzy == null && FleetMemberUtils.fuzzyVariantIdEquals(childV.hullVariantId, targetId) -> fuzzy = childV
+                childV.hullVariantId == targetId -> exact.add(childV)
+                FleetMemberUtils.fuzzyVariantIdEquals(childV.hullVariantId, targetId) -> fuzzy.add(childV)
             }
         }
-        return exact ?: fuzzy
+        if (exact.isNotEmpty()) return exact.singleOrNull()
+        return fuzzy.singleOrNull()
     }
 
     private fun removeFromTags(variant: ShipVariantAPI) {
