@@ -99,15 +99,22 @@ class ShipModLoader {
 
     private fun getWholeShipModsData(member: FleetMemberAPI, variant: ShipVariantAPI): List<ShipModifications> {
         val result = ArrayList<ShipModifications>(4)
+        val seenSlotPaths = HashSet<String>(8)
         val seenVariantIds = HashSet<String>(8)
         val rootVariant = resolveRootVariant(member, variant)
-        collectWholeShipMods(member, rootVariant, result, seenVariantIds)
+        collectWholeShipMods(member, rootVariant, emptyList(), result, seenSlotPaths, seenVariantIds)
         // The REFIT display variant tree is a second object graph carrying the same tags
         // (refit clones preserve child tags 1:1). Union it in so a read never depends on
-        // which variant instance the engine happened to hand us.
+        // which variant instance the engine happened to hand us. Its modules are lined up with the
+        // root tree by slot path, so each module still counts once.
         val refitVariant = runCatching { member.checkRefitVariant() }.getOrNull()
         if (refitVariant != null && refitVariant !== rootVariant) {
-            collectWholeShipMods(member, refitVariant, result, seenVariantIds)
+            val base = alignWithin(rootVariant, refitVariant)
+            if (base != null) {
+                collectWholeShipMods(member, refitVariant, base, result, seenSlotPaths, seenVariantIds)
+            } else {
+                collectWholeShipModsById(member, refitVariant, result, seenVariantIds)
+            }
         }
         return result
     }
@@ -124,13 +131,34 @@ class ShipModLoader {
         return FleetMemberUtils.findRootVariantByHullId(member, rootVariantId) ?: variant
     }
 
-    // Recursive stationModules walk. Dedupes by (member id, hullVariantId) so the same logical
-    // variant (stock / REFIT clone / combat clone) is never collected twice — otherwise a single
-    // installation would be iterated multiple times by whole-ship consumers like
-    // advanceInCampaign. The member id scopes the key so identical-root twin ships (whose nodes
-    // share hullVariantIds) can never have the first ship's mods swallowed by the second's walk.
-    // Includes the variant's own ShipModifications.
+    // Recursive stationModules walk. Dedupes by slot path from the ship root, so the same module seen
+    // in two graphs (stock / REFIT clone / combat clone) is never collected twice — otherwise a single
+    // installation would be iterated multiple times by whole-ship consumers like advanceInCampaign.
+    // A hullVariantId is not unique inside a ship: identical modules (one module variant in several
+    // slots) are different slots, and each one's mods count (#76, F1). Includes the variant's own
+    // ShipModifications. Records ids too, for collectWholeShipModsById.
     private fun collectWholeShipMods(
+        member: FleetMemberAPI,
+        variant: ShipVariantAPI,
+        path: List<String>,
+        result: MutableList<ShipModifications>,
+        seenSlotPaths: MutableSet<String>,
+        seenVariantIds: MutableSet<String>
+    ) {
+        seenVariantIds.add(wholeShipModKey(member, variant))
+        if (seenSlotPaths.add(path.joinToString("/"))) {
+            get(member, variant)?.let { result.add(it) }
+        }
+        for (slotId in variant.stationModules.keys) {
+            val childV = variant.getModuleVariant(slotId) ?: continue
+            collectWholeShipMods(member, childV, path + slotId, result, seenSlotPaths, seenVariantIds)
+        }
+    }
+
+    // The previous dedup, kept for a refit graph that cannot be lined up with the root tree: by
+    // (member id, hullVariantId). The member id scopes the key so identical-root twin ships (whose
+    // nodes share hullVariantIds) can never have the first ship's mods swallowed by the second's walk.
+    private fun collectWholeShipModsById(
         member: FleetMemberAPI,
         variant: ShipVariantAPI,
         result: MutableList<ShipModifications>,
@@ -153,6 +181,43 @@ class ShipModLoader {
     // twins never dedupe into each other's mods.
     private fun wholeShipModKey(member: FleetMemberAPI, variant: ShipVariantAPI): String {
         return member.id + ":" + variant.hullVariantId
+    }
+
+    // Slot path of [other]'s root inside [root] (empty when it is the same ship), or null when the two
+    // cannot be lined up: by instance, then a copy of the same ship, then an id found exactly once.
+    private fun alignWithin(root: ShipVariantAPI, other: ShipVariantAPI): List<String>? {
+        slotPathTo(root, other)?.let { return it }
+        if (isSameShip(root, other)) return emptyList()
+        return slotPathsWithId(root, other.hullVariantId, emptyList()).singleOrNull()
+    }
+
+    // Copies of one ship: the same id, or the same id up to the last '_suffix' with the same,
+    // non-empty module slots. Leaf modules never match by suffix alone.
+    private fun isSameShip(a: ShipVariantAPI, b: ShipVariantAPI): Boolean {
+        if (a.hullVariantId == b.hullVariantId) return true
+        val slots = a.stationModules.keys
+        return slots.isNotEmpty() && slots == b.stationModules.keys
+                && FleetMemberUtils.fuzzyVariantIdEquals(a.hullVariantId, b.hullVariantId)
+    }
+
+    private fun slotPathTo(root: ShipVariantAPI, target: ShipVariantAPI): List<String>? {
+        if (root === target) return emptyList()
+        for (slotId in root.stationModules.keys) {
+            val childV = root.getModuleVariant(slotId) ?: continue
+            val below = slotPathTo(childV, target) ?: continue
+            return listOf(slotId) + below
+        }
+        return null
+    }
+
+    private fun slotPathsWithId(root: ShipVariantAPI, id: String, path: List<String>): List<List<String>> {
+        val found = ArrayList<List<String>>()
+        if (root.hullVariantId == id) found.add(path)
+        for (slotId in root.stationModules.keys) {
+            val childV = root.getModuleVariant(slotId) ?: continue
+            found.addAll(slotPathsWithId(childV, id, path + slotId))
+        }
+        return found
     }
 
     companion object {
