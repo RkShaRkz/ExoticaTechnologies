@@ -61,6 +61,15 @@ open class VariantTagProvider : ShipModLoader.Provider {
     }
 
     private val cache: MutableMap<FleetMemberAPI, MutableMap<String, ShipModifications>> = WeakHashMap()
+
+    /**
+     * The same mirror keyed by variant INSTANCE (HullVariantSpec does not override equals/hashCode, so this
+     * is identity). A hullVariantId is not unique inside a ship: stations and modular ships reuse one module
+     * variant in several slots (edshipyard_helltrain_warfreighter has five
+     * edshipyard_helltrain_combatfreighter_standard modules), so the id-keyed [cache] alone serves every such
+     * module the first one's data (#76).
+     */
+    private val instanceCache: MutableMap<FleetMemberAPI, MutableMap<ShipVariantAPI, ShipModifications>> = WeakHashMap()
     private val EXOTICA_INDICATOR = "$\$EXOTICA$$"
 
     /**
@@ -82,6 +91,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
      */
     fun clearCache() {
         cache.clear()
+        instanceCache.clear()
         lastWrite.clear()
         accessCounter = 0
     }
@@ -109,20 +119,34 @@ open class VariantTagProvider : ShipModLoader.Provider {
                     //   days=N            -> data genuinely older than the TTL
                     //   CLOCK-UNAVAILABLE -> elapsed == EVICT_FROM_CACHE_DAYS, i.e. time could not
                     //                        be measured (null sector/clock or clock mismatch).
-                    cache.remove(member)
-                    lastWrite.remove(member)
+                    forget(member)
                     // fall through to tag read below
                 } else {
-                    val cacheMods = memberCache[variantId]
-                    if (cacheMods != null) {
-                        return cacheMods
+                    val instanceMods = instanceCache[member]?.get(variant)
+                    if (instanceMods != null) {
+                        return instanceMods
                     }
 
-                    val fuzzyKey = findFuzzyKey(member, variantId)
-                    if (fuzzyKey.isPresent()) {
-                        val matchId = fuzzyKey.get()
-                        val fuzzyMods = memberCache[matchId]
-                        return fuzzyMods
+                    // By id only when that id names at most one node of this ship: with identical
+                    // modules, an id hit would be another module's data.
+                    val idCount = countNodesWithId(member, variantId)
+                    if (idCount <= 1) {
+                        val cacheMods = memberCache[variantId]
+                        if (cacheMods != null) {
+                            return cacheMods
+                        }
+                    }
+
+                    // Fuzzy only for an id that is not itself a module of this ship (a refit clone such
+                    // as 'left_0'). A real sibling must not be served another sibling's data:
+                    // 'remnant_hangar1_Standard' and 'remnant_hangar1_Strike' are different modules.
+                    if (idCount == 0) {
+                        val fuzzyKey = findFuzzyKey(member, variantId)
+                        if (fuzzyKey.isPresent()) {
+                            val matchId = fuzzyKey.get()
+                            val fuzzyMods = memberCache[matchId]
+                            return fuzzyMods
+                        }
                     }
                 }
             }
@@ -136,8 +160,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
             if (StarsectorAPIInteractor.runningFromRefitOrFleetScreen()) {
                 return it
             } else {
-                cache.getOrPut(member) { mutableMapOf() }[variantId] = it
-                lastWrite[member] = currentGameTime()
+                remember(member, variant, it)
             }
             return it
         }
@@ -149,6 +172,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
         // from every member's cache so the new data can never be shadowed by a stale sibling
         // served via exact or fuzzy match on a later read.
         invalidateVariantAcrossAll(variant.hullVariantId)
+        instanceCache.values.forEach { it.remove(variant) }
 
         if (variant == member.variant && variant.source != VariantSource.REFIT) {
             member.fixVariant()
@@ -168,14 +192,36 @@ open class VariantTagProvider : ShipModLoader.Provider {
         // blanket-tagging the root would duplicate a child's installation across entries.
         writeThrough(member, variant, tag)
 
+        remember(member, variant, mods)
+    }
+
+    private fun remember(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {
         cache.getOrPut(member) { mutableMapOf() }[variant.hullVariantId] = mods
+        instanceCache.getOrPut(member) { WeakHashMap() }[variant] = mods
         lastWrite[member] = currentGameTime()
+    }
+
+    private fun forget(member: FleetMemberAPI) {
+        cache.remove(member)
+        instanceCache.remove(member)
+        lastWrite.remove(member)
+    }
+
+    /** How many nodes of [member]'s ship (root included) carry [variantId]. */
+    private fun countNodesWithId(member: FleetMemberAPI, variantId: String): Int {
+        val root = member.variant ?: return 0
+        var count = if (root.hullVariantId == variantId) 1 else 0
+        root.forEachModuleVariant { childV ->
+            if (childV.hullVariantId == variantId) count++
+        }
+        return count
     }
 
     override fun remove(member: FleetMemberAPI, variant: ShipVariantAPI) {
         // A removal must purge the cached mirrors too, or the removed exotic keeps being served
         // from another FM key until the TTL sweep happens to re-sync it.
         invalidateVariantAcrossAll(variant.hullVariantId)
+        instanceCache.values.forEach { it.remove(variant) }
         removeFromTags(variant)
         // Write-through removal: strip the stale EXOTICA tags from every sibling object graph the
         // whole-ship read may walk. This is the core fix for the strip bug — without it a removal
@@ -293,6 +339,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
                 val elapsed = elapsedSince(last)
                 if (elapsed > CACHE_TTL_GAME_DAYS) {
                     iter.remove()
+                    instanceCache.remove(member)
                     lastWrite.remove(member)
                 }
             }
@@ -335,6 +382,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
                     // No data left for this member — drop the member entirely so neither the
                     // inner map nor its lastWrite timestamp lingers as dead weight.
                     iter.remove()
+                    instanceCache.remove(member)
                     lastWrite.remove(member)
                 }
             }
