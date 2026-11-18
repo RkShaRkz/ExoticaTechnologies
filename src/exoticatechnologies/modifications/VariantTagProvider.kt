@@ -63,7 +63,26 @@ open class VariantTagProvider : ShipModLoader.Provider {
         private const val NUMBER_OF_GRAPHS = 4
     }
 
-    private val cache: MutableMap<FleetMemberAPI, MutableMap<String, ShipModifications>> = WeakHashMap()
+    /**
+     * Mirror of the variant tags, three levels deep: fleet member -> hullVariantId -> slot path
+     * ([ModuleSlotPathsUtils]) -> the decoded modifications. Together the three levels are the
+     * composite key (member, hullVariantId, slot path) of ONE module.
+     *
+     * The slot path level exists because a hullVariantId is not unique inside a ship: a ship can
+     * mount one module variant in several slots (the five identical segments of a train ship).
+     * Keyed by id alone, all of them shared a single entry, and each of them was served whatever
+     * the first one had cached (#76 F4).
+     *
+     * It is a nested map and not one map with a combined key, for two reasons: a lookup builds no
+     * key object (get() runs every frame, a combined key would have to be created for each call),
+     * and everything that works per hullVariantId - [invalidateVariantAcrossAll], [findFuzzyKey] -
+     * keeps working on the middle level as it did before.
+     *
+     * The slot path is the one the caller passes ([get] with a slot path - used by the walks of
+     * [ShipModLoader], which already know it) or, for a plain [get], the one [cacheSlotPathOf]
+     * works out. Either names one module under one member, which is all a key has to do.
+     */
+    private val cache: MutableMap<FleetMemberAPI, MutableMap<String, MutableMap<String, ShipModifications>>> = WeakHashMap()
     private val EXOTICA_INDICATOR = "$\$EXOTICA$$"
 
     /**
@@ -90,7 +109,46 @@ open class VariantTagProvider : ShipModLoader.Provider {
     }
 
     override fun get(member: FleetMemberAPI, variant: ShipVariantAPI): ShipModifications? {
+        // The caller does not know which module this is: [getAtSlotPath] works it out.
+        return getAtSlotPath(member, variant, Optional.empty())
+    }
+
+    /**
+     * Reads the modifications of a variant whose slot path the caller already knows.
+     *
+     * A caller that walks a ship's module tree holds the slot path of every node it visits, so
+     * it passes that path instead of having it searched for again. That makes the read exact
+     * whatever [member] is (a module-level member has no tree of its own in which identical
+     * modules could be told apart) and free of any tree search.
+     *
+     * @param member the member the lookup is made for
+     * @param variant the variant to read
+     * @param slotPath the slot path of [variant] on the ship ([ModuleSlotPathsUtils])
+     * @return the modifications of [variant], or null when it carries none
+     */
+    override fun get(member: FleetMemberAPI, variant: ShipVariantAPI, slotPath: String): ShipModifications? {
+        return getAtSlotPath(member, variant, Optional.of(slotPath))
+    }
+
+    /**
+     * The read behind both [get] entry points: from the cache when it holds this module's data,
+     * otherwise from the variant's own tag.
+     *
+     * @param member the member the lookup is made for
+     * @param variant the variant to read
+     * @param givenSlotPath the slot path of [variant] when the caller knows it, [Optional.empty]
+     * when it has to be worked out here ([cacheSlotPathOf])
+     * @return the modifications of [variant], or null when it carries none. Null is what the
+     * [ShipModLoader.Provider] contract returns for "nothing stored", so it is kept here.
+     */
+    private fun getAtSlotPath(member: FleetMemberAPI, variant: ShipVariantAPI, givenSlotPath: Optional<String>): ShipModifications? {
         val variantId = variant.hullVariantId
+        // WHICH module of the member's ship this variant is: the part of the cache key that the
+        // hullVariantId cannot provide. When the caller did not pass it, it is only worked out
+        // once it is needed - there is a cache to look in, or a result to store - so a read that
+        // can do neither (nothing cached yet, on the refit screen) pays nothing for it.
+        var slotPath = givenSlotPath
+        var isSlotPathResolved = givenSlotPath.isPresent()
 
         // Periodic sweep for members whose cached data age has exceeded the TTL
         if (++accessCounter % CLEANUP_INTERVAL == 0L) {
@@ -116,17 +174,35 @@ open class VariantTagProvider : ShipModLoader.Provider {
                     lastWrite.remove(member)
                     // fall through to tag read below
                 } else {
-                    val cacheMods = memberCache[variantId]
-                    if (cacheMods != null) {
-                        return cacheMods
+                    if (isSlotPathResolved.not()) {
+                        slotPath = cacheSlotPathOf(member, variant)
+                        isSlotPathResolved = true
                     }
+                    if (slotPath.isPresent()) {
+                        val cacheMods = memberCache[variantId]?.get(slotPath.get())
+                        if (cacheMods != null) {
+                            return cacheMods
+                        }
 
-                    val fuzzyKey = findFuzzyKey(member, variantId)
-                    if (fuzzyKey.isPresent()) {
-                        val matchId = fuzzyKey.get()
-                        val fuzzyMods = memberCache[matchId]
-                        return fuzzyMods
+                        val fuzzyKey = findFuzzyKey(member, variantId)
+                        if (fuzzyKey.isPresent()) {
+                            val matchId = fuzzyKey.get()
+                            // A fuzzy key is ANOTHER hullVariantId with the same prefix. It is
+                            // the same module only when it was cached for the same slot: the
+                            // refit clone 'left_0' of 'left_Start' sits where 'left_Start' sits,
+                            // while the sibling 'hangar1_Strike' of 'hangar1_Standard' sits in
+                            // another slot and must not be served its data. When that slot has
+                            // no entry, the read falls through to the variant's own tag instead
+                            // of returning nothing.
+                            val fuzzyMods = memberCache[matchId]?.get(slotPath.get())
+                            if (fuzzyMods != null) {
+                                return fuzzyMods
+                            }
+                        }
                     }
+                    // No slot path: nothing says which module this variant is (see
+                    // cacheSlotPathOf), so no cached entry can be trusted to be ITS data. Its own
+                    // tag is read below.
                 }
             }
         }
@@ -139,15 +215,93 @@ open class VariantTagProvider : ShipModLoader.Provider {
             if (StarsectorAPIInteractor.runningFromRefitOrFleetScreen()) {
                 return it
             } else {
-                cache.getOrPut(member) { mutableMapOf() }[variantId] = it
-                lastWrite[member] = currentGameTime()
+                if (isSlotPathResolved.not()) {
+                    // Not needed until now. fixVariant above may have replaced the member's
+                    // variant in the meantime; that only happens when [variant] WAS the
+                    // member's variant, and its copy of the whole ship resolves to the same
+                    // root slot path.
+                    slotPath = cacheSlotPathOf(member, variant)
+                }
+                rememberInCache(member, variantId, slotPath, it)
             }
             return it
         }
         return null
     }
 
+    /**
+     * Works out which module of [member]'s ship [variant] is, as the slot path that completes
+     * the cache key (member, hullVariantId, slot path).
+     *
+     * The position is taken relative to the member's OWN variant tree, not to the ship's root:
+     * the cache is kept per member, so all that matters is that one module always gets the same
+     * slot path under the same member. That keeps the common cases free of any search:
+     *
+     * - [variant] is the member's variant itself (every single-module ship, every read of a ship
+     *   root): the root slot path, decided by one reference comparison.
+     * - the member's variant owns no station modules (a single-module ship, or a module-level
+     *   member such as the transient one the refit screen creates for a selected module): its
+     *   tree is a single node, so there is only one position anything read through this member
+     *   can have. For every ship without modules this is exactly the previous behaviour - one
+     *   entry per hullVariantId.
+     *
+     * Only a member whose variant owns station modules needs a search
+     * ([ModuleSlotPathsUtils.slotPathOfGraphRoot]): by instance, as a copy of the whole ship, or by a
+     * hullVariantId that only one module of the ship carries. No instance is stored anywhere;
+     * the instance is only used to look up a String.
+     *
+     * Known limit: a module-level member has no tree in which identical modules could be told
+     * apart. When OTHER modules of the ship are read through such a member WITHOUT a slot path,
+     * modules that share a hullVariantId still share one entry, exactly as before this change.
+     * The walks of [ShipModLoader] pass the slot path of every node they read, so they do not
+     * depend on this function and are exact for every member.
+     *
+     * @param member the member the lookup is made for
+     * @param variant the variant being read or written
+     * @return the slot path of [variant] under [member], or [Optional.empty] when it cannot be
+     * determined: [variant] is a detached clone of one of several identical modules, and nothing
+     * says which one. Such a variant is not cached at all, see [rememberInCache].
+     */
+    private fun cacheSlotPathOf(member: FleetMemberAPI, variant: ShipVariantAPI): Optional<String> {
+        val memberVariant: ShipVariantAPI? = member.variant
+        if (memberVariant == null || memberVariant === variant) {
+            // No tree to search, or the root of it: either way the root position.
+            return Optional.of(ModuleSlotPathsUtils.ROOT_SLOT_PATH)
+        }
+        val stationModules: Map<String, String>? = memberVariant.stationModules
+        if (stationModules == null || stationModules.isEmpty()) {
+            return Optional.of(ModuleSlotPathsUtils.ROOT_SLOT_PATH)
+        }
+        return ModuleSlotPathsUtils.slotPathOfGraphRoot(memberVariant, variant)
+    }
+
+    /**
+     * Stores [mods] in the cache under the composite key (member, hullVariantId, slot path) and
+     * restarts the member's data-age clock.
+     *
+     * @param member the member the data belongs to
+     * @param variantId the hullVariantId of the variant the data was read from or written to
+     * @param slotPath the slot path of that variant under [member] ([cacheSlotPathOf])
+     * @param mods the modifications to cache
+     */
+    private fun rememberInCache(member: FleetMemberAPI, variantId: String, slotPath: Optional<String>, mods: ShipModifications) {
+        if (slotPath.isPresent().not()) {
+            // An entry without a slot would be found by the next module that carries the same
+            // hullVariantId - which is the defect this cache had. A variant that cannot be placed
+            // is therefore not cached; it is read from its own tag on every call. That costs
+            // speed for such a variant and never data: the tag is the source of truth.
+            return
+        }
+        cache.getOrPut(member) { mutableMapOf() }.getOrPut(variantId) { mutableMapOf() }[slotPath.get()] = mods
+        lastWrite[member] = currentGameTime()
+    }
+
     override fun set(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {
+        // The slot the written module sits in, for the cache entry made at the end. Worked out
+        // first, because fixVariant below can replace the member's variant, and the written
+        // instance would no longer be found in the member's tree afterwards.
+        val slotPath = cacheSlotPathOf(member, variant)
+
         // Write-side invalidation BEFORE the fresh write: purge stale mirrors of this variantId
         // from every member's cache so the new data can never be shadowed by a stale sibling
         // served via exact or fuzzy match on a later read.
@@ -172,8 +326,7 @@ open class VariantTagProvider : ShipModLoader.Provider {
         // blanket-tagging the root would duplicate a child's installation across entries.
         writeThrough(member, variant, tag)
 
-        cache.getOrPut(member) { mutableMapOf() }[variant.hullVariantId] = mods
-        lastWrite[member] = currentGameTime()
+        rememberInCache(member, variant.hullVariantId, slotPath, mods)
     }
 
     override fun remove(member: FleetMemberAPI, variant: ShipVariantAPI) {
@@ -604,6 +757,11 @@ open class VariantTagProvider : ShipModLoader.Provider {
      * (stripping the last '_suffix', mirroring [findFuzzyKey]) is required because the same module
      * variant appears under many suffixes ('left_0' / 'left_Start' / 'left_Hull') depending on where
      * the engine sourced it; writing any one of them must invalidate all siblings.
+     *
+     * The cache has a slot path level below the variantId (see [cache]). Dropping a variantId
+     * drops it for EVERY slot, so a write to one of several identical modules also drops the
+     * mirrors of the others. That is more than strictly needed and deliberately kept: it is safe
+     * for the reason given above, and it keeps this purge independent of where a module sits.
      *
      * @param variantId the variantId whose mirrors must be dropped
      */
