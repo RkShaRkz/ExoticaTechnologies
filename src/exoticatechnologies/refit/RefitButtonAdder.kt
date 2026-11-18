@@ -13,6 +13,7 @@ import com.fs.starfarer.api.util.Misc
 import com.fs.starfarer.campaign.CampaignState
 import com.fs.starfarer.loading.specs.HullVariantSpec
 import com.fs.state.AppDriver
+import exoticatechnologies.util.datastructures.Optional
 import lunalib.lunaExtensions.addLunaSpriteElement
 import lunalib.lunaUI.elements.LunaSpriteElement
 import org.lazywizard.lazylib.MathUtils
@@ -536,4 +537,36 @@ fun getRefitDisplayVariant(member: FleetMemberAPI): ShipVariantAPI? {
     val actorRootId = if (member.shipName != null) member.id else refitRootMember.id
     if (refitRootMember.id != actorRootId) return null
     return runCatching { RefitButtonAdder.member?.checkRefitVariant() }.getOrNull()
+}
+
+/**
+ * The variant that [getRefitDisplayVariant] is the working copy OF: the own variant of the member
+ * the refit screen is editing right now, behind the same attribution gate.
+ *
+ * It exists to answer one question the display working tree cannot answer by itself: WHICH module
+ * of the ship is being edited. While a module tab is selected, the display tree is a single
+ * module's variant. It is not an instance inside the ship's own tree, and its hullVariantId can be
+ * shared by several modules of the ship (the five identical segments of a train ship), so neither
+ * its identity nor its id says which slot it belongs to. The member it is the working copy of can:
+ * that member's own variant may still be the very instance mounted in the ship's tree, and then
+ * its slot is known for certain (see [exoticatechnologies.util.ModuleSlotPathsUtils]).
+ *
+ * @param member the [FleetMemberAPI] entering the whole-ship flow
+ * @return the edited member's own variant when the refit screen is attributable to [member]'s
+ * ship; [Optional.empty] when the refit screen is closed, is showing another ship, or the
+ * engine returned no member or variant for it
+ */
+fun getRefitDisplayMemberVariant(member: FleetMemberAPI): Optional<ShipVariantAPI> {
+    val refitRootMember: FleetMemberAPI? = RefitButtonAdder.getRootMember()
+    if (refitRootMember == null) {
+        return Optional.empty()
+    }
+    // Same attribution as getRefitDisplayVariant(member): a named member must BE the refit root,
+    // an unnamed (transient station-module) member is attributed to the refit root itself.
+    val actorRootId = if (member.shipName != null) member.id else refitRootMember.id
+    return if (refitRootMember.id != actorRootId) {
+        Optional.empty()
+    } else {
+        Optional.ofNullable(RefitButtonAdder.member?.variant)
+    }
 }

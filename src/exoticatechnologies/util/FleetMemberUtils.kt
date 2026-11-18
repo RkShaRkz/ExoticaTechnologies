@@ -229,8 +229,8 @@ object FleetMemberUtils {
      *    its tree may receive fresh data.
      * 4. A root whose tree INSTANCE-contains [variant] (unique owner, breaks identical hull ties
      *    deterministically in the stable campaign graph).
-     * 5. A root whose tree EXACTLY contains [targetId] (mirrors the [findVariantInTree] exact step:
-     *    differing hull ids under a shared prefix disambiguate duplicate-hull ships).
+     * 5. A root whose tree EXACTLY contains [targetId] (an exact id match is tried before any
+     *    fuzzy one: differing hull ids under a shared prefix disambiguate duplicate-hull ships).
      * 6. Same-fleet fuzzy fallback (never a cross-fleet fuzzy first-match), preserving the old
      *    single-ship behavior.
      *
