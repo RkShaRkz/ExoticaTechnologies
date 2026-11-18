@@ -7,6 +7,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.FleetMemberUtils
+import exoticatechnologies.util.ModuleSlotPathsUtils
 import exoticatechnologies.util.ModuleVariantHierarchy
 import exoticatechnologies.util.FleetMemberUtils.findMemberFromShip
 import exoticatechnologies.util.combineIntoList
@@ -21,6 +22,21 @@ class ShipModLoader {
 
     private fun getData(member: FleetMemberAPI, variant: ShipVariantAPI = member.variant): ShipModifications? {
         return providers.firstNotNullOfOrNull { it.get(member, variant) }
+    }
+
+    /**
+     * [getData] for a caller that already knows the slot path of [variant] on the ship, which is
+     * every caller that walks the ship's module tree. Passing it on saves the provider from
+     * searching the tree for a node the walk is standing on, and makes the read exact for a
+     * module-level member, which has no tree of its own to search.
+     *
+     * @param member the member the read is made for
+     * @param variant the variant to read
+     * @param slotPath the slot path of [variant] on the ship ([ModuleSlotPathsUtils])
+     * @return the modifications of [variant], or null when no provider has any
+     */
+    private fun getData(member: FleetMemberAPI, variant: ShipVariantAPI, slotPath: String): ShipModifications? {
+        return providers.firstNotNullOfOrNull { it.get(member, variant, slotPath) }
     }
 
     private fun saveData(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {
@@ -81,19 +97,37 @@ class ShipModLoader {
         // (sibling modules and child-module data live on the child variants themselves).
         val rootFM = FleetMemberUtils.findMemberForStats(stats) ?: return allModsList.toList()
         get(rootFM, rootFM.variant)?.let { allModsList.add(it) }
-        collectModuleMods(rootFM, rootFM.variant, allModsList)
+        collectModuleMods(rootFM, rootFM.variant, ModuleSlotPathsUtils.ROOT_SLOT_PATH, allModsList)
 
         return allModsList.toList()
     }
 
-    private fun collectModuleMods(member: FleetMemberAPI, variant: ShipVariantAPI, result: MutableSet<ShipModifications>) {
+    /**
+     * Recursive stationModules walk that collects the modifications of every module below
+     * [variant].
+     *
+     * @param member the member the reads are made for
+     * @param variant the variant whose station modules are read
+     * @param variantSlotPath the slot path of [variant] on the ship
+     * @param result receives the modifications found
+     */
+    private fun collectModuleMods(
+        member: FleetMemberAPI,
+        variant: ShipVariantAPI,
+        variantSlotPath: String,
+        result: MutableSet<ShipModifications>
+    ) {
         for (slotId in variant.stationModules.keys) {
             val childV = variant.getModuleVariant(slotId) ?: continue
-            val childMods = get(member, childV)
+            // This walk runs every frame in combat and knows which slot it is standing on, so it
+            // hands the slot path to the read instead of having the provider search the tree for
+            // the node again. For a module mounted on the root the path is the slot id itself.
+            val childSlotPath = ModuleSlotPathsUtils.childSlotPath(variantSlotPath, slotId)
+            val childMods = getData(member, childV, childSlotPath)
             childMods?.let {
                 result.add(it)
             }
-            collectModuleMods(member, childV, result)
+            collectModuleMods(member, childV, childSlotPath, result)
         }
     }
 
@@ -228,6 +262,27 @@ class ShipModLoader {
 
     interface Provider {
         fun get(member: FleetMemberAPI, variant: ShipVariantAPI): ShipModifications?
+
+        /**
+         * [get] for a caller that already knows the slot path of [variant] on the ship.
+         *
+         * The slot path only helps a provider that keeps a separate record for every module of a
+         * ship: it is what tells two modules with the same hullVariantId apart
+         * ([VariantTagProvider] keys its cache by it). A provider that keeps one record per fleet
+         * member, or one for a particular ship, has nothing to tell apart. That is why the default
+         * ignores the slot path and answers exactly as the plain [get] does: such a provider, and
+         * any provider added later, needs no code for it.
+         *
+         * @param member the member the read is made for
+         * @param variant the variant to read
+         * @param slotPath the slot path of [variant] on the ship
+         * ([exoticatechnologies.util.ModuleSlotPathsUtils])
+         * @return the modifications of [variant], or null when the provider has none
+         */
+        fun get(member: FleetMemberAPI, variant: ShipVariantAPI, slotPath: String): ShipModifications? {
+            return get(member, variant)
+        }
+
         fun set(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications)
         fun remove(member: FleetMemberAPI, variant: ShipVariantAPI)
 
