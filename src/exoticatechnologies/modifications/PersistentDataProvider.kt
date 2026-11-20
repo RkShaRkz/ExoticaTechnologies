@@ -17,6 +17,21 @@ class PersistentDataProvider: VariantTagProvider() {
         return mods
     }
 
+    /**
+     * The slot-path read of this provider. Its data is kept per fleet member id, not per module,
+     * so the slot path makes no difference to it. The override is still needed: without it this
+     * call would run [VariantTagProvider]'s slot-path read and answer from the variant tags
+     * instead of from this provider's own store.
+     *
+     * @param member the member the read is made for
+     * @param variant the variant to read
+     * @param slotPath the slot path of [variant] on the ship, unused here
+     * @return the same as [get] without a slot path
+     */
+    override fun get(member: FleetMemberAPI, variant: ShipVariantAPI, slotPath: String): ShipModifications? {
+        return get(member, variant)
+    }
+
     override fun set(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {
         throw RuntimeException("This provider is not intended to be used.")
 
