@@ -2,6 +2,7 @@ package exoticatechnologies.util
 
 import org.lwjgl.util.vector.Vector2f
 import kotlin.math.abs
+import kotlin.math.sign
 import kotlin.math.withSign
 
 object FastTrigUtils {
@@ -66,16 +67,38 @@ object FastTrigUtils {
     }
 
     /**
+     * Computes a fast approximation of the arc tangent of a value.
+     *
+     * Uses a minimax cubic polynomial approximation over `[-1.0, 1.0]` combined with
+     * range reduction (`atan(z) = sign(z) * π/2 - atan(1/z)`) for `|z| > 1.0`.
+     *
+     * - **Input domain:** All finite [Double] values `(-∞, +∞)` (also handles `±Infinity`, returning `±π/2`).
+     * - **Output range:** `[-π/2, +π/2]` radians (approximately `-1.5708` to `+1.5708`).
+     * - **Accuracy:** Maximum absolute error is ~`0.00495` radians (~`0.28°`) across the entire domain.
+     *
+     * @param tangentValue the tangent value (slope ratio) whose arc tangent is to be returned.
+     * @return the approximate angle in radians within `[-π/2, +π/2]`, or [Double.NaN] if [tangentValue] is `NaN`.
+     * @see atan_internal
+     */
+    fun atan(tangentValue: Double): Double {
+        return if (abs(tangentValue) <= 1.0) {
+            atan_internal(tangentValue)
+        } else {
+            tangentValue.sign * kotlin.math.PI / 2.0 - atan_internal(1.0 / tangentValue)
+        }
+    }
+
+    /**
      * Returns arctangent of [tangentValue] as an angle in radians, via magic.
      *
      * The actual magic in question
      *
      *      return (0.97239411 + -0.19194795 * tangentValue * tangentValue) * tangentValue
      *
-     * @param tangentValue the value to calculate atan for
+     * @param tangentValue the value to calculate atan for, **must be in [-1,1] range
      * @return angle in radians
      */
-    fun atan(tangentValue: Double): Double {
+    private fun atan_internal(tangentValue: Double): Double {
         return (0.97239411 + -0.19194795 * tangentValue * tangentValue) * tangentValue
     }
 
