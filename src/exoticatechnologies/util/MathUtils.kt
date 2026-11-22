@@ -24,12 +24,34 @@ object FastTrigUtils {
         val r1 = radians % twoPi
 
         // put us in -PI to +PI space
-        val r2 = if (abs(r1) > Math.PI) r1 - twoPi else r1
+        val r2 = if (abs(r1) > Math.PI) r1 - r1.sign * twoPi else r1
 
         // put us in -PI/2 to +PI/2 space
-        val r3 = if (abs(r2) > Math.PI / 2.0) Math.PI - r2 else r2
+        val r3 = if (abs(r2) > Math.PI / 2.0) r2.sign * Math.PI - r2 else r2
 
         return r3
+    }
+
+    /**
+     * Computes a fast approximation of the sine of an angle using a 7th-order Taylor polynomial.
+     *
+     * First normalizes [radians] into `[-π/2, +π/2]` via [reduceSinAngle], then evaluates the
+     * Maclaurin series expansion `x - x³/3! + x⁵/5! - x⁷/7!` using Horner's method for speed
+     * and numerical stability.
+     *
+     * - **Input domain:** All finite [Double] angles in radians `(-∞, +∞)` (returns [Double.NaN] for `NaN` or `±Infinity`).
+     * - **Output range:** Approximately `[-1.0, +1.0]` (unitless ratio).
+     * - **Accuracy:** Maximum absolute error is ~`0.000157` (`~1.57e-4`) at the `±π/2` boundaries.
+     *
+     * @param radians the angle in radians whose sine is to be approximated.
+     * @return the approximate sine of [radians], or [Double.NaN] if [radians] is `NaN` or infinite.
+     * @see reduceSinAngle
+     * @see sin_hybrid
+     */
+    fun sin(radians: Double): Double {
+        val x = reduceSinAngle(radians)
+        val x2 = x * x
+        return x * (1.0 - x2 * (1.0 / 6.0 - x2 * (1.0 / 120.0 - x2 / 5040.0)))
     }
 
     /**
@@ -39,10 +61,13 @@ object FastTrigUtils {
      * precision and utilizes a hybrid approach: calling [kotlin.math.sin] for
      * small angles and [kotlin.math.cos] for angles closer to π/2.
      *
+     * This one is alot more accurate than [sin]
+     *
      * @param radians The angle, in radians.
      * @return The sine of the angle, in radians.
+     * @see sin
      */
-    fun sin(radians: Double): Double {
+    fun sin_hybrid(radians: Double): Double {
         // limits angle to between -PI/2 and +PI/2
         val reduced = reduceSinAngle(radians)
         return if (abs(reduced) <= Math.PI / 4.0) {
@@ -60,10 +85,13 @@ object FastTrigUtils {
      * ensures consistent range reduction and performance with the [sin] implementation.
      *
      * @param radians The angle, in radians.
+     * @param useHybridSin whether we should use the "taylor" [sin] or the "hybrid" [sin_hybrid]
      * @return The cosine of the angle, in radians.
+     * @see sin
+     * @see sin_hybrid
      */
-    fun cos(radians: Double): Double {
-        return sin(radians + Math.PI / 2.0)
+    fun cos(radians: Double, useHybridSin: Boolean = false): Double {
+        return if (useHybridSin) sin_hybrid(radians + Math.PI / 2.0) else sin(radians + Math.PI / 2.0)
     }
 
     /**
@@ -89,7 +117,7 @@ object FastTrigUtils {
     }
 
     /**
-     * Returns arctangent of [tangentValue] as an angle in radians, via magic.
+     * Returns arctangent of [tangentValue] as an angle in radians, via minimax cubic polynomial approximation magic.
      *
      * The actual magic in question
      *
@@ -101,6 +129,15 @@ object FastTrigUtils {
     private fun atan_internal(tangentValue: Double): Double {
         return (0.97239411 + -0.19194795 * tangentValue * tangentValue) * tangentValue
     }
+
+//    private fun atan_internal(tangentValue: Double): Double {
+//        val a = 0.372003
+//        val b = 0.703384
+//        val c = 0.043562
+//
+//        val xx = tangentValue * tangentValue
+//        return (1.0 + a * xx) * tangentValue / (1.0 + xx * (b + c * xx))
+//    }
 
     /**
      * Calculates the four-quadrant arctangent of y/x using [Float] inputs.
@@ -130,11 +167,13 @@ object FastTrigUtils {
     fun atan2(y: Double, x: Double): Double {
         val ay = abs(y)
         val ax = abs(x)
+        // if they're both zero, bail out imediatelly to avoid NaN while calculating Z
+        if (ax == 0.0 && ay == 0.0) return 0.0.withSign(y)
         val invert = ay > ax
         // [0,1]
         val z = if (invert) ax / ay else ay / ax
         // [0,π/4]
-        var theta = atan(z)
+        var theta = atan_internal(z)
         // [0,π/2]
         if (invert) theta = Math.PI / 2.0 - theta
 
