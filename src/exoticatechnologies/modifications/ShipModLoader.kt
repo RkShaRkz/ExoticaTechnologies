@@ -5,6 +5,9 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.special.ShipRecoverySpecial
+import exoticatechnologies.modifications.dataproviders.PersistentDataProvider
+import exoticatechnologies.modifications.dataproviders.VariantTagProvider
+import exoticatechnologies.modifications.dataproviders.ZigguratDataProvider
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.util.FleetMemberUtils
 import exoticatechnologies.util.ModuleVariantHierarchy

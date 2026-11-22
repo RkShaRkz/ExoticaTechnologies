@@ -16,7 +16,7 @@ import exoticatechnologies.hullmods.ExoticaTechHM;
 import exoticatechnologies.hullmods.exotics.HullmodExoticHandler;
 import exoticatechnologies.integration.indevo.IndEvoUtil;
 import exoticatechnologies.modifications.ShipModLoader;
-import exoticatechnologies.modifications.VariantTagProvider;
+import exoticatechnologies.modifications.dataproviders.VariantTagProvider;
 import exoticatechnologies.modifications.bandwidth.Bandwidth;
 import exoticatechnologies.modifications.exotics.ExoticSpecialItemPlugin;
 import exoticatechnologies.modifications.exotics.ExoticsHandler;
