@@ -5,7 +5,7 @@ import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import exoticatechnologies.modifications.ShipModifications
 
-class PersistentDataProvider: VariantTagProvider() {
+class PersistentDataProvider : AbstractDataProvider() {
     fun getFromId(id: String): ShipModifications? {
         return shipModificationMap[id]
     }
@@ -13,7 +13,7 @@ class PersistentDataProvider: VariantTagProvider() {
     override fun get(member: FleetMemberAPI, variant: ShipVariantAPI): ShipModifications? {
         val mods: ShipModifications? = getFromId(member.id)
         if (mods != null) {
-            super.set(member, variant, mods) //set variant tag
+            VariantTagProvider.getInstance().set(member, variant, mods) //set variant tag
         }
         return mods
     }

@@ -9,7 +9,7 @@ import exoticatechnologies.modifications.ShipModifications
  * The only ship in the game that changes variant upon recovery, to my knowledge.
  * VariantTagProvider will return updated versions of this if the player installs more mods.
  */
-class ZigguratDataProvider: VariantTagProvider() {
+class ZigguratDataProvider : AbstractDataProvider() {
     companion object {
         @JvmStatic
         var inst: ZigguratDataProvider = ZigguratDataProvider()
@@ -38,7 +38,7 @@ class ZigguratDataProvider: VariantTagProvider() {
     }
 
     override fun remove(member: FleetMemberAPI, variant: ShipVariantAPI) {
-        //donothing
+        //do nothing
     }
 
     override fun setOnlyIfFirst(): Boolean {

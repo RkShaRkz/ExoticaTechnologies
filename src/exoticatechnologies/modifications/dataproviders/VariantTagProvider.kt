@@ -12,11 +12,9 @@ import exoticatechnologies.util.*
 import exoticatechnologies.util.datastructures.Optional
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
-import org.json.JSONException
-import org.json.JSONObject
 import java.util.WeakHashMap
 
-open class VariantTagProvider : ShipModLoader.Provider {
+open class VariantTagProvider : AbstractDataProvider() {
     companion object {
         val MIN_LOG_LEVEL: Level = Level.WARN
 
@@ -396,22 +394,5 @@ open class VariantTagProvider : ShipModLoader.Provider {
         }
 
         return null
-    }
-
-    fun convertFromJson(json: String): ShipModifications {
-        try {
-            val modsObj = JSONObject(json)
-            return ShipModifications(modsObj)
-        } catch (ex: JSONException) {
-            throw RuntimeException("Failed to load Exotica modifications object from variant tags.", ex)
-        }
-    }
-
-    fun convertToJson(member:FleetMemberAPI, mods: ShipModifications): String {
-        try {
-            return mods.toJson(member).toString()
-        } catch (ex: JSONException) {
-            throw RuntimeException("Failed to save Exotica object.")
-        }
     }
 }
