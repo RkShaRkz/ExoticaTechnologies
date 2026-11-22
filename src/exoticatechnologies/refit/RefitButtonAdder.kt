@@ -13,6 +13,7 @@ import com.fs.starfarer.api.util.Misc
 import com.fs.starfarer.campaign.CampaignState
 import com.fs.starfarer.loading.specs.HullVariantSpec
 import com.fs.state.AppDriver
+import exoticatechnologies.util.datastructures.Optional
 import lunalib.lunaExtensions.addLunaSpriteElement
 import lunalib.lunaUI.elements.LunaSpriteElement
 import org.lazywizard.lazylib.MathUtils
@@ -536,4 +537,26 @@ fun getRefitDisplayVariant(member: FleetMemberAPI): ShipVariantAPI? {
     val actorRootId = if (member.shipName != null) member.id else refitRootMember.id
     if (refitRootMember.id != actorRootId) return null
     return runCatching { RefitButtonAdder.member?.checkRefitVariant() }.getOrNull()
+}
+
+/**
+ * Returns the variant the refit display tree is a working copy of, under the same attribution gate
+ * as [getRefitDisplayVariant].
+ *
+ * While a module tab is selected, the display tree is a detached clone of one module. Its identity
+ * and hull id cannot say which slot it belongs to when several modules share a hull, but the
+ * edited member's own variant may still be the exact instance mounted in the ship tree. Exposing
+ * that original lets write mirroring place a detached display module by slot instead of guessing.
+ */
+fun getRefitDisplayMemberVariant(member: FleetMemberAPI): Optional<ShipVariantAPI> {
+    val refitRootMember: FleetMemberAPI? = RefitButtonAdder.getRootMember()
+    if (refitRootMember == null) {
+        return Optional.empty()
+    }
+    val actorRootId = if (member.shipName != null) member.id else refitRootMember.id
+    return if (refitRootMember.id != actorRootId) {
+        Optional.empty()
+    } else {
+        Optional.ofNullable(RefitButtonAdder.member?.variant)
+    }
 }
