@@ -222,26 +222,6 @@ class FastTrigUtilsTest {
         assertTrue(sink.isFinite())
     }
 
-    /**
-     * Reference Zarowski rational approximation on [-1, 1] wrapped with full range reduction
-     * for fair comparison against FastTrigUtils.atan().
-     */
-    private fun atanZarowskiFull(z: Double): Double {
-        fun core(x: Double): Double {
-            val a = 0.372003
-            val b = 0.703384
-            val c = 0.043562
-            val xx = x * x
-            return (1.0 + a * xx) * x / (1.0 + xx * (b + c * xx))
-        }
-
-        return if (abs(z) <= 1.0) {
-            core(z)
-        } else {
-            kotlin.math.sign(z) * (PI / 2.0) - core(1.0 / z)
-        }
-    }
-
     @Test
     fun `compare accuracy of FastTrigUtils atan vs Zarowski atanApprox`() {
         var maxCurrentError = 0.0
@@ -253,8 +233,8 @@ class FastTrigUtilsTest {
             val z = -20.0 + (40.0 * i / steps)
             val truth = stdAtan(z)
 
-            val currentVal = FastTrigUtils.atan(z)
-            val zarowskiVal = atanZarowskiFull(z)
+            val currentVal = FastTrigUtils.atan(z, useZarowski = false)
+            val zarowskiVal = FastTrigUtils.atan(z, useZarowski = true)
 
             val currentErr = abs(truth - currentVal)
             val zarowskiErr = abs(truth - zarowskiVal)
@@ -284,17 +264,17 @@ class FastTrigUtilsTest {
         var sink = 0.0
         repeat(500_000) { i ->
             val z = inputs[i and 1023]
-            sink += stdAtan(z) + FastTrigUtils.atan(z) + atanZarowskiFull(z)
+            sink += stdAtan(z) + FastTrigUtils.atan(z, useZarowski = false) + FastTrigUtils.atan(z, useZarowski = true)
         }
 
         val stdTimeNs = measureNanoTime {
             for (i in 0 until iterations) sink += stdAtan(inputs[i and 1023])
         }
         val cubicTimeNs = measureNanoTime {
-            for (i in 0 until iterations) sink += FastTrigUtils.atan(inputs[i and 1023])
+            for (i in 0 until iterations) sink += FastTrigUtils.atan(inputs[i and 1023], useZarowski = false)
         }
         val zarowskiTimeNs = measureNanoTime {
-            for (i in 0 until iterations) sink += atanZarowskiFull(inputs[i and 1023])
+            for (i in 0 until iterations) sink += FastTrigUtils.atan(inputs[i and 1023], useZarowski = true)
         }
 
         println(
