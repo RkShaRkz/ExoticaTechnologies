@@ -1,8 +1,9 @@
-package exoticatechnologies.modifications
+package exoticatechnologies.modifications.dataproviders
 
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
+import exoticatechnologies.modifications.ShipModifications
 
 class PersistentDataProvider: VariantTagProvider() {
     fun getFromId(id: String): ShipModifications? {

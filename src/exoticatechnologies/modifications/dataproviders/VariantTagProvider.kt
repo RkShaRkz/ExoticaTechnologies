@@ -1,9 +1,11 @@
-package exoticatechnologies.modifications
+package exoticatechnologies.modifications.dataproviders
 
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.loading.VariantSource
+import exoticatechnologies.modifications.ShipModLoader
+import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.refit.checkRefitVariant
 import exoticatechnologies.refit.getRefitDisplayVariant
 import exoticatechnologies.util.*

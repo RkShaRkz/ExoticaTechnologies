@@ -6,7 +6,6 @@ import com.fs.starfarer.api.campaign.*
 import com.fs.starfarer.api.campaign.CampaignEventListener.FleetDespawnReason
 import com.fs.starfarer.api.campaign.econ.MonthlyReport
 import com.fs.starfarer.api.campaign.listeners.EconomyTickListener
-import com.fs.starfarer.api.campaign.rules.MemoryAPI
 import com.fs.starfarer.api.combat.EngagementResultAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.fleet.FleetMemberType
@@ -27,7 +26,7 @@ import com.fs.starfarer.api.util.Pair
 import exoticatechnologies.ETModSettings
 import exoticatechnologies.campaign.market.MarketManager
 import exoticatechnologies.hullmods.ExoticaTechHM
-import exoticatechnologies.modifications.PersistentDataProvider.Companion.shipModificationMap
+import exoticatechnologies.modifications.dataproviders.PersistentDataProvider.Companion.shipModificationMap
 import exoticatechnologies.modifications.ShipModFactory
 import exoticatechnologies.modifications.ShipModFactory.generateRandom
 import exoticatechnologies.modifications.ShipModLoader

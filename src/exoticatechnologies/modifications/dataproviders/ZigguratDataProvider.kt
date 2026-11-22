@@ -1,8 +1,9 @@
-package exoticatechnologies.modifications
+package exoticatechnologies.modifications.dataproviders
 
 import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.combat.ShipVariantAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
+import exoticatechnologies.modifications.ShipModifications
 
 /**
  * The only ship in the game that changes variant upon recovery, to my knowledge.
