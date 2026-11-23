@@ -290,4 +290,166 @@ class FastTrigUtilsTest {
         assertTrue(sink.isFinite())
     }
 
+    /**
+     * Reference Kotlin port of libGDX's branchless Möbius-reduced atanUnchecked().
+     */
+    private fun atanLibGdx(i: Double): Double {
+        val n = abs(i)
+        val c = (n - 1.0) / (n + 1.0)
+        val c2 = c * c
+        val c3 = c * c2
+        val c5 = c3 * c2
+        val c7 = c5 * c2
+        val c9 = c7 * c2
+        val c11 = c9 * c2
+        return kotlin.math.sign(i) * (
+            (PI * 0.25) +
+                (0.99997726 * c - 0.33262347 * c3 + 0.19354346 * c5 - 0.11643287 * c7 + 0.05265332 * c9 - 0.0117212 * c11)
+            )
+    }
+
+    /**
+     * Reference Kotlin port of libGDX's atan2() built on top of atanUnchecked().
+     */
+    private fun atan2LibGdx(yInput: Double, xInput: Double): Double {
+        var x = xInput
+        var n = yInput / x
+        if (n != n) {
+            n = if (yInput == x) 1.0 else -1.0
+        } else if (n - n != n - n) {
+            x = 0.0
+        }
+        return if (x > 0.0) {
+            atanLibGdx(n)
+        } else if (x < 0.0) {
+            if (yInput >= 0.0) atanLibGdx(n) + PI else atanLibGdx(n) - PI
+        } else if (yInput > 0.0) {
+            x + PI / 2.0
+        } else if (yInput < 0.0) {
+            x - PI / 2.0
+        } else {
+            x + yInput
+        }
+    }
+
+    @Test
+    fun `benchmark atan and atan2 against libGDX branchless implementation`() {
+        val iterations = 2_000_000
+        val rng = java.util.Random(42L)
+
+        // Random inputs spanning [-10, +10] so |z| <= 1 and |z| > 1 branches are unpredictable
+        val zInputs = DoubleArray(1024) { (rng.nextDouble() * 20.0) - 10.0 }
+        val yInputs = DoubleArray(1024) { (rng.nextDouble() * 20.0) - 10.0 }
+        val xInputs = DoubleArray(1024) { (rng.nextDouble() * 20.0) - 10.0 }
+
+        // 1. Measure max error across [-20, +20] for atan() and full 360° circle for atan2()
+        var maxCubicAtanErr = 0.0
+        var maxZarowskiAtanErr = 0.0
+        var maxLibGdxAtanErr = 0.0
+
+        for (i in 0..10_000) {
+            val z = -20.0 + (40.0 * i / 10_000.0)
+            val truth = stdAtan(z)
+            maxCubicAtanErr = maxOf(maxCubicAtanErr, abs(truth - FastTrigUtils.atan(z, useZarowski = false)))
+            maxZarowskiAtanErr = maxOf(maxZarowskiAtanErr, abs(truth - FastTrigUtils.atan(z, useZarowski = true)))
+            maxLibGdxAtanErr = maxOf(maxLibGdxAtanErr, abs(truth - atanLibGdx(z)))
+        }
+
+        var maxCubicAtan2Err = 0.0
+        var maxZarowskiAtan2Err = 0.0
+        var maxLibGdxAtan2Err = 0.0
+
+        for (i in 0..10_000) {
+            val angle = -PI + (2.0 * PI * i / 10_000.0)
+            val y = stdSin(angle) * 5.0
+            val x = stdCos(angle) * 5.0
+            val truth = stdAtan2(y, x)
+            maxCubicAtan2Err = maxOf(maxCubicAtan2Err, abs(truth - FastTrigUtils.atan2(y, x, useZarowski = false)))
+            maxZarowskiAtan2Err = maxOf(maxZarowskiAtan2Err, abs(truth - FastTrigUtils.atan2(y, x, useZarowski = true)))
+            maxLibGdxAtan2Err = maxOf(maxLibGdxAtan2Err, abs(truth - atan2LibGdx(y, x)))
+        }
+
+        // 2. Warmup JVM JIT compiler
+        var sink = 0.0
+        repeat(500_000) { i ->
+            val idx = i and 1023
+            val z = zInputs[idx]
+            val y = yInputs[idx]
+            val x = xInputs[idx]
+            sink += stdAtan(z) + FastTrigUtils.atan(z, true) + FastTrigUtils.atan(z, false) + atanLibGdx(z)
+            sink += stdAtan2(y, x) + FastTrigUtils.atan2(y, x, true) + FastTrigUtils.atan2(y, x, false) + atan2LibGdx(y, x)
+        }
+
+        // 3. Benchmark standalone atan()
+        val stdAtanNs = measureNanoTime {
+            for (i in 0 until iterations) sink += stdAtan(zInputs[i and 1023])
+        }
+        val cubicAtanNs = measureNanoTime {
+            for (i in 0 until iterations) sink += FastTrigUtils.atan(zInputs[i and 1023], useZarowski = false)
+        }
+        val zarowskiAtanNs = measureNanoTime {
+            for (i in 0 until iterations) sink += FastTrigUtils.atan(zInputs[i and 1023], useZarowski = true)
+        }
+        val libGdxAtanNs = measureNanoTime {
+            for (i in 0 until iterations) sink += atanLibGdx(zInputs[i and 1023])
+        }
+
+        // 4. Benchmark four-quadrant atan2()
+        val stdAtan2Ns = measureNanoTime {
+            for (i in 0 until iterations) {
+                val idx = i and 1023
+                sink += stdAtan2(yInputs[idx], xInputs[idx])
+            }
+        }
+        val cubicAtan2Ns = measureNanoTime {
+            for (i in 0 until iterations) {
+                val idx = i and 1023
+                sink += FastTrigUtils.atan2(yInputs[idx], xInputs[idx], useZarowski = false)
+            }
+        }
+        val zarowskiAtan2Ns = measureNanoTime {
+            for (i in 0 until iterations) {
+                val idx = i and 1023
+                sink += FastTrigUtils.atan2(yInputs[idx], xInputs[idx], useZarowski = true)
+            }
+        }
+        val libGdxAtan2Ns = measureNanoTime {
+            for (i in 0 until iterations) {
+                val idx = i and 1023
+                sink += atan2LibGdx(yInputs[idx], xInputs[idx])
+            }
+        }
+
+        println(
+            """
+            |=== atan() Accuracy (Max Error on [-20, 20]) ===
+            |Cubic atan()    : $maxCubicAtanErr rad (~${Math.toDegrees(maxCubicAtanErr)}°)
+            |Zarowski atan() : $maxZarowskiAtanErr rad (~${Math.toDegrees(maxZarowskiAtanErr)}°)
+            |libGDX atan()   : $maxLibGdxAtanErr rad (~${Math.toDegrees(maxLibGdxAtanErr)}°)
+            |
+            |=== atan2() Accuracy (Max Error across [-π, π]) ===
+            |Cubic atan2()    : $maxCubicAtan2Err rad (~${Math.toDegrees(maxCubicAtan2Err)}°)
+            |Zarowski atan2() : $maxZarowskiAtan2Err rad (~${Math.toDegrees(maxZarowskiAtan2Err)}°)
+            |libGDX atan2()   : $maxLibGdxAtan2Err rad (~${Math.toDegrees(maxLibGdxAtan2Err)}°)
+            |
+            |=== Standalone atan() Benchmark ($iterations random calls) ===
+            |kotlin.math.atan : ${stdAtanNs / 1_000_000.0} ms
+            |Cubic atan()     : ${cubicAtanNs / 1_000_000.0} ms
+            |Zarowski atan()  : ${zarowskiAtanNs / 1_000_000.0} ms
+            |libGDX atan()    : ${libGdxAtanNs / 1_000_000.0} ms
+            |
+            |=== Four-Quadrant atan2() Benchmark ($iterations random calls) ===
+            |kotlin.math.atan2 : ${stdAtan2Ns / 1_000_000.0} ms
+            |Cubic atan2()     : ${cubicAtan2Ns / 1_000_000.0} ms
+            |Zarowski atan2()  : ${zarowskiAtan2Ns / 1_000_000.0} ms
+            |libGDX atan2()    : ${libGdxAtan2Ns / 1_000_000.0} ms
+            |(sink=$sink)
+            """.trimMargin()
+        )
+
+        assertTrue(sink.isFinite())
+    }
+
+
+
 }
