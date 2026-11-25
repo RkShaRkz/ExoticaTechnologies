@@ -27,7 +27,7 @@ class AlphaSubcore(key: String, settingsObj: JSONObject) :
 
     override fun canAfford(fleet: CampaignFleetAPI, market: MarketAPI?): Boolean {
         return Utilities.hasItem(fleet.cargo, ITEM)
-                || Utilities.hasItem(Misc.getStorageCargo(market), ITEM)
+            || Utilities.hasItem(Misc.getStorageCargo(market), ITEM)
     }
 
     override fun removeItemsFromFleet(fleet: CampaignFleetAPI, member: FleetMemberAPI, market: MarketAPI?): Boolean {
@@ -57,10 +57,10 @@ class AlphaSubcore(key: String, settingsObj: JSONObject) :
                 .format("bmberReduction", AlphaSubcoreHM.BOMBER_REDUCTION)
                 .addToTooltip(tooltip, title)
 
-            if(member.variant.hullMods.any { BLOCKED_HULLMODS.contains(it) }) {
+            if (member.variant.hullMods.any { BLOCKED_HULLMODS.contains(it) }) {
                 StringUtils
-                        .getTranslation("AlphaSubcore", "conflictDetected")
-                        .addToTooltip(tooltip)
+                    .getTranslation("AlphaSubcore", "conflictDetected")
+                    .addToTooltip(tooltip)
             }
         }
     }
@@ -97,13 +97,15 @@ class AlphaSubcore(key: String, settingsObj: JSONObject) :
         return BANDWIDTH_INCREASE * getPositiveMult(member, mods, exoticData)
     }
 
-    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
+    override fun installsOnWholeShip() = true
+
+    override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = false
 
     override fun shouldAffectModulesToShareEffectsToOtherModules() = false
 
-    override fun shouldAffectModule(moduleStats: MutableShipStatsAPI) = false
+    override fun shouldAffectModule(moduleStats: MutableShipStatsAPI) = true
 
-    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = false
+    override fun shouldAffectModule(ship: ShipAPI?, module: ShipAPI?) = true
 
     companion object {
         private const val ITEM = "alpha_core"

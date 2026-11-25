@@ -1,0 +1,97 @@
+# plan-addressing_cr_comments-revision1.txt — status after ExoticaTechHM unlock
+
+Revision 1 of plan-addressing_cr_comments.txt (base preserved unchanged). Object unchanged:
+clear the outstanding PR #73 review comments. The user UNLOCKED ExoticaTechHM.java, so the
+formerly BLOCKED items 5.2 / 5.2.2 / 5.2.3 were implemented in this revision; 5.1 / 5.2b /
+5.3 / 5.4 are confirmed done. Sections 1-4 are carried over verbatim from the base.
+
+## 1. Intent
+Clear the outstanding code-review comments left by RkShaRkz on PR #73 ("Attempt at
+fixing the 'fix-rework' by also applying the main idea to everything", fix-rework2 ->
+fix-rework) so the branch is merge-ready. Also fold in the dead-code cleanup that
+surfaced from review comment #691 (findRootVariantMember vs resolveWholeShipRootMember).
+
+## 2. Context
+- PR #73: https://github.com/RkShaRkz/ExoticaTechnologies/pull/73 (open, author RkShaRkz).
+- base: fix-rework (merge-base d54b50d).
+- head: fix-rework2 (sha 46814cd... at plan time; RE-FETCH before diffing, the user pushes).
+- 101 commits, +7152 / -7152 (symmetric = repo-wide CRLF), 46 review comments, 4 issue comments.
+- Reading PR data is allowed (public repo; `gh` is NOT installed — use the REST API via webfetch).
+- This plan NEVER touches git. The user commits.
+
+## 3. Scope / boundaries
+- In scope: the outstanding comments listed in section 5.
+- ExoticaTechHM.java was UNLOCKED by the user for this revision; the formerly BLOCKED items
+  (5.2 / 5.2.2 / 5.2.3) are now in scope and implemented.
+- House rules: no new comments; no `!!` / elvis; do not remove pre-existing operational
+  logs; MIN_LOG_LEVEL=WARN; no local kotlinc/javac (user rebuilds the JAR in the IDE).
+- Working tree carries repo-wide CRLF churn — always diff with `git diff -w`.
+
+## 4. Ownership
+The user is addressing several comments directly and will push, then ping for a re-review
+regarding these other changes. Per item, my role is either to implement (non-ExoticaTechHM)
+or to re-review the user's changes against this list.
+
+## 5. Item status (updated in this revision)
+
+### 5.1 [DONE; from CR #691] Dead root resolver — no ExoticaTechHM involvement
+- DONE: deleted `findRootVariantMember` and the now-orphaned `findRootVariant`.
+- KEPT: findModuleMember, matchingRootMembers, treeInstanceContains.
+- DONE: repointed the stale KDoc `[findRootVariantMember]` refs -> `resolveWholeShipRootMember`
+  (FleetMemberUtils.kt, RefitButtonAdder.kt:45 and :122). Static check: zero refs remain.
+
+### 5.2 [DONE — ExoticaTechHM unlocked] Fuzzy variant-id consolidation (CR #61)
+- DONE: single canonical `FleetMemberUtils.fuzzyVariantIdEquals(a, b)` (@JvmStatic, in the
+  FleetMemberUtils object). Deleted ExoticaTechHM.fuzzyVariantMatch and repointed its caller;
+  deleted VariantTagProvider.fuzzyVariantIdEquals (2 call sites now call FleetMemberUtils) and
+  the FleetMemberUtils String extension. Call sites: ExoticaTechHM, VariantTagProvider, treeContains.
+
+### 5.2b [DONE] Cross-check note, CR on FleetMemberUtils.kt:320
+- Superseded by 5.2: the KDoc on the canonical fuzzyVariantIdEquals records that it is the single
+  implementation replacing the three former duplicates.
+
+### 5.2.2 [DONE] Wording — ExoticaTechHM.java:111
+- DONE: "highlight to appear" -> "Modification effects to apply" (CR #111).
+
+### 5.2.3 [DONE] Delete dead / commented-out blocks (CR #117/#567/#603/#652/#688/#713/#769)
+- DONE: all seven blocks removed (exotic-stats loop, upgrade-stats loop, FIXME + stray note,
+  ship shouldSkipModification, upgrade.applyToShip, exotic.applyToFighters, fighter upgrade loop).
+
+### 5.3 [DONE] treeFuzzyContains / treeExactContains merge
+- DONE: merged into `treeContains(root, id, isFuzzy)`. Call sites: exact (false) and fuzzy (true)
+  in findShipScopedRootVariant / matchingRootMembers. Static check: old names have zero refs.
+
+### 5.4 [DONE] Already-addressed items (confirmed no regression)
+- HullmodExoticHandler.kt:361 uses `when(workMode)`.
+- runningFromExoticaTechnologiesScreen() restored (HullmodExoticHandler.kt:605-606, used :1140).
+- DaemonCore.kt sharing overrides present.
+
+## 6. Verification approach
+- No local compiler: the user rebuilds the JAR (Windows-side).
+- Static check DONE: grep for every removed symbol (findRootVariantMember, findRootVariant,
+  treeFuzzyContains, treeExactContains, fuzzyVariantMatch, private/local fuzzyVariantIdEquals)
+  -> zero live refs; renamed symbols resolve (FleetMemberUtils.fuzzyVariantIdEquals, treeContains).
+- Manual tests from the review body (PENDING — require the rebuilt JAR):
+  1) Retest AlphaSubcore on single-module ships.
+  2) Re-run TEST_FullMetalSalvo on multi-module ships.
+  3) Check ed_wurgandal with GuardianShield for the regression that preceded the last release.
+  4) HullmodExotic exotic-limit overflow edge cases:
+     - root is 1 under the exotica limit while other modules are full -> installs to the root only;
+     - install from a child when the child and the root are each 1 under the limit ->
+       only that child and the root get it.
+
+## 7. Re-review checklist (runs when the user pings)
+1. Fetch PR #73; record the new head sha; `git diff -w <prevHead> <newHead>`.
+2. Re-run every status check in section 5; report each as addressed / still-open.
+3. Confirm the four manual scenarios in section 6 still pass.
+4. Report any new dead code the changes introduce.
+
+## 8. Closure criteria
+- All non-blocked items implemented and verified; every BLOCKED ExoticaTechHM item either
+  unlocked + done or explicitly deferred by the user.
+- Four manual tests pass on the rebuilt JAR.
+- Branch reported merge-ready for the fix-rework2 -> fix-rework PR.
+
+## 9. Known out-of-scope stale doc
+- docs/modifications-load-save.txt still references the deleted `findRootVariant` (lines 46/86/103).
+  Not part of section 5; left untouched pending user decision.

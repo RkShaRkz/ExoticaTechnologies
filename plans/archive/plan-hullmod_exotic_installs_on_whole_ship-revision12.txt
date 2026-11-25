@@ -1,0 +1,109 @@
+REVISION 12 - CLONE-TREE PERMAMOD POUR (refit-only) + UNCONDITIONAL REMOVE SIDE
+=============================================================================
+
+STATUS: IMPLEMENTED (build-mode), committed-adjacent. Decisions locked via Q&A.
+BASELINE: prior uncommitted state (CHANGE A anchor, refreshStatsEffectsAcrossShipGraphs,
+  DIAG lines in Extensions/HullmodExotic/VariantTagProvider). Revision 11 = strategy ref.
+
+----------------------------------------------------------------------------
+0. ROOT CAUSE (from TEST_RESULTS5/TEST_RESULTS6, confirmed)
+----------------------------------------------------------------------------
+- The OP effect is the exotic hullmod listener attach in HullmodExotic.refreshStatsEffects
+  AcrossShipGraphs. Both the ROOT branch and the descendant loop were gated on the permaMod
+  surviving on that exact variant instance (variant.hasHullMod).
+- On the REFIT screen, getWholeVariantGraph() emits THREE trees: campaign, refit (checkRefit
+  Variant), and display (getRefitDisplayVariant). The CheckAndInstall flows bookkeep + pour
+  permaMod only on campaign instances whose getCorrectMods() resolves; the refit/display CLONES
+  get only the $$EXOTICA$$ tag via writeThrough (ANCHOR-TARGET), never the permaMod, so
+  refresh's hasHullMod gate skips their statsForOpCosts -> live OP on the refit bar and on the
+  re-laid campaign tree never updates. Root kept working (ROOT branch + root re-install).
+- On planetside "exoticatech" screen the refit/display trees identity-skip (=== campaign), so
+  display clones do not exist there -> the pour is a no-op by construction.
+
+----------------------------------------------------------------------------
+1. STRATEGY (user-approved)  -- minimal, symmetric, DIAG-backed
+----------------------------------------------------------------------------
+- Pour addPermaMod onto the refit+display CLONE trees ONLY when runningFromRefitScreen(), so the
+  installed-variant set is LARGER from refit than from the planetside screen.
+- Symmetric strip of those clones on remove (refit-only gate), and harden the remove-side scrub
+  so it is unconditional (permaMod may already be stripped by the remove flows before the scrub
+  runs; removeEffectsBeforeShipCreation is idempotent / no-op where no listener exists).
+- Attach side stays gated on hasHullMod so a module skipped at the exotic limit never gains a
+  cost it did not buy.
+- All new code is comment-free (user directive overrides RULES comment preservation for new
+  blocks); existing comments untouched. All diagnostics are logger.error-class (AnonymousLogger).
+
+----------------------------------------------------------------------------
+2. CHANGE 1 - onInstall NESTED POUR (HullmodExotic.kt)
+----------------------------------------------------------------------------
+    if (installsOnWholeShip) {
+        refreshStatsEffectsAcrossShipGraphs(rootMember, apply = true)
+        if (runningFromRefitScreen()) {
+            pourClonePermaMods(rootMember)
+            refreshStatsEffectsAcrossShipGraphs(rootMember, apply = true)
+        }
+    }
+- pourClonePermaMods(): clone roots = checkRefitVariant() (RefitButtonAdder.kt:490, returns the
+  display spec when root selected; runCatching for the HullVariantSpec cast) and
+  getRefitDisplayVariant(rootMember) (RefitButtonAdder.kt:534, attribution-gated to this ship;
+  covers the child-selected case where root's checkRefitVariant falls back to campaign root).
+  Identity-dedupe both roots (LinkedHashSet), walk root + forEachModuleVariant descendants
+  (Extensions.kt:113, descendants only), addPermaMod via installHullmodOnVariant only where
+  hasHullMod is false. Second refresh latches clone statsForOpCosts listeners in the same frame.
+
+----------------------------------------------------------------------------
+3. CHANGE 2 - onDestroy SYMMETRIC STRIP (HullmodExotic.kt)
+----------------------------------------------------------------------------
+    if (installsOnWholeShip()) {
+        if (runningFromRefitScreen()) {
+            stripClonePermaMods(rootMember)
+        }
+        refreshStatsEffectsAcrossShipGraphs(rootMember, apply = false)
+    }
+- stripClonePermaMods(): same clone-tree iteration, removeHullmodFromVariant where hasHullMod.
+  Clears the poured permaMod even when listOfVariantsWeInstalledOn never recorded the clones
+  (their getCorrectMods was null at install time -> never bookkept).
+
+----------------------------------------------------------------------------
+4. CHANGE 3 - REMOVE-SIDE SCRUB UNCONDITIONAL (HullmodExotic.kt)
+----------------------------------------------------------------------------
+- ROOT branch gate:   if (apply.not() || rootMember.variant.hasHullMod(hullmodId))
+- loop gate:          if (apply && !hasHullMod) continue
+Rationale: the remove flows strip permaMod BEFORE refreshStatsEffectsAcrossShipGraphs(apply=false)
+runs, so a hasHullMod gate there would skip the very clones we poured; removeEffects
+BeforeShipCreation is a no-op on stats that never carried the listener.
+
+----------------------------------------------------------------------------
+5. CHANGE 4 - DIAGNOSTICS
+----------------------------------------------------------------------------
+- pourClonePermaMods(): per-clone hullVariantId@hash, alreadyHasHullMod, mods resolvable
+  (ShipModLoader.get(rootMember, variant)) + isUnderExoticLimit(rootMember) value - answers the
+  exotic-limit over-install question from one run (gate deferred until DIAG shows a problem).
+  Plus a pourClonePermaMods/stripClonePermaMods rootMember entry line.
+- refreshStatsEffectsAcrossShipGraphs(): per-variant DIAG now logs apply= value.
+- Existing getWholeVariantGraph tree-contribution DIAG confirms which clone trees existed.
+
+----------------------------------------------------------------------------
+6. FILES TOUCHED
+----------------------------------------------------------------------------
+- src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt (all Changes 1-4; imports:
+  getRefitDisplayVariant, forEachModuleVariant added)
+  - NO new comments added; existing comments left as-is.
+
+----------------------------------------------------------------------------
+7. VERIFY
+----------------------------------------------------------------------------
+- Rebuild (user), run the TEST_RESULTS6 scenario: expect pourClonePermaMods to land permaMod +
+  listener on refit/display clones, live OP decrease, planetside run unchanged (pour no-op).
+- Then full TEST_PLAN steps 5-10 and 12-21 (uninstall must reset OP on clones too - unconditional
+  scrub + strip).
+- Check DIAG: alreadyHasHullMod/underExoticLimit on every clone; confirm no over-install at limit.
+- If the exotic-limit gate IS needed: pour only where mods.isUnderExoticLimit(rootMember) == true.
+
+----------------------------------------------------------------------------
+8. OPEN ITEMS
+----------------------------------------------------------------------------
+- Whether the explore clone tags survive variant re-lay (permaMod now the carrier of truth,
+  corroborated by ship2's four persistent instances in TEST_RESULTS6) - confirm in the run.
+- If DIAG shows the pour reaching a module the flows intentionally skipped (exotic limit), add
+  the isUnderExoticLimit gate (Change 5 candidate).

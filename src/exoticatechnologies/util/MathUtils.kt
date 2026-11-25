@@ -2,6 +2,7 @@ package exoticatechnologies.util
 
 import org.lwjgl.util.vector.Vector2f
 import kotlin.math.abs
+import kotlin.math.sign
 import kotlin.math.withSign
 
 object FastTrigUtils {
@@ -23,12 +24,34 @@ object FastTrigUtils {
         val r1 = radians % twoPi
 
         // put us in -PI to +PI space
-        val r2 = if (abs(r1) > Math.PI) r1 - twoPi else r1
+        val r2 = if (abs(r1) > Math.PI) r1 - r1.sign * twoPi else r1
 
         // put us in -PI/2 to +PI/2 space
-        val r3 = if (abs(r2) > Math.PI / 2.0) Math.PI - r2 else r2
+        val r3 = if (abs(r2) > Math.PI / 2.0) r2.sign * Math.PI - r2 else r2
 
         return r3
+    }
+
+    /**
+     * Computes a fast approximation of the sine of an angle using a 7th-order Taylor polynomial.
+     *
+     * First normalizes [radians] into `[-π/2, +π/2]` via [reduceSinAngle], then evaluates the
+     * Maclaurin series expansion `x - x³/3! + x⁵/5! - x⁷/7!` using Horner's method for speed
+     * and numerical stability.
+     *
+     * - **Input domain:** All finite [Double] angles in radians `(-∞, +∞)` (returns [Double.NaN] for `NaN` or `±Infinity`).
+     * - **Output range:** Approximately `[-1.0, +1.0]` (unitless ratio).
+     * - **Accuracy:** Maximum absolute error is ~`0.000157` (`~1.57e-4`) at the `±π/2` boundaries.
+     *
+     * @param radians the angle in radians whose sine is to be approximated.
+     * @return the approximate sine of [radians], or [Double.NaN] if [radians] is `NaN` or infinite.
+     * @see reduceSinAngle
+     * @see sin_hybrid
+     */
+    fun sin(radians: Double): Double {
+        val x = reduceSinAngle(radians)
+        val x2 = x * x
+        return x * (1.0 - x2 * (1.0 / 6.0 - x2 * (1.0 / 120.0 - x2 / 5040.0)))
     }
 
     /**
@@ -38,10 +61,13 @@ object FastTrigUtils {
      * precision and utilizes a hybrid approach: calling [kotlin.math.sin] for
      * small angles and [kotlin.math.cos] for angles closer to π/2.
      *
+     * This one is alot more accurate than [sin]
+     *
      * @param radians The angle, in radians.
      * @return The sine of the angle, in radians.
+     * @see sin
      */
-    fun sin(radians: Double): Double {
+    fun sin_hybrid(radians: Double): Double {
         // limits angle to between -PI/2 and +PI/2
         val reduced = reduceSinAngle(radians)
         return if (abs(reduced) <= Math.PI / 4.0) {
@@ -59,24 +85,106 @@ object FastTrigUtils {
      * ensures consistent range reduction and performance with the [sin] implementation.
      *
      * @param radians The angle, in radians.
+     * @param useHybridSin whether we should use the "taylor" [sin] or the "hybrid" [sin_hybrid]
      * @return The cosine of the angle, in radians.
+     * @see sin
+     * @see sin_hybrid
      */
-    fun cos(radians: Double): Double {
-        return sin(radians + Math.PI / 2.0)
+    fun cos(radians: Double, useHybridSin: Boolean = false): Double {
+        return if (useHybridSin) sin_hybrid(radians + Math.PI / 2.0) else sin(radians + Math.PI / 2.0)
     }
 
     /**
-     * Returns arctangent of [tangentValue] as an angle in radians, via magic.
+     * Computes a fast approximation of the arc tangent of a value.
+     *
+     * Uses either Żarowski's rational approximation (default, high accuracy) or a minimax
+     * cubic polynomial (faster, lower accuracy) over `[-1.0, 1.0]`, combined with range
+     * reduction (`atan(z) = sign(z) * π/2 - atan(1/z)`) for `|z| > 1.0`.
+     *
+     * - **Input domain:** All finite [Double] values `(-∞, +∞)` (also handles `±Infinity`, returning `±π/2`).
+     * - **Output range:** `[-π/2, +π/2]` radians (approximately `-1.5708` to `+1.5708`).
+     * - **Accuracy:** ~`5.32e-5` rad (`~0.0030°`) when [useZarowski] is **true**; ~`4.95e-3` rad (`~0.284°`) when **false**.
+     *
+     *
+     *
+     *      === atan() Benchmark (2000000 iterations) ===
+     *      kotlin.math.atan : 298.0831 ms
+     *      Cubic atan()     : 46.5504 ms
+     *      Zarowski atan()  : 67.0914 ms
+     *      ----------------------------------------------
+     *      Max Cubic atan() error    : 0.004952003397448279 rad (~0.28372889480823116°)
+     *      Max Zarowski atan() error : 5.3200332788994054E-5 rad (~0.0030481545375008073°)
+     *
+     * @param tangentValue the tangent value (slope ratio) whose arc tangent is to be returned.
+     * @param useZarowski whether we should use Żarowski or cubic polynomial approximation; Cubic is slightly faster but Żarowski's is about 100 times more accurate. Defaults to **true**
+     * @return the approximate angle in radians within `[-π/2, +π/2]`, or [Double.NaN] if [tangentValue] is `NaN`.
+     * @see atan_internal
+     */
+    fun atan(tangentValue: Double, useZarowski: Boolean = true): Double {
+        return if (abs(tangentValue) <= 1.0) {
+            atan_internal(tangentValue, useZarowski)
+        } else {
+            tangentValue.sign * kotlin.math.PI / 2.0 - atan_internal(1.0 / tangentValue, useZarowski)
+        }
+    }
+
+    /**
+     * Dispatches core `[-1.0, 1.0]` arctangent calculation to either [atan_internal_zarowski]
+     * or [atan_internal_cubic] based on [useZarowski].
+     *
+     * @param tangentValue the tangent value whose arc tangent is to be calculated, **must be within `[-1.0, 1.0]`**.
+     * @param useZarowski `true` to use Żarowski's rational approximation; `false` for the cubic polynomial.
+     * @return the approximate angle in radians within `[-π/4, +π/4]`.
+     * @see atan_internal_cubic
+     * @see atan_internal_zarowski
+     */
+    private fun atan_internal(tangentValue: Double, useZarowski: Boolean): Double {
+        return if (useZarowski) atan_internal_zarowski(tangentValue) else atan_internal_cubic(tangentValue)
+    }
+
+    /**
+     * Returns arctangent of [tangentValue] as an angle in radians, via minimax cubic polynomial approximation magic.
+     *
+     * Computes a fast approximation of the arc tangent of a value.
+     *
+     * Uses a minimax cubic polynomial approximation over `[-1.0, 1.0]` combined with
+     * range reduction (`atan(z) = sign(z) * π/2 - atan(1/z)`) for `|z| > 1.0`.
+     *
+     * - **Input domain:** All finite [Double] values `(-∞, +∞)` (also handles `±Infinity`, returning `±π/2`).
+     * - **Output range:** `[-π/2, +π/2]` radians (approximately `-1.5708` to `+1.5708`).
+     * - **Accuracy:** Maximum absolute error is ~`0.00495` radians (~`0.28°`) across the entire domain.
+     *
      *
      * The actual magic in question
      *
      *      return (0.97239411 + -0.19194795 * tangentValue * tangentValue) * tangentValue
      *
-     * @param tangentValue the value to calculate atan for
+     * @param tangentValue the value to calculate atan for, **must be in [-1,1] range
      * @return angle in radians
      */
-    fun atan(tangentValue: Double): Double {
+    private fun atan_internal_cubic(tangentValue: Double): Double {
         return (0.97239411 + -0.19194795 * tangentValue * tangentValue) * tangentValue
+    }
+
+    /**
+     * Computes the arctangent of [tangentValue] in radians using Żarowski's rational approximation.
+     *
+     * Evaluates `(1 + a * x²) * x / (1 + x² * (b + c * x²))` with constants derived via
+     * differential evolution (C. Żarowski, *Nanodottek Report NDT3-04-2006*).
+     *
+     * - **Valid input domain:** Strictly `[-1.0, 1.0]` (inputs outside this range will diverge).
+     * - **Accuracy:** Maximum absolute error of ~`5.32e-5` radians (~`0.0030°`) within `[-1.0, 1.0]`.
+     *
+     * @param tangentValue the tangent slope ratio, **must be within `[-1.0, 1.0]`**.
+     * @return the approximate angle in radians within `[-π/4, +π/4]`.
+     */
+    private fun atan_internal_zarowski(tangentValue: Double): Double {
+        val a = 0.372003
+        val b = 0.703384
+        val c = 0.043562
+
+        val xx = tangentValue * tangentValue
+        return (1.0 + a * xx) * tangentValue / (1.0 + xx * (b + c * xx))
     }
 
     /**
@@ -85,10 +193,11 @@ object FastTrigUtils {
      *
      * @param y The y-coordinate (numerator).
      * @param x The x-coordinate (denominator).
+     * @param useZarowski whether to use Cubic or Żarowski approximation
      * @return The angle within the range [-π, π], in radians.
      */
-    fun atan2(y: Float, x: Float): Double {
-        return atan2(y.toDouble(), x.toDouble())
+    fun atan2(y: Float, x: Float, useZarowski: Boolean = true): Double {
+        return atan2(y.toDouble(), x.toDouble(), useZarowski = useZarowski)
     }
 
     /**
@@ -102,16 +211,19 @@ object FastTrigUtils {
      *
      * @param y The y-coordinate (numerator).
      * @param x The x-coordinate (denominator).
+     * @param useZarowski whether to use Cubic or Żarowski approximation
      * @return The angle within the range [-π, π], in radians.
      */
-    fun atan2(y: Double, x: Double): Double {
+    fun atan2(y: Double, x: Double, useZarowski: Boolean = true): Double {
         val ay = abs(y)
         val ax = abs(x)
+        // if they're both zero, bail out imediatelly to avoid NaN while calculating Z
+        if (ax == 0.0 && ay == 0.0) return 0.0.withSign(y)
         val invert = ay > ax
         // [0,1]
         val z = if (invert) ax / ay else ay / ax
         // [0,π/4]
-        var theta = atan(z)
+        var theta = atan_internal(z, useZarowski = useZarowski)
         // [0,π/2]
         if (invert) theta = Math.PI / 2.0 - theta
 

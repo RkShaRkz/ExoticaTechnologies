@@ -1,0 +1,82 @@
+# Completed Plan: plan-multimodule_root_resolution_and_placeholder_clobber-completed.txt
+
+## Intent
+Installing a Modification (e.g. FullMetalSalvo) on a CHILD module of a multi-module ship must apply
+to the WHOLE ship, and the `exoticatech` hullmod must persist across refit. Before this plan, a
+child-module install was anchored to the child `FleetMemberAPI` itself: the whole-ship modification
+read walked only the child's subtree and the hullmod did not reliably reach the root and sibling
+modules.
+
+## Scope
+Touched: `src/exoticatechnologies/hullmods/ExoticaTechHM.java` (addToFleetMember root anchoring) and
+`src/exoticatechnologies/modifications/ShipModLoader.kt` (resolveRootVariant). Instrumentation
+(added then stripped) additionally touched `Extensions.kt`, `VariantTagProvider.kt`,
+`FleetMemberUtils.kt`, and `HullmodExoticHandler.kt`. Untouched by design: VariantTagProvider
+set/remove/writeThrough semantics (uninstall depends on them), ModuleVariantHierarchy public API,
+and the tag-storage model (child exotics stay on child variant nodes).
+
+## Evolution
+- Implemented revision: plan-multimodule_root_resolution_and_placeholder_clobber-revision2.txt
+- General idea followed from: plan-multimodule_root_resolution_and_placeholder_clobber.txt (base)
+- Borrowed elements from: plan-multimodule_root_resolution_and_placeholder_clobber-revision1.txt
+
+The base proposed two fixes on a suspicion-based analysis (Defect 1 placeholder clobber, Defect 2
+cold root resolution). Revision1 added Phase 0 instrumentation and marked both fixes
+PROPOSED-PENDING-LOG. The logs then isolated Defect 2 only. Revision2 records the anchor-first fix
+that the evidence justified, and this document closes the plan.
+
+## Outcome
+Root resolution now prefers stable ship-scoped attribution before the build-fragile variant-id
+hierarchy map:
+- `ExoticaTechHM.addToFleetMember` calls `FleetMemberUtils.resolveWholeShipRootMember(member)` first,
+  derives `rootVariantId` from the resolved root (with the root's own variant id as backstop), and
+  gates the child-display hullmod on `(rootMember != member) || (rootVariantId != null)`.
+- `ShipModLoader.resolveRootVariant` prefers `FleetMemberUtils.findShipScopedRootVariant(member,
+  variant)` before the existing hierarchy fallbacks.
+
+With the anchor corrected, a child-module install lights up the whole ship and the `exoticatech`
+hullmod is installed on the root and every module. Tag storage is unchanged: child exotics continue
+to live on the child nodes; only the whole-ship anchor changed. Single-module ships are unaffected
+(`resolveWholeShipRootMember` returns the member itself).
+
+Evidence across runs: child installs on `tbj_overslaught_left` and `ork_superdread_thruster_left`
+anchored to their roots (logs2); `SHIP-SCOPED` dominant and the lone `rootVariantId=null` a named
+single-root ship by design (logs3); 21 ships / 23 installs across 17 distinct multi-module hulls all
+anchored correctly, no exceptions, no tag clobber (logs4). The fix was committed by the user as
+a650621 ("Fix the 'big problem' when installing Exotics on child modules of multimodule ships"),
+followed by 68aac3c ("Latest JAR").
+
+## Deviations
+- Defect 1 (Fix 1: ShipModFactory non-destructive placeholder guards + `CustomExoticaPanel.kt:45`
+  outer-set removal) was NOT implemented. It never reproduced, and the user objected to changing the
+  panel without log proof it was the sole clobber writer. The panel call is unchanged.
+- The base / revision1 proposed `ModuleVariantHierarchy.refreshAllCaches()` as a fallback. It was
+  rejected as a per-call full-fleet walk (perf) and replaced by the ship-scoped attribution path.
+- `ShipModLoader.resolveRootVariant` was pulled into scope. The base had deferred it as a follow-up;
+  logs showed the whole-ship READ was also walking only the child while the map was cold.
+- `diagnosticLogOnce` / `diagnosticSeen` were added during instrumentation but never used; the final
+  helper set was a single `diagnosticLog` route, later stripped entirely.
+- Note on the base plan's claim that the `FullMetalSalvo.kt` test hacks were already committed in
+  HEAD: they were not (they remain uncommitted working-tree changes). They are unrelated to this
+  plan and were intentionally left untouched.
+
+## Clarifying Implementation Details
+- Why anchoring (not tag storage) was the fix: the bug was not "the tag is written to the wrong
+  node". `VariantTagProvider.writeThrough` already writes only the fuzzy-matched node. The bug was
+  that the whole-ship consumer's ROOT was computed from a cold hierarchy map, so its tree walk
+  started at the child. Correcting the anchor fixes both the propagation and the collection without
+  disturbing the storage model.
+- Why `isChild = (rootMember != member) || (rootVariantId != null)`: with anchor-first resolution the
+  child case is known by member identity, so the child display variant no longer depends on the
+  hierarchy returning a non-null id.
+- `resolveWholeShipRootMember` returns self (not null) for named members and outside refit; that is
+  why the 4 `rootVariantId=null` stress cases are legitimate single-root ships, not anchor failures.
+
+## Reflection
+The plan's value was procedural: rather than implementing two suspected fixes blind, Phase 0
+instrumentation proved which defect fired and exonerated the other, preventing a risky change to the
+panel/provider write path that uninstall relies on. The durable lesson is that "variant identity"
+(`===`, cold hierarchy maps) is unreliable across refit/fixVariant churn, while stable ship-scoped
+attribution (refit-root cache, module-tree ownership) is the dependable anchor. This closes the
+multi-module root-resolution thread; the multimodule install now behaves identically to a
+single-module install from the user's perspective.

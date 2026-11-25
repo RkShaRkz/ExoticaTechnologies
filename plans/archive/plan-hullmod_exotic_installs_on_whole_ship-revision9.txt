@@ -1,0 +1,151 @@
+ISSUE #39 HULLMOD EXOTICS -> "INSTALL ON WHOLE SHIP" - REVISION 9 (FLOWS CONVERGENCE + DIAGNOSTICS)
+==================================================================================================
+Revision docs accumulate; originals are never overwritten. -revision8 was the moduleMap
+sole-owner guard, -revision7 the dual-stat scrub + variantTreeOwns root resolution, -revision6 the
+per-stripped-variant unapply walk, -revision5 the updateStats/SOE fix. Revision 7 and 8 still fired
+the sticky-OP on the FIRST twin (tbj_overslaught_Start) and never the second. LOG-PROVEN root cause
+(issue #39 log capture): the REMOVE flow bails at the STRICT hasHullMod fail-fast inside
+shouldRemoveHullmodExoticFromVariant (HullmodExoticHandler.kt:271-279), so the dual-stat scrub in
+removeHullmodExoticFromVariant (HullmodExoticHandler.kt:364-380) never runs and OP stays reduced.
+
+WHY STRICT FIRES DURING REFIT (root cause)
+------------------------------------------
+getWorkModeOptional() (HullmodExoticHandler.kt:1083-1091) resolves the work mode as:
+    runningFromRefitScreen()        -> LENIENT
+    runningFromExoticaTechnologiesScreen() -> STRICT
+    fallback (OUTSIDE default)      -> STRICT
+STRICT expects the exotic's marker hullmod to ALREADY be present on the variant (hasHullMod gate,
+HullmodExoticHandler.kt:271-279) and demands the variant be instance-identical to what was expected.
+LENIENT (refit) tolerates hullVariantId churn. Any dialog on top of the refit flips
+runningFromRefitScreen() to false while runningFromExoticaTechnologiesScreen() (hasOptions) still
+reads true -> workMode silently becomes STRICT mid-refit -> the remove flow bails at the gate.
+STRICT is correct for the planetside "exoticatech" screen (marker already written there) and stays
+UNTOUCHED. LENIENT is the refit contract and must tolerate clone churn on both shouldInstall (already
+hullId-based) and shouldRemove/isInstalledOn (currently strict instance contains).
+
+SCHEMA OF THIS REVISION
+-----------------------
+Phase 1 - kill the findRootVariantMember log spam; keep ONE entry diagnosticLog that prints the
+          shipName of member and rootMember (verifies RefitButtonAdder.rootMember correctness).
+Phase 2 - instrumentation ONLY. No behavior change, no fix without proof. Each instrumentation site
+          gets a LOCAL private diagnosticLog(...) (WARN via the pre-existing log() util) DELETED from
+          its file when diagnostics are done. Instrument StarsectorAPIInteractor
+          actualStarsectorAPIrunningFromRefitScreen() and the 4 flow starts' workMode. If the repro
+          still shows STRICT during refit, that WARN line is the smoking gun with which to fix the
+          detector (per user: zero guesswork, no detector edits without this proof).
+Phase 3 - flows convergence. Install flows feed the FULL variant graph set into their
+          expectedVariants; remove flows already iterate installedOn (now the full set). New
+          getWholeVariantGraph(...) in Extensions.kt simply replaces the getChildModuleVariantList(...)
+          call at HullmodExoticHandler.kt:697 (same util-layer shape, so the Handler's self-sufficiency
+          and testability promise is UNBROKEN - no new parameter leaks graph construction into the
+          caller). propagate/strip machinery becomes redundant and is deleted.
+
+PHASE 2 DETAIL
+--------------
+Field-verified by the user on the repo HEAD (d4ea575, rev8): no changes to StarsectorAPIInteractor
+or the detector until the instrumented repro proves it - ZERO GUESSWORK.
+- Diagnostics helper: a private fun diagnosticLog(logMsg: String) in EACH file that needs it, body
+  log(logMsg, LocalLogger, Level.WARN), name/logger per-file:
+      FleetMemberUtils.kt        (existing logger remains; do NOT remove it)
+      StarsectorAPIInteractor.kt (existing logger)
+      HullmodExoticHandler.kt    (existing logger)
+  NOT in Extensions.kt, NOT shared, NOT added to the generic log() util.
+- Instrument actualStarsectorAPIrunningFromRefitScreen() (StarsectorAPIInteractor.kt:64-73): log the
+  empty-optional early return; log coreTab==REFIT, hasOptions, and the returned bool.
+- Instrument the 4 flow starts in HullmodExoticHandler.kt (~:682 install-to-children, ~:786
+  install-to-member, ~:891 remove-from-children, ~:989 remove-from-member): log workMode (install
+  flows already capture isFromRefitScreen; log that too).
+- Tests (lock current behavior + phase-3 behavior):
+      HullmodExoticHandlerTests (src/exoticatechnologies/util/tests/): add testsOnly hooks where
+      privates need exposure (existing testsOnly_* pattern), new tests:
+        * workMode: no-dialog test-mode default -> STRICT; refit test-mode -> LENIENT.
+        * install/remove bookkeeping for the whole-graph expected set (campaign-tree only in test
+          mode) - installedOn contains every expected variant, remove leaves none.
+
+PHASE 3 DETAIL
+--------------
+- getWholeVariantGraph(fleetMember: FleetMemberAPI): MutableSet<ShipVariantAPI> in Extensions.kt
+  (replaces getChildModuleVariantList usage in the flows; getChildModuleVariantList ITSELF stays
+  public - ShipRepulsorSystem.kt:121 still uses it). Returns identity-deduped set of:
+      1. campaign tree: fleetMember.variant + every descendant (forEachModuleVariant)
+      2. refit tree: fleetMember.checkRefitVariant() + descendants, only if !== fleetMember.variant
+      3. display tree: getRefitDisplayVariant() + descendants, only if non-null and !== campaign root
+      4. child FleetMember variants: for each campaign descendant variant,
+         FleetMemberUtils.findModuleMember(it)?.variant
+  Nulling display tree naturally self-gates STRICT/planetside paths to the campaign tree only.
+  TEST-MODE GUARD: when StarsectorAPIInteractor.workingInTestMode, walk ONLY the campaign tree so the
+  RefitButtonAdder/Starsector statics cannot crash JUnit; keeps the function unit-testable.
+- CheckAndInstallOnAllChildModulesVariants (HullmodExoticHandler.kt:682-...): iterateList =
+  getWholeVariantGraph(fleetMember) MINUS the member's own variant and (refit mode) its refit variant
+  (those stay in CheckAndInstallOnMemberModule - preserves the child/member split and each callback's
+  distinct role). allVariantsList (the expected set stored into installData.listOfAllModuleVariants)
+  = the FULL whole graph. (Today: childModuleVariants + memberVariant + refitVariant.)
+- CheckAndInstallOnMemberModule (~:785) and getChildrenForInstallExpected (~:1104-1111) switch their
+  expected lists to getWholeVariantGraph(fleetMember) for consistency.
+- Recursion guard comment (~:698-705): stays valid - re-entry is broken by alreadyIn /
+  hasNotInstalledAlready regardless of expected-list breadth; update the wording accordingly.
+- isInstalledOn (HullmodExoticHandler.kt:315, LENIENT path): strict instance contains() is
+  churn-VULNERABLE -> replace with hullId-based match against installedOn (both twins and all refit
+  clones of a hull share hullId; the list is per exotic-key so no cross-hull leakage).
+- Remove flows (CheckAndRemoveFromAllChildModulesVariants ~:891, CheckAndRemoveFromMemberModule
+  ~:989): NO signature change - they iterate data.listOfVariantsWeInstalledOn; keep the
+  parentMemberVariant/parentMemberRefitVariant identity skips (caller still handles those).
+- Delete redundant machinery in HullmodExotic.kt (its flows + propagate covered the same variants
+  the whole-graph install now does; ExoticaTechHM.addToFleetMember already fixVariant +
+  refreshFleetCache per callback, ExoticaTechHM.java:105-109):
+      propagateHullmodThroughoutShip (161-173) + installHullmodRecursive (212-217)
+      stripHullmodThroughoutShip (194-210) + stripHullmodAndUnapplyRecursive (219-224)
+        + stripHullmodAndUnapply (226-229)
+      onDestroy marker scrub + refit-member scrub (~:312-333)
+      unapplyExoticHullmodFromVariantOnAllStats (427-432)
+      unapplyExoticHullmodFromVariant (407-410) - becomes unused after the above
+  KEEP installHullmodOnVariant (still used by installThisHullmodExoticToFleetMembersVariant),
+  the STRICT hasHullMod gate :271-279, keep removeHullmodExoticFromVariant's dual-stat scrub, and the
+  rev-5 updateStats veto. The callback's own unapply was redundant anyway: the handler's
+  removeHullmodExoticFromVariant dual-scrubs stats BEFORE the callback runs.
+- HullmodExotic.onInstall: propagate call replaced by nothing (whole-graph flows do the work);
+  addToFleetMember still runs per variant via callbacks.
+
+VERIFICATION (user, Windows build, in game)
+-------------------------------------------
+1. Repro: 2x AlphaSubcore on both twins (tbj_overslaught_Start = game-start console A,
+   tbj_overslaught_Standard = console B). Refit-install on A, then refit-uninstall - expect
+   workMode=LENIENT and runningFromRefitScreen=true in logs.txt and rootMember.shipName resolving to
+   the right ship. A or B OP must fully revert.
+2. If a STRICT WARN line appears during that refit flow, THAT is the proof -> fix the detector with it.
+3. Twin regression: install/uninstall must not leak across twins (each keeps exactly its own exotic).
+4. Single-ship regression + planet side "exoticatech" STRICT install/uninstall still reduces/reverts.
+5. One exotic remains while uninstalling a different one: no exception, no StackOverflowError.
+
+PHASE 4 (user-defined, runs ONLY after the manual test gate)
+-------------------------------------------------------------
+MANUAL TEST GATE between Phase 3 and Phase 4: the user runs the in-game repro on the Windows build.
+If everything is fine -> Phase 4 cleanup. If NOT fine -> fix what needs fixing FIRST (with the
+diagnostics still in place), re-test, and only when working fine run Phase 4.
+
+Phase 4 removes every diagnosticLog() method and every diagnosticLog call site, plus the support
+artifacts added for them (nothing that pre-existed rev9 gets removed):
+- FleetMemberUtils.kt: remove the local diagnosticLog() helper and its findRootVariantMember() call
+  site. KEEP the logger field + Level/Logger imports (they predate this revision and must stay even
+  if unused).
+- StarsectorAPIInteractor.kt: remove the added logger, the local diagnosticLog() helper, the two
+  call sites in actualStarsectorAPIrunningFromRefitScreen(), and the Level/Logger imports added here
+  (they did NOT exist before rev9). Restore the method body to its original no-logging form.
+- HullmodExoticHandler.kt: remove the local diagnosticLog() helper and the 4 flow-start call sites.
+
+Commit the Phase-4 cleanup as its own focused commit once the manual gate passes (and after any
+necessary post-gate fixes are themselves verified).
+
+COMMIT STYLE
+------------
+Single focused commit after phases verified; message suggested at handoff, user commits locally.
+
+FILES
+-----
+src/exoticatechnologies/plans/plan-hullmod_exotic_installs_on_whole_ship-revision9.txt  (this doc)
+src/exoticatechnologies/util/FleetMemberUtils.kt       Phase 1 + diagnosticLog
+src/exoticatechnologies/util/StarsectorAPIInteractor.kt Phase 2 diagnosticLog + instrumentation
+src/exoticatechnologies/hullmods/exotics/HullmodExoticHandler.kt  Phase 2 + Phase 3 flows
+src/exoticatechnologies/util/Extensions.kt             Phase 3 getWholeVariantGraph
+src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt  Phase 3 deletions
+src/exoticatechnologies/util/tests/HullmodExoticHandlerTests.kt      Phase 2/3 tests

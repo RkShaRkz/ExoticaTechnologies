@@ -1,0 +1,91 @@
+ISSUE #39 HULLMOD EXOTICS -> "INSTALL ON WHOLE SHIP" — REVISION 6 (OP RESET ON REMOVE)
+======================================================================================
+Whole-ship removal leaves reduced OP on SOME child modules even though the exotic is fully
+removed. Revision 6 makes stripHullmodThroughoutShip undo the exotic hullmod's stat effects on
+every variant it strips, so OP is guaranteed to revert regardless of the remove-flow's
+install bookkeeping.
+
+Revision docs accumulate; originals are never overwritten. -revision5 remains the rev record
+of the updateStats (StackOverflowError) fix. This revision only extends the REMOVE side.
+
+WHY REVISION 5 LEFT STALE OP (user-given scenario + code)
+----------------------------------------------------------
+User scenario (two identical multimodule ships):
+  1) ship1 = tbj_overslaught_Start; 2) ship2 = tbj_overslaught_Standard;
+  3) install AlphaSubcore on ship1's LEFT child;  4) install AlphaSubcore on ship2's RIGHT child;
+  5) uninstall from ship1's RIGHT child; 6) uninstall from ship2's LEFT child;
+  7) inventory ends with exactly 2 AlphaSubcores (good) but SOME child modules keep reduced OP.
+
+Root cause is a bookkeeping gap, not root resolution:
+- The install flows record ONLY the variants they actually install exotic-data onto into
+  HullmodExoticHandler's listOfVariantsWeInstalledOn (installHullmodExoticToVariant,
+  HullmodExoticHandler.kt:357). For a whole-ship install entered on a single module, that is
+  precisely ONE campaign child variant (+ the root member variant).
+- The whole-ship write-through propagateHullmodThroughoutShip adds the exotic's own hullmod id
+  to EVERY module object graph regardless of that record (campaign tree, refit tree, display
+  tree, children). So each ship has modules that CARRY the hullmod but are NOT in the record.
+- On removal, CheckAndRemoveFromAllChildModulesVariants (HullmodExoticHandler.kt:869) iterates
+  ONLY listOfVariantsWeInstalledOn, and unapplyExoticHullmodAndRemoveExoticaAndHullmod is the
+  ONLY place removeEffectsBeforeShipCreation gets called for those variants. Modules that merely
+  received the propagated hullmod (ship1-RIGHT, ship2-LEFT - exactly the modules the user
+  uninstalled FROM) never get the effect unapplied, so their OP stays reduced even after
+  stripHullmodThroughoutShip removes the perma-mod from the variants.
+
+FIX - UNAPPLY EVERY STRIPPED VARIANT (HullmodExotic.kt)
+-------------------------------------------------------
+stripHullmodThroughoutShip now strips AND unapplies per variant:
+
+  stripHullmodAndUnapplyRecursive(rootMember.variant, rootMember)
+  val refitTree = rootMember.checkRefitVariant()
+  if (refitTree !== rootMember.variant) stripHullmodAndUnapplyRecursive(refitTree, rootMember)
+  getRefitDisplayVariant()?.let { displayTree ->
+      if (displayTree !== rootMember.variant && displayTree !== refitTree)
+          stripHullmodAndUnapplyRecursive(displayTree, rootMember)
+  }
+  rootMember.fixVariant(); refreshFleetCache x3 (unchanged; NO updateStats - SOE guard intact)
+
+  stripHullmodAndUnapplyRecursive(variant, rootMember) = pre-order walk calling
+  stripHullmodAndUnapply(variant, rootMember) which:
+      if (!variant.hasHullMod(hullmodId)) return
+      removeHullmodFromVariant(variant)
+      val stats = HullmodExoticHandler.getNonNullStatsToUse(rootMember, variant)
+      unapplyExoticHullmodFromVariant(variant, stats)
+
+- Replaces the old hullmod-only stripHullmodRecursive (which had no other callers).
+- Same remove -> unapply order as unapplyExoticHullmodAndRemoveExoticaAndHullmod
+  (HullmodExotic.kt:364-365), same stats helper (getNonNullStatsToUse: variant.statsForOpCosts
+  when present, else fleetMember.stats).
+- Guarded on hasHullMod so clean trees are skipped (mirrors ExoticaTechHM.stripTree's guard).
+- Idempotent with the flows: recorded variants are unapplied by both the flow and the strip walk;
+  removeEffectsBeforeShipCreation unmodifies id-keyed stat modifiers, so a second unapply is a no-op.
+  This also hardens uninstall when the flow's object-identity checks bail on refit clones.
+- Explicitly does NOT call updateStats() (rev-5 re-entry rule). The unapply mutates the stats the
+  refit reads directly, so the OP figure reverts on the next screen read.
+
+FILES
+-----
+src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt: stripHullmodThroughoutShip
+  uses the new stripHullmodAndUnapply(Recursive) walk; stripHullmodRecursive removed; KDoc
+  documents the unapply requirements and idempotency.
+No changes to HullmodExoticHandler (guard semantics untouched) and no updateStats reintroduced.
+
+VERIFICATION (user, Windows build, in game)
+-------------------------------------------
+1. Your exact scenario (steps 1-7 above): after both uninstalls, ALL four module tabs on BOTH
+   ships show NORMAL OP (the stripped-only modules ship1-RIGHT and ship2-LEFT revert too), and
+   exactly 2 AlphaSubcores remain in inventory.
+2. Re-install from the refit, then uninstall from a PROPAGATED-ONLY module while another exotic
+   (or AlphaSubcore) remains on a different module - only the removed exotic's OP footprint
+   reverts, no exception, no StackOverflowError.
+3. ExoticaTech-screen install + destroy of AlphaSubcore still reduces/reverts OP everywhere
+   (regression guard).
+4. logs.txt: no StackOverflowError; onDestroy path unchanged apart from the strip walk.
+
+COMMIT STYLE
+------------
+Single focused commit, message suggested at handoff, user commits locally.
+
+PLAN-NOTE
+---------
+Revision docs accumulate; originals are never overwritten. -revision6 documented here;
+-revision5 is the updateStats/SOE fix record, -revision4 the SOE crash record.

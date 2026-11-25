@@ -1,0 +1,151 @@
+# plan-multimodule_root_resolution_and_placeholder_clobber.txt
+# Fix "child-module install shows only on the child / loses the exoticatech hullmod"
+# via (1) non-destructive placeholder writes and (2) robust whole-ship root resolution.
+
+## 1. Intent
+Installing a Modification (e.g. FullMetalSalvo) on a CHILD module of a multi-module
+ship (e.g. ork_superdread_main_standard) must apply to the WHOLE ship and the
+exoticatech hullmod must persist across refit. Today it applies to the child only
+and the module loses the hullmod on return to refit. Two independent defects cause
+this; both are fixed here.
+
+## 2. Context / evidence (captured run: logs.txt, repo root, 11263 lines)
+Member resolution (this run): one root FM "ef5f" (ork_superdread_main_standard);
+module FMs are transient and get NEW ids every refit cycle (thruster_right:
+102be -> 10d87; armor_right: 10467/10ab8/10d17; armor_left: ff3c). The root variant
+OBJECT is re-created repeatedly (rootGraphHash 1381478428 -> 1586923362 ->
+1617417760 -> 1841144749) while the hullVariantId STRING stays constant. The
+id-vs-object mismatch is the root of both defects.
+
+### Defect 1 — content-less (bandwidth-only) writes clobber content tags
+- ShipModFactory.generateForFleetMember (ShipModFactory.kt:25/:37) and
+  generateForChildModules (:85/:93) build a bandwidth-only ShipModifications and
+  persist it with ShipModLoader.set.
+- VariantTagProvider.set (VariantTagProvider.kt:154) always does
+  removeFromTags(variant) + addTag (:165-168) then writeThrough (:210), which
+  fuzzy-matches EVERY object graph by hullVariantId and blindly
+  removeFromTags + addTag (:230-233), replacing a real "$$EXOTICA$$" tag on the
+  matching node of the root graph.
+- generateForFleetMember only asked ShipModLoader.get(member, member.variant),
+  which returns null for a transient clone even when a SIBLING graph in the same
+  ship holds the real tag — so it never "searched the ship" before clobbering.
+- Evidence: :3844 whole-ship read contains FullMetalSalvo; :4111 empty VTP.set
+  (member=102be, sameAsMemberVariant=false, source=REFIT, mods=); :4137 all-none
+  REMOVE; TAG-ADDED with tags=1 but decodes empty.
+- A SECOND clobber writer is the outer call at CustomExoticaPanel.kt:45
+  (get(member, variant) ?: set(member, variant, generateForFleetMember(member))):
+  even if the factory stops writing, this outer set re-writes the empty mods.
+  ShipModUIPlugin.kt:84 is already safe (no outer set).
+- An install/uninstall legitimately persists a content-less ShipModifications to
+  STRIP the last exotic (HullmodExotic.kt:425/:431). Therefore the provider's
+  set/writeThrough semantics MUST NOT change; only the accidental placeholder
+  writes in ShipModFactory are removed.
+
+### Defect 2 — root resolution returns null on the first child install
+- ExoticaTechHM.addToFleetMember (ExoticaTechHM.java:96) uses
+  ModuleVariantHierarchy.findRootVariantId (ModuleVariantHierarchy.kt:84), which
+  reads the variantIdToParentId map populated only by mapVariantTree /
+  refreshFleetCache. The map is refreshed ONLY inside the APPLY branch (:133-134),
+  i.e. AFTER the decision — so on the first child install it is cold.
+- Evidence: :2794 rootVariantId=null -> APPLY to module only; after a root install
+  at :3091 (refreshFleetCache) it resolves at :3763.
+- ShipModLoader.resolveRootVariant (ShipModLoader.kt:128) has the SAME map
+  dependency: "SML.resolveRootVariant ... NO-HIERARCHY-ROOT -> self", so a
+  getWholeShipMods call with a CHILD variant walks only the child. Passing the
+  resolved ROOT's variant is hierarchy-independent (a root id is never a map key,
+  so findRootVariantId(root)==null -> self -> full tree walk).
+
+## 3. Scope
+Touch:
+- src/exoticatechnologies/modifications/ShipModFactory.kt        (Fix 1)
+- src/exoticatechnologies/refit/CustomExoticaPanel.kt            (Fix 1)
+- src/exoticatechnologies/hullmods/ExoticaTechHM.java            (Fix 2)
+Do NOT touch:
+- VariantTagProvider.set/remove/writeThrough semantics (uninstall requires them).
+- Diagnostics stripping (deferred by the user until the fix is verified).
+- ModuleVariantHierarchy public API (only called, not changed).
+
+## 4. Fix 1 (approved option (a)) — non-destructive placeholder writes
+Rule: a content-less placeholder may only be PERSISTED when the whole ship has NO
+content anywhere. When the ship already has content, skip the write and return the
+in-memory mods (bandwidth is deterministic from the member.id seed, so display is
+unaffected).
+
+### 4.1 ShipModFactory.kt
+- generateForFleetMember(member) (:25) and generateForFleetMember(member, market)
+  (:43): when get(member, member.variant) is null, before the placeholder
+  ShipModLoader.set (:37/:55) resolve the ship root and read the whole ship; only
+  proceed with the set when no entry satisfies shouldApplyHullmod(). Otherwise
+  skip the set and still call generateForChildModules + return the in-memory mods.
+- generateForChildModules (:85): same guard around the per-child
+  ShipModLoader.set (:93) — skip placeholder writes for tagless children when the
+  ship already has content.
+- Whole-ship read must be hierarchy-independent: resolve the root first
+  (FleetMemberUtils.resolveWholeShipRootMember(member), fall back to member) and
+  call ShipModLoader.getWholeShipMods(root, root.getVariant()).
+
+### 4.2 CustomExoticaPanel.kt:45
+- Drop the outer set: change
+    ShipModLoader.get(member, variant) ?: ShipModLoader.set(member, variant, ShipModFactory.generateForFleetMember(member))
+  to
+    ShipModLoader.get(member, variant) ?: ShipModFactory.generateForFleetMember(member)
+  (matches ShipModUIPlugin.kt:84). The factory now persists a placeholder itself
+  only when appropriate, so the panel's outer set is both redundant and a clobber.
+
+### 4.3 Preserved behavior
+- Virgin ship (no content anywhere): placeholders are still persisted as today.
+- Uninstall of the last exotic still strips via HullmodExotic.kt:425/:431 -> the
+  unchanged VariantTagProvider.set/writeThrough path.
+
+## 5. Fix 2 (approved + guard) — robust root resolution in addToFleetMember
+Replace ExoticaTechHM.java:96-101 with a primary resolver plus a reliable fallback:
+
+1. Primary: resolved = FleetMemberUtils.resolveWholeShipRootMember(member).
+   - It uses the refit-root cache + rootCarriesModule STRING membership
+     (getStationModules().values), so it is independent of the cold hierarchy map.
+2. GUARD (combat / no-refit): resolveWholeShipRootMember returns member ITSELF
+   (not null) outside refit for an unnamed member (FleetMemberUtils.kt:461), and
+   RefitButtonAdder.getRootMember() is null in combat. So the self result is only
+   trusted when it is a genuine root:
+   - If resolved != null AND resolved != member -> accept it as root
+     (a resolved child->root is always valid).
+   - Otherwise (resolved == null OR resolved == member) -> run the fallback chain
+     below, which detects the child case via the hierarchy map.
+3. Fallback (made reliable): compute
+   rootVariantId = ModuleVariantHierarchy.findRootVariantId(variant.getHullVariantId());
+   if null, call ModuleVariantHierarchy.refreshAllCaches() ONCE and retry. If
+   still null -> rootMember = member (status quo). If non-null ->
+   rootMember = findMemberByVariantId(member, rootVariantId) when found.
+4. Keep a String rootVariantId for the child-display gate at :115: it is non-null
+   exactly when the member is a child module (primary: resolved != member;
+   fallback: rootVariantId != null), so the hullmod is still added to the child
+   display variant.
+5. Onward whole-ship read (:105) keeps using rootMember.getVariant(), which now
+   self-resolves correctly regardless of the hierarchy map.
+
+### Open/deferred (flagged, not in this change)
+- Other getWholeShipMods callers passing a CHILD variant still hit
+  "NO-HIERARCHY-ROOT -> self" while the hierarchy map is cold
+  (ShipModLoader.resolveRootVariant, :128). Out of scope here; note as a follow-up
+  if panels/whole-ship reads misbehave after this fix lands.
+
+## 6. Verification
+- No local compiler: the user rebuilds the JAR (Windows-side).
+- Static: reference the changed symbols; confirm no new dead code; confirm
+  rootVariantId is still consumed at :115.
+- Manual (from the test plans):
+  1) Install FullMetalSalvo on a CHILD module of ork_superdread -> effect shows
+     on the whole ship; hullmod survives confirm + re-enter refit.
+  2) Install on the ROOT -> whole ship, still correct.
+  3) Install on a child, remove it -> hullmod stripped from the WHOLE ship
+     (uninstall path unregressed).
+  4) Single-module ships unchanged (say AlphaSubcore).
+  5) tbj_overslaught and an IndEvo station multi-module hull.
+- Re-capture logs.txt; confirm no empty VTP.set clobbers a content tag
+  (no "TAG-ADDED ... tags=1" followed by empty decode on a previously-full node).
+
+## 7. Closure criteria
+- Child-module install shows on the whole ship; hullmod persists across refit.
+- Root install, child uninstall, single-module install all unregressed.
+- No content tag is ever replaced by a content-less tag in the fresh log.
+- Then (and only then) strip the temporary diagnostics as a separate pass.

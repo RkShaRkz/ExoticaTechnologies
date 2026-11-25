@@ -1,0 +1,43 @@
+# Completed Plan: plan-orchestration-completed.txt
+
+## Intent
+Explain why the two implementation plans (plan-variant_cache and plan-hullmod_installation)
+had to run together. The big-picture goal was to expose the shared root-cause chain of the
+multi-module exotica system and sequence the two tracks so their diagnostics did not
+contaminate each other.
+
+## Scope
+A coordination document only — no code lives here. It bounds the two sibling plans it
+orchestrates: the cache track (combat child-data resolution) and the hullmod track (root
+hullmod persistence), which together cover refit, campaign, and combat.
+
+## Evolution
+- Implemented revision: plan-orchestration.txt (single revision; coordination doc).
+- Borrowed elements from: plan-child_effect_sharing.txt (the parent umbrella).
+- General idea followed from: plan-child_effect_sharing.txt, whose intent it renders into two
+  concrete tracks.
+
+## Outcome
+Both orchestrated plans are implemented at HEAD. The orchestration's execution order was
+followed: the hullmod track landed first (consolidateHullmod + whole-ship reads), giving the
+cache track a clean baseline; the cache track then shipped the write-side mirror that removes
+the combat tag-loss NULLs. Both halves being done, the orchestration's purpose is fulfilled.
+
+## Deviations
+- The orchestration anticipated Plan-cache Path B (campaign-anchored read recovery) as still
+  required after the hullmod fix. During implementation the cache track instead shipped a
+  write-side design (write-through + cross-instance invalidation) that prevents the stale/NULL
+  mirror problem at the source, without the read-side recovery machinery. The coordination
+  rationale (fix hullmod first for a clean baseline) remained valid.
+
+## Clarifying Implementation Details
+- The shared root cause: multi-module ships are root FMAPI + child module FMAPIs whose data
+  lives in per-variant tags; both the root hullmod presence and the whole-ship data readability
+  are prerequisites for correct behavior across layers.
+- No identity-based FleetMemberHierarchy calls in new code; whole-ship data via the variant-tree
+  walk; whole-ship reads deduped by hullVariantId to avoid double-firing campaign effects.
+
+## Reflection
+The two tracks share one codebase and interleaved diagnostics; coordinating them avoided fixing
+one and leaving the other symptom fully visible, and prevented a contaminated Phase-2b baseline.
+This umbrella earned its place and is now closed.

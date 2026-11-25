@@ -25,6 +25,7 @@ object ShipModFactory {
     fun generateForFleetMember(member: FleetMemberAPI): ShipModifications {
         var mods = ShipModLoader.get(member, member.variant)
         if (mods != null) {
+            generateForChildModules(member)
             return mods
         }
 
@@ -34,6 +35,7 @@ object ShipModFactory {
         mods.bandwidth = generateBandwidth(member)
 
         ShipModLoader.set(member, member.variant, mods)
+        generateForChildModules(member)
         return mods
     }
 
@@ -41,6 +43,7 @@ object ShipModFactory {
     fun generateForFleetMember(member: FleetMemberAPI, market: MarketAPI): ShipModifications {
         var mods = ShipModLoader.get(member, member.variant)
         if (mods != null) {
+            generateForChildModules(member)
             return mods
         }
 
@@ -50,11 +53,12 @@ object ShipModFactory {
         mods.bandwidth = generateBandwidth(member, market)
 
         ShipModLoader.set(member, member.variant, mods)
+        generateForChildModules(member)
         return mods
     }
 
     private fun getFaction(fm: FleetMemberAPI): String? {
-        if (fm.hullId.contains("ziggurat")) {
+        if (fm.hullId?.contains("ziggurat") == true) {
             return "omega"
         }
 
@@ -72,6 +76,23 @@ object ShipModFactory {
         }
 
         return fm.fleetData.fleet.faction?.id
+    }
+
+    // Reverse case — exotic installed on child module only — is handled upstream by
+    // ExoticaTechHM.addToFleetMember, which decides the hullmod from the WHOLE ship's
+    // modifications (consolidateHullmod over ShipModLoader.getWholeShipMods), so the root
+    // and all module variants get the hullmod even when the first exotic lands on a child.
+    private fun generateForChildModules(member: FleetMemberAPI) {
+        val stationModules = member.variant?.stationModules ?: return
+        for ((slotId, _) in stationModules) {
+            val childVariant = member.variant?.getModuleVariant(slotId) ?: continue
+            val existing = ShipModLoader.get(member, childVariant)
+            if (existing == null) {
+                val childMods = ShipModifications()
+                childMods.bandwidth = generateBandwidth(member, getFaction(member), childVariant.hullSpec?.manufacturer)
+                ShipModLoader.set(member, childVariant, childMods)
+            }
+        }
     }
 
     @JvmStatic
@@ -114,7 +135,7 @@ object ShipModFactory {
         return mods
     }
 
-    fun generateBandwidth(member: FleetMemberAPI, faction: String?): Float {
+    fun generateBandwidth(member: FleetMemberAPI, faction: String?, manufacturerOverride: String? = null): Float {
         if (!ETModSettings.getBoolean(ETModSettings.RANDOM_BANDWIDTH)) {
             return ETModSettings.getFloat(ETModSettings.STARTING_BANDWIDTH)
         }
@@ -123,14 +144,18 @@ object ShipModFactory {
             return Bandwidth.UNKNOWN.bandwidth
         }
 
-
         var mult = 1.0f
         if (faction != Factions.PLAYER) {
             mult *= 1.5f
         }
 
-        val manufacturer = member.hullSpec.manufacturer
+        val manufacturer = if (manufacturerOverride.isNullOrBlank()) {
+            member.hullSpec?.manufacturer
+        } else {
+            manufacturerOverride
+        }
         val manufacturerBandwidthMult = MagicSettings.getFloatMap("exoticatechnologies", "manufacturerBandwidthMult")
+        // containsKey guard ensures the value is non-null; !! is safe here
         if (manufacturerBandwidthMult.containsKey(manufacturer)) {
             mult *= manufacturerBandwidthMult[manufacturer]!!
         }
@@ -142,10 +167,8 @@ object ShipModFactory {
             }
         }
 
-        if (member.fleetData != null && member.fleetData.fleet != null) {
-            if (member.fleetData.fleet.memoryWithoutUpdate.contains("\$exotica_bandwidthMult")) {
-                mult *= member.fleetData.fleet.memoryWithoutUpdate.getFloat("\$exotica_bandwidthMult")
-            }
+        if (member.fleetData?.fleet?.memoryWithoutUpdate?.contains("\$exotica_bandwidthMult") == true) {
+            mult *= member.fleetData.fleet.memoryWithoutUpdate.getFloat("\$exotica_bandwidthMult")
         }
 
         mult += Utilities.getSModCount(member).toFloat()

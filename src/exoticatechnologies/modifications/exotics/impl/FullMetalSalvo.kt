@@ -6,7 +6,6 @@ import com.fs.starfarer.api.combat.ShipAPI
 import com.fs.starfarer.api.fleet.FleetMemberAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
-import com.fs.starfarer.api.util.Misc
 import exoticatechnologies.combat.ExoticaCombatUtils
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.modifications.exotics.Exotic
@@ -104,10 +103,10 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
             mods: ShipModifications,
             exoticData: ExoticData
     ) {
-        if (MagicSubsystemsManager.getSubsystemsForShipCopy(ship)?.filterIsInstance<SalvoActivator>()?.isEmpty() != false) {
-            val activator = SalvoActivator(ship, member, mods, exoticData)
-            MagicSubsystemsManager.addSubsystemToShip(ship, activator)
-        }
+        super.applyToShip(id, member, ship, mods, exoticData)
+
+        val activator = SalvoActivator(ship, member, mods, exoticData)
+        MagicSubsystemsManager.addSubsystemToShip(ship, activator)
     }
 
     override fun shouldShareEffectToOtherModules(ship: ShipAPI?, module: ShipAPI?) = true
@@ -117,8 +116,8 @@ class FullMetalSalvo(key: String, settings: JSONObject) : Exotic(key, settings) 
             val member: FleetMemberAPI,
             val mods: ShipModifications,
             val exoticData: ExoticData
-    ) :
-            MagicSubsystem(ship) {
+    ) : MagicSubsystem(ship) {
+
         override fun getDisplayText(): String {
             return Global.getSettings().getString(exoticData.key, "systemText")
         }

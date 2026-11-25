@@ -1,0 +1,98 @@
+ISSUE #39 HULLMOD EXOTICS -> "INSTALL ON WHOLE SHIP" — REVISION 5 (SOE FIX)
+===========================================================================
+Rev-4 (stable refit-root marker + whole-ship write-through of the exotic's OWN hullmod)
+crashed with a StackOverflowError when installing AlphaSubcore on a child module from the
+Refit screen (user in-game test -> logs.txt). Revision 5 fixes that crash while KEEPING the
+rev-4 reach improvements (root resolution + write-through), which rev-4's own verification
+confirmed were otherwise sound. Revision 4 doc left untouched as the record of the crash.
+
+WHY REVISION 4 CRASHED (logs.txt)
+---------------------------------
+logs.txt is a single 5-frame loop repeated for ~1000 lines:
+
+    propagateHullmodThroughoutShip(HullmodExotic.kt:167)   <- rootMember.updateStats()
+        -> FleetMember.updateStats
+        -> ExoticaTechHM.applyEffectsBeforeShipCreation(ExoticaTechHM.java:567)
+        -> AlphaSubcore.applyExoticToStats(AlphaSubcore.kt:85)   <- calls exotic.onInstall(member)
+        -> HullmodExotic.onInstall(HullmodExotic.kt:126)         <- rev-4 propagate call
+        -> propagateHullmodThroughoutShip(167)                   <- loop
+
+Root cause: propagateHullmodThroughoutShip ended with rootMember.updateStats(). updateStats()
+re-enters applyEffectsBeforeShipCreation -> each installed whole-ship exotic's
+applyExoticToStats -> onInstall, and rev-4's onInstall ALWAYS called propagate -> updateStats
+again. Nothing bounded it. The handler's expected-variant guard CANNOT break this cycle: it
+only gates the exotic-data installs inside the flows, while propagate ran AFTER the flows and
+called updateStats every pass. (The recurring org.json frames at the top of the trace are
+downstream damage from the deep recursion, not the cause.)
+
+Pre-rev-4 was safe because onInstall never called updateStats: the only stats refresh was
+ExoticaTechHM.addToFleetMember's single member.updateStats() (ExoticaTechHM.java:122), called
+from the button-click path (InstallMethod.apply:37), OUTSIDE onInstall.
+
+FIX PART 1 - NO updateStats() INSIDE THE WRITE-THROUGH HELPERS (HullmodExotic.kt)
+------------------------------------------------------------------------------
+- propagateHullmodThroughoutShip: removed the trailing rootMember.updateStats().
+- stripHullmodThroughoutShip: removed the trailing rootMember.updateStats() (a remaining
+  whole-ship exotic would re-enter the same cycle through applyExoticToStats).
+- fixVariant() and ModuleVariantHierarchy.refreshFleetCache() stay (safe: fixVariant is
+  setVariant(newVariant, false, false) - no stats re-entry).
+- KDoc reworked: the helpers now explicitly document WHY they do not call updateStats
+  (re-entry loop), and that the initiating caller refreshes stats once instead
+  (ExoticaTechHM.addToFleetMember / refit click).
+
+FIX PART 2 - DROP THE REDUNDANT/UNSTABLE PER-FM STRIP (HullmodExotic.kt)
+----------------------------------------------------------------------
+- stripHullmodThroughoutShip no longer walks child variants via
+  FleetMemberUtils.findModuleMember(childV). childV from rootMember.variant's own walk IS the
+  concrete campaign child variant, and stripHullmodRecursive(rootMember.variant) already
+  strips it. findModuleMember resolves via variant.statsForOpCosts -> findMemberForStats,
+  which is instance-unstable after fixVariant/refit cloning and can return null (silent miss)
+  or the identical-twin ship's member (issue #39). The refit-side clones are rebuilt clean by
+  fixVariant() at the end, so no reverse lookup is needed on the remove side.
+  (The ADD side's child-FM coverage via the shared propagateFromVariantTree util is kept -
+  additive and idempotent, same as ExoticaTechHM.addToFleetMember uses.)
+
+FIX PART 3 - RESTORE THE EXPECTED-VARIANT GUARD SEMANTICS
+(HullmodExoticHandler.CheckAndInstallOnAllChildModulesVariants)
+----------------------------------------------------------------
+- Removed the rev-4 addition of getRefitDisplayVariant() to allVariantsList (and its import).
+  The refit expected-list is back to: childModuleVariants + fleetMemberVariant +
+  fleetMember.checkRefitVariant(). The guard's immediate bail on a variant it does not expect
+  is the handler's recursive-install break, so the expected list must stay minimal and stable.
+  Safe: the flows iterate only the campaign childModuleVariants, and
+  CheckAndInstallOnMemberModule checks rootMember.variant / checkRefitVariant(), both still
+  present in the list, so neither flow's install is dropped.
+
+FILES
+-----
+src/exoticatechnologies/modifications/exotics/impl/HullmodExotic.kt: both write-through
+  helpers lose their updateStats() tail; strip helper loses the findModuleMember loop; KDocs
+  reworked to explain why (re-entry guard preserved, per RULES.md rework-don't-delete).
+src/exoticatechnologies/hullmods/exotics/HullmodExoticHandler.kt: allVariantsList refit
+  branch reverts to childVariants + memberVariant + checkRefitVariant (no display tree);
+  getRefitDisplayVariant import removed.
+Unchanged from rev-4 (still in place, verified harmless): RefitButtonAdder companion
+  rootMember, FleetMemberUtils findRootVariantMember step 1-refit-root, onInstall/onDestroy
+  propagate/strip call sites.
+Revision-4 doc untouched: record of the crash. Ideas/history in -revision1..-revision4.
+
+VERIFICATION (user, Windows build, in game)
+-------------------------------------------
+1. Two identical multimodule ships (two overslaughts), install AlphaSubcore on ship A from the
+   REFIT screen -> OP drops on ALL modules of A only; ship B untouched; NO stack overflow.
+2. Switch module tabs on A: every module tab shows the reduced OP.
+3. Destroy the exotic from A's refit screen -> only A's modules revert; B unchanged.
+4. Restore, then install AlphaSubcore from the EXOTICA SCREEN -> still reduces OP everywhere
+   (regression guard, no loop).
+5. Logs: whole-ship flows while in refit resolve "1-refit-root -> <rootId>"; the
+   propagate/strip helpers no longer appear under an updateStats frame; no StackOverflowError.
+
+COMMIT STYLE
+------------
+Single focused commit, message suggested at handoff, user commits locally.
+
+PLAN-NOTE
+---------
+Revision docs accumulate; originals are never overwritten. -revision4 remains the record of
+the StackOverflowError regression caused by calling updateStats() from inside onInstall's
+write-through.

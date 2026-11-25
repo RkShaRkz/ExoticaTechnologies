@@ -1,0 +1,123 @@
+# plan-hullmod_exotic_installs_on_whole_ship-revision2.txt
+
+Follow-up to `plan-hullmod_exotic_installs_on_whole_ship-revision1.txt` (and, behind
+it, the original `plan-hullmod_exotic_installs_on_whole_ship.txt`). New plan file per
+repo convention; earlier plan docs are never overwritten.
+
+## 1. Objective
+
+Revision 1 anchored whole-ship installs/removes on the ship's root member via
+`FleetMemberUtils.findRootVariantMember`, resolving the root with a fleet-wide fuzzy
+scan of station-module trees. With a **single** ship that works, but with **two or
+more copies of the same hull** the scan is ambiguous:
+
+- The scan matches on `hullVariantId` **strings** (`findRootVariant` /
+  `findRootVariantByHullId`), and two identical ships have byte-identical module
+  variant ids (e.g. both `overslaught_left_0`).
+- `treeFuzzyContains` therefore returns true for every copy's root, and the scan
+  returns whichever root comes first in `activeFleets` iteration order — an
+  effectively random pick per invocation.
+- Any path that feeds a *child* `FleetMemberAPI` into `findRootVariantMember`
+  (module-stats application re-entering `onInstall`/`onDestroy`, e.g. via
+  `applyExoticToStats`), not just the refit panel, can then anchor the whole-ship
+  bookkeeping on the **wrong ship's** root.
+
+In-game symptom (user-verified on Windows, two identical overslaughts):
+
+- installing on the first ship's child can seed entries on the second ship;
+- removing from one ship's child strips the **other** ship too (and vice versa).
+
+This revision makes the root resolution **deterministic per ship** in the one context
+where these flows legitimately run: the refit screen.
+
+## 2. Change set
+
+### 2.1 `FleetMemberUtils.kt` — refit screen authority in `findRootVariantMember`
+
+The refit screen edits **one ship at a time**, and `RefitButtonAdder.member` is that
+ship's root member (null whenever the refit screen is closed — `RefitButtonAdder`
+resets it in `advance`). It is therefore an unambiguous truth oracle: a child module
+entering a whole-ship flow while the refit screen is open belongs to exactly the ship
+whose root is `RefitButtonAdder.member`.
+
+```kotlin
+@JvmStatic
+fun findRootVariantMember(member: FleetMemberAPI): FleetMemberAPI {
+    // A root owns its station modules; nothing to resolve.
+    if (member.variant.stationModules.isNotEmpty()) return member
+
+    // All whole-ship flows run synchronously from the single ship currently being
+    // refitted, so the refit screen's root member unambiguously owns the triggering
+    // child module.
+    if (runningFromRefitScreen()) {
+        val refitRoot = RefitButtonAdder.member
+        if (refitRoot != null && refitRoot.variant.stationModules.isNotEmpty() &&
+                treeFuzzyContains(refitRoot.variant, member.variant.hullVariantId)) {
+            return refitRoot
+        }
+    }
+
+    val rootVariant = findRootVariant(member, member.variant)
+    if (rootVariant == member.variant) return member
+    return findModuleMember(rootVariant) ?: member
+}
+```
+
+Details:
+
+- The refit branch is **guarded**: it only fires while `runningFromRefitScreen()` is
+  true, the refit root actually owns station modules, *and* its module tree
+  fuzzy-contains the triggering child's variant id. A stale/foreign refit root falls
+  through to the previous resolution.
+- The previous resolution (`findRootVariant` → `findModuleMember`) is untouched and
+  remains the fallback for non-refit paths (colony-side dialog passes the root member
+  already, so the fast path handles it; tests keep `RefitButtonAdder.member == null`
+  and use the fallback — no test breakage).
+- Import added: `exoticatechnologies.refit.RefitButtonAdder`. `runningFromRefitScreen()`
+  is same-package at `exoticatechnologies.util.Extensions.kt:1043`.
+
+KDoc on `findRootVariantMember` updated to document the refit-first rule and *why* the
+fallback scan is kept (it cannot tell two identical hulls apart).
+
+### 2.2 Not touched
+
+- `HullmodExotic.kt`, `HullmodExoticHandler.kt`: no changes. The `member = rootMember`
+  decision at `HullmodExotic.kt:99` is unchanged; with a correct (per-ship) anchor the
+  stats re-entry resolves to the same root the panel install used, so
+  `doesEntryExist` short-circuits and no spurious second entry is created.
+- `ModuleVariantHierarchy`, `findRootVariantByHullId`, STRICT/LENIENT work modes,
+  `AlphaSubcore`/`DaemonCore`, stats paths: unchanged.
+
+## 3. Why this fixes the contamination
+
+Every contaminated path (panel install/destroy, and module-stats re-entry through
+`applyExoticToStats → onInstall/onDestroy`) funnels through `findRootVariantMember`.
+In the refit screen the triggering child now resolves to the *editing* ship's root:
+
+- install from a child of ship A touches only A;
+- the stats re-entry produces the same root-anchored key as the panel install, so the
+  handler's `didWeAlreadyInstall`/`hasNotInstalledOnThisVariantAlready` checks no-op it;
+- destroy from a child of ship B tears down only B; A keeps its hullmod + exotic data.
+
+The remaining fuzzy scan is reachable only when the refit screen is closed, where the
+only legitimate whole-ship entry is a root member (fast path) — so single-ship
+behavior is unchanged and no ambiguity is reachable in practice.
+
+## 4. Validation
+
+- No unit test (same rationale as revision 1: the stubbed `FleetMemberAPI` test doubles
+  cannot model a real Starsector module tree; the fix is verified in-game).
+- Diff hygiene: only `FleetMemberUtils.kt` (plus this plan doc) carries a non-CRLF diff
+  (`git -c core.autocrlf=false diff -w --stat`).
+- Windows build + in-game (user-held), **two copies of the same multimodule ship**:
+  1. install whole-ship exotic on ship A's child → only A gains it;
+  2. install on ship B's child → only B gains it; A keeps A's own;
+  3. destroy from ship B's child → only B loses it; A retains hullmod + exotic data;
+  4. re-open A's refit: A still has it, B is clean.
+
+## 5. Deliverables
+
+- `findRootVariantMember` refit-first resolution + KDoc (and the one import).
+- `plans/plan-hullmod_exotic_installs_on_whole_ship-revision2.txt`.
+- Plan closes when: grep/diff hygiene clean, Windows build passes, in-game two-copy
+  smoke above is green.
