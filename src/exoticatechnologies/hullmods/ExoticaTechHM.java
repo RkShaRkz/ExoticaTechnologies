@@ -270,8 +270,9 @@ public class ExoticaTechHM extends BaseHullMod {
             return;
         }
 
-        // wholeShipMods is deduped by hullVariantId in getWholeShipMods, so each installation is
-        // iterated exactly once even when the same logical variant exists as stock/REFIT/combat clones.
+        // wholeShipMods is deduped by (member id, hullVariantId, slot path) in getWholeShipMods, so
+        // each installation is iterated exactly once even when the same logical variant exists as
+        // stock/REFIT/combat clones or as identical sibling modules.
         for (ShipModifications shipMods : wholeShipMods) {
             for (Upgrade upgrade : UpgradesHandler.UPGRADES_LIST) {
                 int level = shipMods.getUpgrade(upgrade);

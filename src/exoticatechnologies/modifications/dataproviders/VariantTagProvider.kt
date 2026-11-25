@@ -7,6 +7,7 @@ import com.fs.starfarer.api.loading.VariantSource
 import exoticatechnologies.modifications.ShipModLoader
 import exoticatechnologies.modifications.ShipModifications
 import exoticatechnologies.refit.checkRefitVariant
+import exoticatechnologies.refit.getRefitDisplayMemberVariant
 import exoticatechnologies.refit.getRefitDisplayVariant
 import exoticatechnologies.util.*
 import exoticatechnologies.util.datastructures.Optional
@@ -14,7 +15,7 @@ import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import java.util.WeakHashMap
 
-open class VariantTagProvider : AbstractDataProvider() {
+open class VariantTagProvider : AbstractDataProvider(), ModuleSlotDataProvider {
     companion object {
         val MIN_LOG_LEVEL: Level = Level.WARN
 
@@ -46,8 +47,9 @@ open class VariantTagProvider : AbstractDataProvider() {
         /**
          * Upper bound on the number of distinct object GRAPHS a single tag write is mirrored onto by
          * [writeThrough]. This counts tree ROOTS, not module nodes: a ship's actual module count is
-         * orthogonal (each root's station-module tree is walked node-by-node in [findVariantInTree],
-         * never enumerated here). The four graphs, all subtrees of the same acting ship, are:
+         * orthogonal (each root's station-module tree is walked node-by-node in
+         * [ModuleWriteGraphContext.findMirrorVariant], never enumerated here). The four graphs, all
+         * subtrees of the same acting ship, are:
          *
          * 1. the member's own variant tree ([FleetMemberAPI.variant])
          * 2. the resolved root tree ([FleetMemberUtils.findShipScopedRootVariant])
@@ -60,7 +62,13 @@ open class VariantTagProvider : AbstractDataProvider() {
         private const val NUMBER_OF_GRAPHS = 4
     }
 
-    private val cache: MutableMap<FleetMemberAPI, MutableMap<String, ShipModifications>> = WeakHashMap()
+    /**
+     * Mirrors tag data per member, hull id, and slot path.
+     *
+     * Hull ids repeat across identical sibling modules, so a hull-id-only mirror made two modules
+     * share one cached result even though their tags were independent.
+     */
+    private val cache: MutableMap<FleetMemberAPI, MutableMap<String, MutableMap<String, ShipModifications>>> = WeakHashMap()
     private val EXOTICA_INDICATOR = "$\$EXOTICA$$"
 
     /**
@@ -87,7 +95,26 @@ open class VariantTagProvider : AbstractDataProvider() {
     }
 
     override fun get(member: FleetMemberAPI, variant: ShipVariantAPI): ShipModifications? {
+        return findModifications(member, variant, Optional.empty())
+    }
+
+    override fun getAtSlotPath(member: FleetMemberAPI, variant: ShipVariantAPI, slotPath: String): ShipModifications? {
+        return findModifications(member, variant, Optional.of(slotPath))
+    }
+
+    /**
+     * Reads a module's tags through a cache keyed by its actual slot.
+     *
+     * Tree walks already know the slot, and plain reads can usually derive it; without that key a
+     * fuzzy hull-id hit could return a sibling module's cached modifications.
+     */
+    private fun findModifications(
+        member: FleetMemberAPI,
+        variant: ShipVariantAPI,
+        requestedSlotPath: Optional<String>
+    ): ShipModifications? {
         val variantId = variant.hullVariantId
+        val slotPath = resolveSlotPath(member, variant, requestedSlotPath)
 
         // Periodic sweep for members whose cached data age has exceeded the TTL
         if (++accessCounter % CLEANUP_INTERVAL == 0L) {
@@ -95,7 +122,7 @@ open class VariantTagProvider : AbstractDataProvider() {
         }
 
         val memberCache = cache[member]
-        if (memberCache != null) {
+        if (memberCache != null && slotPath.isPresent()) {
             val writeTime = lastWrite[member]
             if (writeTime != null) {
                 // TTL is measured from the last WRITE, not the last read. A member read every
@@ -113,16 +140,9 @@ open class VariantTagProvider : AbstractDataProvider() {
                     lastWrite.remove(member)
                     // fall through to tag read below
                 } else {
-                    val cacheMods = memberCache[variantId]
-                    if (cacheMods != null) {
-                        return cacheMods
-                    }
-
-                    val fuzzyKey = findFuzzyKey(member, variantId)
-                    if (fuzzyKey.isPresent()) {
-                        val matchId = fuzzyKey.get()
-                        val fuzzyMods = memberCache[matchId]
-                        return fuzzyMods
+                    val cachedMods = findCachedModifications(memberCache, variantId, slotPath.get())
+                    if (cachedMods != null) {
+                        return cachedMods
                     }
                 }
             }
@@ -132,19 +152,93 @@ open class VariantTagProvider : AbstractDataProvider() {
             member.fixVariant()
         }
 
-        getFromVariant(variant)?.let {
-            if (StarsectorAPIInteractor.runningFromRefitOrFleetScreen()) {
-                return it
-            } else {
-                cache.getOrPut(member) { mutableMapOf() }[variantId] = it
-                lastWrite[member] = currentGameTime()
+        val fresh = getFromVariant(variant)
+        if (fresh != null) {
+            if (!StarsectorAPIInteractor.runningFromRefitOrFleetScreen()) {
+                rememberModificationsInCache(member, variantId, fresh, slotPath)
             }
-            return it
+            return fresh
         }
         return null
     }
 
+    /**
+     * Finds the best available slot path for a plain read.
+     *
+     * Instance identity is preferred over hull id because the engine can place the same stock
+     * object at more than one slot; hull matching is only a fallback for working-copy graphs.
+     */
+    private fun resolveSlotPath(
+        member: FleetMemberAPI,
+        variant: ShipVariantAPI,
+        requestedSlotPath: Optional<String>
+    ): Optional<String> {
+        if (requestedSlotPath.isPresent()) {
+            return requestedSlotPath
+        }
+        val shipVariant: ShipVariantAPI? = member.variant
+        if (shipVariant == null) {
+            return Optional.empty()
+        }
+        val byInstance = ModuleSlotPathsUtils.findInstanceSlotPath(shipVariant, variant)
+        if (byInstance.isPresent()) {
+            return byInstance
+        }
+        return ModuleSlotPathsUtils.findGraphRootSlotPath(shipVariant, variant)
+    }
+
+    /**
+     * Looks up exact and fuzzy cache keys at one slot.
+     *
+     * Fuzzy support remains necessary for refit suffix churn, but the slot must match in both
+     * branches or identical sibling modules would still share data.
+     */
+    private fun findCachedModifications(
+        memberCache: MutableMap<String, MutableMap<String, ShipModifications>>,
+        variantId: String,
+        slotPath: String
+    ): ShipModifications? {
+        val variantCache = memberCache[variantId]
+        if (variantCache != null) {
+            val exact = variantCache[slotPath]
+            if (exact != null) {
+                return exact
+            }
+        }
+
+        val fuzzyKey = findFuzzyVariantId(memberCache, variantId)
+        if (fuzzyKey.isPresent()) {
+            val fuzzyVariantCache = memberCache[fuzzyKey.get()]
+            if (fuzzyVariantCache != null) {
+                return fuzzyVariantCache[slotPath]
+            }
+        }
+        return null
+    }
+
+    /**
+     * Stores a fresh tag read only when its slot is known.
+     *
+     * Unknown-slot data must not be cached: a hull-id-only key is exactly the ambiguity that lets
+     * one sibling's modifications leak into another.
+     */
+    private fun rememberModificationsInCache(
+        member: FleetMemberAPI,
+        variantId: String,
+        mods: ShipModifications,
+        slotPath: Optional<String>
+    ) {
+        if (!slotPath.isPresent()) {
+            return
+        }
+        cache.getOrPut(member) { mutableMapOf() }
+                .getOrPut(variantId) { mutableMapOf() }[slotPath.get()] = mods
+        lastWrite[member] = currentGameTime()
+    }
+
     override fun set(member: FleetMemberAPI, variant: ShipVariantAPI, mods: ShipModifications) {
+        val slotPath = resolveSlotPath(member, variant, Optional.empty())
+
         // Write-side invalidation BEFORE the fresh write: purge stale mirrors of this variantId
         // from every member's cache so the new data can never be shadowed by a stale sibling
         // served via exact or fuzzy match on a later read.
@@ -162,14 +256,14 @@ open class VariantTagProvider : AbstractDataProvider() {
         // Write-through: mirror the write onto every object graph a later whole-ship read may
         // walk (the member's own variant tree, the resolved root tree, the REFIT display tree).
         // An install/removal that lands on a transient child FM variant or a refit clone must
-        // reach the equivalent node in each sibling graph, or the whole-ship decision keeps
-        // reading stale tags. Matching is fuzzy by variantId prefix so 'left_0' finds the
-        // root-tree's 'left_Start' copy; only the matching node is touched, never the root —
-        // blanket-tagging the root would duplicate a child's installation across entries.
+        // reach the equivalent slot in each sibling graph, or the whole-ship decision keeps
+        // reading stale tags. Slot paths decide the matching node; fuzzy hull ids are only a
+        // last resort for working-copy churn ('left_0' -> 'left_Start'); only the matching node
+        // is touched, never the root — blanket-tagging the root would duplicate a child's
+        // installation across entries.
         writeThrough(member, variant, tag)
 
-        cache.getOrPut(member) { mutableMapOf() }[variant.hullVariantId] = mods
-        lastWrite[member] = currentGameTime()
+        rememberModificationsInCache(member, variant.hullVariantId, mods, slotPath)
     }
 
     override fun remove(member: FleetMemberAPI, variant: ShipVariantAPI) {
@@ -188,8 +282,8 @@ open class VariantTagProvider : AbstractDataProvider() {
      * Mirrors a single tag write ([tag] == null means strip) onto every object graph a later
      * whole-ship read may walk: the member's own variant tree, the resolved root tree (which may
      * be a different object after fixVariant churn), the REFIT variant tree, and the refit DISPLAY
-     * working tree. Each graph is independently written at the node fuzzy-matching the target
-     * variant — see [findVariantInTree].
+     * working tree. [ModuleWriteGraphContext] maps the written object's slot into each graph so a
+     * write can never land on a different sibling with the same hull id.
      *
      * The display tree is the graph the refit screen actually renders and re-binds on confirm; the
      * strip side already reaches it ([ExoticaTechHM.removeHullmodEverywhere]), so the install/tag
@@ -198,51 +292,44 @@ open class VariantTagProvider : AbstractDataProvider() {
      * state, so a write on one ship can never mirror onto another ship's display tree.
      */
     private fun writeThrough(member: FleetMemberAPI, variant: ShipVariantAPI, tag: String?) {
-        val targetId = variant.hullVariantId
+        val originalVariant: ShipVariantAPI? = member.variant
+        if (originalVariant == null) {
+            return
+        }
         val rootGraph = FleetMemberUtils.findShipScopedRootVariant(member, variant)
 
         val graphs = ArrayList<ShipVariantAPI>(NUMBER_OF_GRAPHS)
-        member.variant?.let { graphs.add(it) }
-        rootGraph?.let { rootVariant ->
-            if (rootVariant !== member.variant && graphs.none { it === rootVariant }) graphs.add(rootVariant)
+        graphs.add(originalVariant)
+        if (rootGraph != null && graphs.none { it === rootGraph }) {
+            graphs.add(rootGraph)
         }
         val refitVariant = runCatching { member.checkRefitVariant() }.getOrNull()
-        if (refitVariant != null && graphs.none { it === refitVariant }) graphs.add(refitVariant)
-        getRefitDisplayVariant(member)?.let { displayVariant ->
-            if (graphs.none { it === displayVariant }) graphs.add(displayVariant)
+        if (refitVariant != null && graphs.none { it === refitVariant }) {
+            graphs.add(refitVariant)
+        }
+        val displayVariant = getRefitDisplayVariant(member)
+        if (displayVariant != null && graphs.none { it === displayVariant }) {
+            graphs.add(displayVariant)
+        }
+
+        val displayMemberVariant = getRefitDisplayMemberVariant(member).firstOrNull()
+        val context = ModuleWriteGraphContext(originalVariant, graphs, displayVariant, displayMemberVariant)
+        val writtenSlotPathOptional = context.findWrittenSlotPath(variant)
+        val writtenSlotPath: String? = if (writtenSlotPathOptional.isPresent()) {
+            writtenSlotPathOptional.get()
+        } else {
+            null
         }
 
         for (graph in graphs) {
-            val target = findVariantInTree(graph, targetId) ?: continue
-            removeFromTags(target)
-            if (tag != null) {
-                target.addTag(tag)
+            val target = context.findMirrorVariant(graph, variant, writtenSlotPath)
+            if (target != null) {
+                removeFromTags(target)
+                if (tag != null) {
+                    target.addTag(tag)
+                }
             }
         }
-    }
-
-    /**
-     * Finds the node in [root]'s variant tree corresponding to [targetId]: an exact hullVariantId
-     * match first, then a fuzzy match (same prefix before the last '_suffix'). Returns null when
-     * the tree has no such node (e.g. a child variant whose tree is unreachable from [root]).
-     */
-    private fun findVariantInTree(root: ShipVariantAPI, targetId: String): ShipVariantAPI? {
-        // The root IS fuzzy-matched too: for a single-module ship the whole tree is just the root,
-        // and the write target can be a refit clone ('ship_0') of the member's variant ('ship_Start')
-        // — exact-only matching would skip member.variant entirely and the whole-ship read on it
-        // would then see nothing. For module ships the root's prefix differs from every child's, so
-        // a root fuzzy-match never collides with a child target.
-        if (root.hullVariantId == targetId || FleetMemberUtils.fuzzyVariantIdEquals(root.hullVariantId, targetId)) return root
-        var exact: ShipVariantAPI? = null
-        var fuzzy: ShipVariantAPI? = null
-        root.forEachModuleVariant { childV ->
-            when {
-                exact != null -> { /* already found an exact node, keep looking for nothing */ }
-                childV.hullVariantId == targetId -> exact = childV
-                fuzzy == null && FleetMemberUtils.fuzzyVariantIdEquals(childV.hullVariantId, targetId) -> fuzzy = childV
-            }
-        }
-        return exact ?: fuzzy
     }
 
     private fun removeFromTags(variant: ShipVariantAPI) {
@@ -306,19 +393,20 @@ open class VariantTagProvider : AbstractDataProvider() {
      * instance (a transient refit FM) and later read under a different one (combat FM, or the root
      * FM for child modules via the variant-tree walk). FleetMemberAPI has no stable id usable as a
      * cache key across those identities — but the variantId is stable. So on every write/removal we
-     * purge every cached mirror of that variantId across ALL members, exact-match or prefix-fuzzy.
+     * purge every cached mirror of that variantId across ALL members and slots, exact-match or
+     * prefix-fuzzy.
      *
      * This runs only on the cold write path (install/remove), never inside get(). The mirrors it
      * drops are re-synced from the variant tags (the durable source of truth) on their next read —
      * the cost is one tag read per affected member, only when it is next requested. Fuzzy matching
-     * (stripping the last '_suffix', mirroring [findFuzzyKey]) is required because the same module
+     * (stripping the last '_suffix', mirroring [findFuzzyVariantId]) is required because the same module
      * variant appears under many suffixes ('left_0' / 'left_Start' / 'left_Hull') depending on where
      * the engine sourced it; writing any one of them must invalidate all siblings.
      *
      * @param variantId the variantId whose mirrors must be dropped
      */
     private fun invalidateVariantAcrossAll(variantId: String) {
-        // Mirrors findFuzzyKey's prefix derivation; precomputed once, not per entry.
+        // Mirrors findFuzzyVariantId's prefix derivation; precomputed once, not per entry.
         // substringBeforeLast("_", variantId) falls back to the whole id when there's no
         // underscore, degrading cleanly to exact-match-only for flat variant names.
         val prefix = variantId.substringBeforeLast("_", variantId)
@@ -341,38 +429,42 @@ open class VariantTagProvider : AbstractDataProvider() {
         }
     }
 
-    private fun findFuzzyKey(member: FleetMemberAPI, variantId: String): Optional<String> {
-        val cacheForMember = cache[member]
-        return if (cacheForMember != null) {
-            // we have it, so find the best-matching key
-            val lastUnderscoreIndex = variantId.lastIndexOf("_")
-            // hopefully all ship variants have the snakecase naming scheme but if they don't...
-            if (lastUnderscoreIndex <= 0) {
-                // no underscore, bail out
-                logIfOverMinLogLevel(
-                    logMsg = "No underscore found in cache keyset for variantId ${variantId} - bailing out!",
-                    logLevel = Level.INFO
-                )
-            } else {
-                val prefix = variantId.substringBeforeLast("_", variantId)
-                // Now, find the best-matching key to this prefix
-                // If it matches completely on everything but the last '_suffix' part - we'll consider it "fuzzy equal"
-                // We use this to match "different" variants we get from the game for the same member
-                // e.g. 'tbj_overslaught_left_0' to 'tbj_overslaught_left_Start' and 'tbj_overslaught_right_1' to 'tbj_overslaught_right_Start'
-                for (cacheVariantId in cacheForMember.keys) {
-                    val sanitizedCacheVariantId = cacheVariantId.substringBeforeLast("_", cacheVariantId)
-                    if (sanitizedCacheVariantId.contentEquals(prefix)) {
-                        return Optional.of(cacheVariantId)
-                    }
-                }
-            }
-
-            // In case we didn't find a fuzzy-matching key or we bailed out due to index - return empty
-            Optional.empty()
-        } else {
-            // Nothing in the cache, bail out
-            Optional.empty()
+    /**
+     * Finds a cached hull id that differs only in its refit suffix.
+     *
+     * The suffix changes when the engine clones variants, but the slot path is carried separately,
+     * so this fallback cannot collapse two modules in different slots.
+     */
+    private fun findFuzzyVariantId(
+        memberCache: MutableMap<String, MutableMap<String, ShipModifications>>,
+        variantId: String
+    ): Optional<String> {
+        // we have the member's cache, so find the best-matching key
+        val lastUnderscoreIndex = variantId.lastIndexOf("_")
+        // hopefully all ship variants have the snakecase naming scheme but if they don't...
+        if (lastUnderscoreIndex <= 0) {
+            // no underscore, bail out
+            logIfOverMinLogLevel(
+                logMsg = "No underscore found in cache keyset for variantId ${variantId} - bailing out!",
+                logLevel = Level.INFO
+            )
+            return Optional.empty()
         }
+
+        val prefix = variantId.substringBeforeLast("_", variantId)
+        // Now, find the best-matching key to this prefix
+        // If it matches completely on everything but the last '_suffix' part - we'll consider it "fuzzy equal"
+        // We use this to match "different" variants we get from the game for the same member
+        // e.g. 'tbj_overslaught_left_0' to 'tbj_overslaught_left_Start' and 'tbj_overslaught_right_1' to 'tbj_overslaught_right_Start'
+        for (cacheVariantId in memberCache.keys) {
+            val sanitizedCacheVariantId = cacheVariantId.substringBeforeLast("_", cacheVariantId)
+            if (sanitizedCacheVariantId.contentEquals(prefix)) {
+                return Optional.of(cacheVariantId)
+            }
+        }
+
+        // No fuzzy-matching key, or we bailed out due to index - return empty
+        return Optional.empty()
     }
 
     private fun logIfOverMinLogLevel(logMsg: String, logLevel: Level) {
