@@ -110,8 +110,8 @@ class ModuleWriteGraphContext(
     /**
      * Finds the same module inside one of the mirror graphs.
      *
-     * Slot paths are tried first because they distinguish identical siblings; hull ids are only a
-     * last resort when the id is unique in that graph.
+     * Only slot paths and refit working-copy identity are used. A graph that cannot be placed is
+     * left untouched rather than guessing: a hull-id fallback can cross-write another sibling.
      */
     fun findMirrorVariant(graph: ShipVariantAPI, writtenVariant: ShipVariantAPI, writtenSlotPath: String?): ShipVariantAPI? {
         // The root IS considered when the graph is a working copy of the written tree: for a
@@ -138,18 +138,6 @@ class ModuleWriteGraphContext(
             return graph
         }
 
-        // Last resort: a hull id is safe only when this graph contains it exactly once. An
-        // ambiguous id means several identical siblings, and guessing would recreate the clobber.
-        val writtenId: String? = writtenVariant.hullVariantId
-        if (writtenId != null) {
-            val uniqueSlotPath = ModuleSlotPathsUtils.findOnlyVariantSlotPathWithHullId(graph, writtenId)
-            if (uniqueSlotPath.isPresent()) {
-                val mirror = ModuleSlotPathsUtils.findVariantAtSlotPath(graph, uniqueSlotPath.get())
-                if (mirror.isPresent()) {
-                    return mirror.get()
-                }
-            }
-        }
         return null
     }
 }
